@@ -1,0 +1,21 @@
+!_TAG_FILE_FORMAT	2	/extended format; --format=1 will not append ;" to lines/
+!_TAG_FILE_SORTED	1	/0=unsorted, 1=sorted, 2=foldcase/
+BinHash	/home/pablo/repos/subotai/src/node/hash.rs	/^pub struct BinHash {$/;"	s
+KEY_SIZE	/home/pablo/repos/subotai/src/node/hash.rs	/^const KEY_SIZE : usize = 160;$/;"	c
+KEY_SIZE_BYTES	/home/pablo/repos/subotai/src/node/hash.rs	/^const KEY_SIZE_BYTES : usize = KEY_SIZE \/ 8;$/;"	c
+Node	/home/pablo/repos/subotai/src/node/mod.rs	/^pub trait Node<D> {$/;"	t
+Node	/home/pablo/repos/subotai/src/node/oldmod.rs	/^pub struct Node {$/;"	s
+XorNode	/home/pablo/repos/subotai/src/node/xor_node.rs	/^pub struct XorNode {$/;"	s
+distance	/home/pablo/repos/subotai/src/node/mod.rs	/^   fn distance(&Self, &Self) -> D;$/;"	f
+distance	/home/pablo/repos/subotai/src/node/xor_node.rs	/^   fn distance(node_alpha : &Self, node_beta : &Self) -> BinHash {$/;"	f
+distance_between_two_new_nodes_is_zero	/home/pablo/repos/subotai/src/node/xor_node.rs	/^    fn distance_between_two_new_nodes_is_zero() {$/;"	f
+it_works	/home/pablo/repos/subotai/src/lib.rs	/^    fn it_works() {$/;"	f
+it_works	/home/pablo/repos/subotai/src/node/hash.rs	/^    fn it_works() {$/;"	f
+it_works	/home/pablo/repos/subotai/src/node/oldmod.rs	/^    fn it_works() {$/;"	f
+new	/home/pablo/repos/subotai/src/node/hash.rs	/^   pub fn new() -> BinHash {$/;"	f
+new	/home/pablo/repos/subotai/src/node/oldmod.rs	/^   pub fn new() -> Node {$/;"	f
+new	/home/pablo/repos/subotai/src/node/xor_node.rs	/^   pub fn new() -> XorNode {$/;"	f
+tests	/home/pablo/repos/subotai/src/lib.rs	/^mod tests {$/;"	m
+tests	/home/pablo/repos/subotai/src/node/hash.rs	/^mod tests {$/;"	m
+tests	/home/pablo/repos/subotai/src/node/oldmod.rs	/^mod tests {$/;"	m
+tests	/home/pablo/repos/subotai/src/node/xor_node.rs	/^mod tests {$/;"	m
