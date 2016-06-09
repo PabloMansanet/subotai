@@ -4,8 +4,9 @@ const KEY_SIZE : usize = 160;
 const KEY_SIZE_BYTES : usize = KEY_SIZE / 8;
 
 #[derive(Debug)]
+#[derive(Clone)]
 pub struct BinHash {
-   raw : [u8; KEY_SIZE_BYTES],
+   pub raw : [u8; KEY_SIZE_BYTES],
 }
 
 impl BinHash {
