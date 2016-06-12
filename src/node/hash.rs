@@ -6,6 +6,8 @@ use std::fmt;
 const KEY_SIZE : usize = 160;
 const KEY_SIZE_BYTES : usize = KEY_SIZE / 8;
 
+
+/// Light Wrapper over a Sha1 hash
 #[derive(Debug)]
 #[derive(Clone)]
 pub struct Sha1Hash {

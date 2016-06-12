@@ -1,15 +1,19 @@
 use node::Node;
 use node::hash::Sha1Hash;
 use itertools::Zip;
+use std::net::UdpSocket;
+use std::io;
 
 #[derive(Debug)]
 pub struct XorNode {
    pub key : Sha1Hash,
+   socket : UdpSocket,
 }
 
 impl XorNode {
-   pub fn new() -> XorNode {
-      XorNode { key : Sha1Hash::new() }
+   pub fn new() -> io::Result<XorNode> {
+      let mut socket = try!(UdpSocket::bind("127.0.0.1:50000"));
+      Ok(XorNode { key : Sha1Hash::new(), socket : socket })
    }
 }
 
@@ -31,8 +35,8 @@ mod tests {
 
     #[test]
     fn distance_between_two_new_nodes_is_zero() {
-       let node_alpha = XorNode::new(); 
-       let node_beta = XorNode::new(); 
+       let node_alpha = XorNode::new().unwrap(); 
+       let node_beta = XorNode::new().unwrap(); 
        let distance = XorNode::distance(&node_alpha, &node_beta);
 
        for element in distance.raw.into_iter() {
@@ -42,8 +46,8 @@ mod tests {
 
     #[test]
     fn distance_between_two_nodes_is_XOR() {
-       let mut node_alpha = XorNode::new(); 
-       let mut node_beta = XorNode::new(); 
+       let mut node_alpha = XorNode::new().unwrap(); 
+       let mut node_beta = XorNode::new().unwrap(); 
 
        node_alpha.key.raw[0] = 0xFF;
        node_alpha.key.raw[1] = 0xFF;
