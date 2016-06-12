@@ -1,3 +1,6 @@
+extern crate itertools;
+extern crate crypto;
+
 pub mod node;
 
 #[cfg(test)]

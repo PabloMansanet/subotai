@@ -4,3 +4,5 @@ version = "0.1.0"
 authors = ["Cu3rv0 <pablomansanet@gmail.com>"]
 
 [dependencies]
+itertools = "0.4.15"
+rust-crypto = "0.2.36"
