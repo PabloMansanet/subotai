@@ -9,8 +9,7 @@ pub const KEY_SIZE_BYTES : usize = KEY_SIZE / 8;
 ///
 /// We aren't interested in strong cryptography, but rather
 /// a simple way to generate 160 bit key identifiers.
-#[derive(Debug)]
-#[derive(Clone)]
+#[derive(Debug,Clone,PartialEq)]
 pub struct Sha1Hash {
    pub raw : [u8; KEY_SIZE_BYTES],
 }
@@ -44,7 +43,8 @@ impl Sha1Hash {
       distance
    }
 
-   pub fn highest_1_index(&self) -> Option<usize> {
+   /// Computes the bit index of the highest "1". Returns None for a blank hash.
+   pub fn height(&self) -> Option<usize> {
       let last_nonzero_byte = self.raw.iter().enumerate().rev().find(|&pair| *pair.1 != 0);
       if let Some((index, byte)) = last_nonzero_byte {
          for bit in (0..8).rev() {
@@ -71,20 +71,20 @@ mod tests {
     }
 
     #[test]
-    fn highest_1_indexing() {
+    fn computing_height() {
        let mut test_hash = Sha1Hash::blank_hash();
-       assert!(test_hash.highest_1_index().is_none());
+       assert!(test_hash.height().is_none());
        
        // First bit
        test_hash.raw[0] = 1;
-       assert_eq!(test_hash.highest_1_index(), Some(0));
+       assert_eq!(test_hash.height(), Some(0));
 
        // Fourth bit (index 3)
        test_hash.raw[0] = test_hash.raw[0] | (1 << 3);
-       assert_eq!(test_hash.highest_1_index(), Some(3));
+       assert_eq!(test_hash.height(), Some(3));
 
        // Last bit (index 159)
-       test_hash.raw[19] = (1 << 7);
-       assert_eq!(test_hash.highest_1_index(), Some(159));
+       test_hash.raw[19] = 1 << 7;
+       assert_eq!(test_hash.height(), Some(159));
     }
 }

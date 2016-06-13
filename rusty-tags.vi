@@ -874,7 +874,7 @@ bool3ary_202	/home/cuervo/.cargo/registry/src/github.com-88ac128001ac3a9a/rust-c
 bool3ary_232	/home/cuervo/.cargo/registry/src/github.com-88ac128001ac3a9a/rust-crypto-0.2.36/src/sha1.rs	/^    macro_rules! bool3ary_232 {$/;"	d
 bool3ary_232	/home/cuervo/.cargo/registry/src/github.com-88ac128001ac3a9a/rust-crypto-0.2.36/src/sha2.rs	/^    macro_rules! bool3ary_232 {$/;"	d
 borrow_write_buffer	/home/cuervo/.cargo/registry/src/github.com-88ac128001ac3a9a/rust-crypto-0.2.36/src/buffer.rs	/^    pub fn borrow_write_buffer(&mut self) -> BorrowedWriteBuffer {$/;"	f
-bucket_for_node	/home/cuervo/Desktop/repos/subotai/src/kademlia/table.rs	/^   fn bucket_for_node(&self, key : &Sha1Hash) -> usize {$/;"	f
+bucket_for_node	/home/cuervo/Desktop/repos/subotai/src/kademlia/table.rs	/^   fn bucket_for_node(&self, key : &Sha1Hash) -> Option<usize> {$/;"	f
 buffer	/home/cuervo/.cargo/registry/src/github.com-88ac128001ac3a9a/rust-crypto-0.2.36/src/lib.rs	/^pub mod buffer;$/;"	m
 calculate_block	/home/cuervo/.cargo/registry/src/github.com-88ac128001ac3a9a/rust-crypto-0.2.36/src/pbkdf2.rs	/^fn calculate_block<M: Mac>($/;"	f
 call_mut	/home/cuervo/.cargo/registry/src/github.com-88ac128001ac3a9a/itertools-0.4.15/src/groupbylazy.rs	/^    fn call_mut(&mut self, _arg: A) -> Self::Key {$/;"	f
@@ -925,6 +925,7 @@ combinations_n	/home/cuervo/.cargo/registry/src/github.com-88ac128001ac3a9a/iter
 combinations_n	/home/cuervo/.cargo/registry/src/github.com-88ac128001ac3a9a/itertools-0.4.15/tests/tests.rs	/^fn combinations_n() {$/;"	f
 compress	/home/cuervo/.cargo/registry/src/github.com-88ac128001ac3a9a/rust-crypto-0.2.36/src/blake2b.rs	/^    fn compress(&mut self) {$/;"	f
 compress	/home/cuervo/.cargo/registry/src/github.com-88ac128001ac3a9a/rust-crypto-0.2.36/src/blake2s.rs	/^    fn compress(&mut self) {$/;"	f
+computing_height	/home/cuervo/Desktop/repos/subotai/src/hash/mod.rs	/^    fn computing_height() {$/;"	f
 cond_xor	/home/cuervo/.cargo/registry/src/github.com-88ac128001ac3a9a/rust-crypto-0.2.36/src/ghash.rs	/^    fn cond_xor(self, x: Gf128, y: Gf128) -> Gf128 {$/;"	f
 construct	/home/cuervo/.cargo/registry/src/github.com-88ac128001ac3a9a/rust-crypto-0.2.36/src/aessafe.rs	/^    fn construct(a: u32, b: u32, c: u32, d: u32, bit: u32) -> u16 {$/;"	f
 construct_ctr_x8	/home/cuervo/.cargo/registry/src/github.com-88ac128001ac3a9a/rust-crypto-0.2.36/src/blockmodes.rs	/^fn construct_ctr_x8(in_ctr: &[u8], out_ctr_x8: &mut [u8]) {$/;"	f
@@ -1179,9 +1180,8 @@ hc128_1k	/home/cuervo/.cargo/registry/src/github.com-88ac128001ac3a9a/rust-crypt
 hc128_64k	/home/cuervo/.cargo/registry/src/github.com-88ac128001ac3a9a/rust-crypto-0.2.36/src/hc128.rs	/^    pub fn hc128_64k(bh: & mut Bencher) {$/;"	f
 hchacha20	/home/cuervo/.cargo/registry/src/github.com-88ac128001ac3a9a/rust-crypto-0.2.36/src/chacha20.rs	/^    fn hchacha20(&mut self, out: &mut [u8]) -> () {$/;"	f
 heapify	/home/cuervo/.cargo/registry/src/github.com-88ac128001ac3a9a/itertools-0.4.15/src/kmerge.rs	/^fn heapify<T: Ord>(data: &mut [T]) {$/;"	f
+height	/home/cuervo/Desktop/repos/subotai/src/hash/mod.rs	/^   pub fn height(&self) -> Option<usize> {$/;"	f
 hex_to_bytes	/home/cuervo/.cargo/registry/src/github.com-88ac128001ac3a9a/rust-crypto-0.2.36/src/aes_gcm.rs	/^    fn hex_to_bytes(raw_hex: &str) -> Vec<u8> {$/;"	f
-highest_1_index	/home/cuervo/Desktop/repos/subotai/src/hash/mod.rs	/^   pub fn highest_1_index(&self) -> Option<usize> {$/;"	f
-highest_1_indexing	/home/cuervo/Desktop/repos/subotai/src/hash/mod.rs	/^    fn highest_1_indexing() {$/;"	f
 hkdf	/home/cuervo/.cargo/registry/src/github.com-88ac128001ac3a9a/rust-crypto-0.2.36/src/lib.rs	/^pub mod hkdf;$/;"	m
 hkdf_expand	/home/cuervo/.cargo/registry/src/github.com-88ac128001ac3a9a/rust-crypto-0.2.36/src/hkdf.rs	/^pub fn hkdf_expand<D: Digest>(mut digest: D, prk: &[u8], info: &[u8], okm: &mut [u8]) {$/;"	f
 hkdf_extract	/home/cuervo/.cargo/registry/src/github.com-88ac128001ac3a9a/rust-crypto-0.2.36/src/hkdf.rs	/^pub fn hkdf_extract<D: Digest>(mut digest: D, salt: &[u8], ikm: &[u8], prk: &mut [u8]) {$/;"	f

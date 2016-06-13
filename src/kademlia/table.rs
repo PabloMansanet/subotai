@@ -14,6 +14,7 @@ struct Bucket {
    entries  : VecDeque<NodeInfo>
 }
 
+#[derive(Clone)]
 pub struct NodeInfo {
    key  : Sha1Hash,
    ip   : net::IpAddr,
@@ -30,18 +31,20 @@ impl RoutingTable {
       RoutingTable { parent_key : parent_key.clone(), buckets : buckets }
    }
 
+   /// Returns a table entry for the specific node with a given hash.
    fn specific_node(&self, key : &Sha1Hash) -> Option<NodeInfo> {
+      if let Some(index) = self.bucket_for_node(key){
+         let ref bucket = self.buckets[index];
+         return bucket.entries.iter().find(|ref info| *key == info.key).map(|x| x.clone());
+      }
       None
    }
 
    /// Returns the appropriate position for a node, by computing
-   /// the last bit of their distance set to 1.
-   fn bucket_for_node(&self, key : &Sha1Hash) -> usize {
-      let distance = Sha1Hash::xor_distance(&self.parent_key, &key);
-      match distance.highest_1_index() {
-         Some(index) => index,
-         None => 0
-      }
+   /// the last bit of their distance set to 1. None if we are
+   /// attempting to add the parent key.
+   fn bucket_for_node(&self, key : &Sha1Hash) -> Option<usize> {
+       Sha1Hash::xor_distance(&self.parent_key, &key).height()
    }
 
 }

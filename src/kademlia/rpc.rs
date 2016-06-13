@@ -6,5 +6,5 @@ pub enum RpcType {
 }
 
 pub struct Rpc{
-   rpcType : RpcType
+   rpc_type : RpcType
 }
