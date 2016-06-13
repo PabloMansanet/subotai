@@ -34,18 +34,14 @@ impl RoutingTable {
       None
    }
 
+   /// Returns the appropriate position for a node, by computing
+   /// the last bit of their distance set to 1.
    fn bucket_for_node(&self, key : &Sha1Hash) -> usize {
       let distance = Sha1Hash::xor_distance(&self.parent_key, &key);
-      // Finds the last byte that contains a 1.
-      let last_byte = distance.raw.iter().enumerate().rev().find(|&pair| pair.0 != 0);
-      if let Some((byte, index)) = last_byte {
-         for bit in 7..0 {
-            if (byte & (1 << bit)) != 0 {
-               return (8 * index + bit) as usize
-            }
-         }
+      match distance.index_highest_1() {
+         Some(index) => index,
+         None => 0
       }
-      0
    }
 
 }

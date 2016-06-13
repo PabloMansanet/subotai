@@ -16,13 +16,13 @@ pub struct Sha1Hash {
 }
 
 impl Sha1Hash {
-   fn new() -> Sha1Hash {
+   fn blank_hash() -> Sha1Hash {
       Sha1Hash { raw : [0; KEY_SIZE_BYTES] }
    }
 
    pub fn from_string(s: &str) -> Sha1Hash {
       let mut hash_generator = Sha1::new();
-      let mut hash = Sha1Hash::new();
+      let mut hash = Sha1Hash::blank_hash();
       hash_generator.input_str(s);
       hash_generator.result(&mut hash.raw);
       hash
@@ -37,11 +37,23 @@ impl Sha1Hash {
    }
 
    pub fn xor_distance(hash_alpha : &Self, hash_beta : &Self) -> Sha1Hash {
-      let mut distance = Sha1Hash::new();
+      let mut distance = Sha1Hash::blank_hash();
       for (d, a, b) in Zip::new((&mut distance.raw, &hash_alpha.raw, &hash_beta.raw)) {
          *d = a^b;
       }
       distance
+   }
+
+   pub fn index_highest_1(&self) -> Option<usize> {
+      let last_nonzero_byte = self.raw.iter().enumerate().rev().find(|&pair| *pair.1 != 0);
+      if let Some((index, byte)) = last_nonzero_byte {
+         for bit in (0..7).rev() {
+            if (byte & (1 << bit)) != 0 {
+               return Some((8 * index + bit) as usize)
+            }
+         }
+      }
+      None
    }
 }
 
@@ -56,5 +68,15 @@ mod tests {
        let hash = Sha1Hash::from_string(input);
 
        assert_eq!(output_string, hash.to_string());
+    }
+
+    #[test]
+    fn highest_1_indexing() {
+       let mut test_hash = Sha1Hash::blank_hash();
+       assert!(test_hash.index_highest_1().is_none());
+
+       // First bit
+       test_hash.raw[0] = 1;
+       assert_eq!(test_hash.index_highest_1(), Some(0));
     }
 }
