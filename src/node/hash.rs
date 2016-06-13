@@ -1,13 +1,14 @@
-use std::ops::BitXor;
 use crypto::sha1::Sha1;
 use crypto::digest::Digest;
-use std::fmt;
 
 const KEY_SIZE : usize = 160;
 const KEY_SIZE_BYTES : usize = KEY_SIZE / 8;
 
 
 /// Light Wrapper over a Sha1 hash
+///
+/// We aren't interested in strong cryptography, but rather
+/// a simple way to generate 160 bit key identifiers.
 #[derive(Debug)]
 #[derive(Clone)]
 pub struct Sha1Hash {
@@ -15,7 +16,7 @@ pub struct Sha1Hash {
 }
 
 impl Sha1Hash {
-   pub fn new() -> Sha1Hash {
+   fn new() -> Sha1Hash {
       Sha1Hash { raw : [0; KEY_SIZE_BYTES] }
    }
 
