@@ -38,7 +38,7 @@ impl RoutingTable {
    /// the last bit of their distance set to 1.
    fn bucket_for_node(&self, key : &Sha1Hash) -> usize {
       let distance = Sha1Hash::xor_distance(&self.parent_key, &key);
-      match distance.index_highest_1() {
+      match distance.highest_1_index() {
          Some(index) => index,
          None => 0
       }

@@ -44,10 +44,10 @@ impl Sha1Hash {
       distance
    }
 
-   pub fn index_highest_1(&self) -> Option<usize> {
+   pub fn highest_1_index(&self) -> Option<usize> {
       let last_nonzero_byte = self.raw.iter().enumerate().rev().find(|&pair| *pair.1 != 0);
       if let Some((index, byte)) = last_nonzero_byte {
-         for bit in (0..7).rev() {
+         for bit in (0..8).rev() {
             if (byte & (1 << bit)) != 0 {
                return Some((8 * index + bit) as usize)
             }
@@ -73,10 +73,18 @@ mod tests {
     #[test]
     fn highest_1_indexing() {
        let mut test_hash = Sha1Hash::blank_hash();
-       assert!(test_hash.index_highest_1().is_none());
-
+       assert!(test_hash.highest_1_index().is_none());
+       
        // First bit
        test_hash.raw[0] = 1;
-       assert_eq!(test_hash.index_highest_1(), Some(0));
+       assert_eq!(test_hash.highest_1_index(), Some(0));
+
+       // Fourth bit (index 3)
+       test_hash.raw[0] = test_hash.raw[0] | (1 << 3);
+       assert_eq!(test_hash.highest_1_index(), Some(3));
+
+       // Last bit (index 159)
+       test_hash.raw[19] = (1 << 7);
+       assert_eq!(test_hash.highest_1_index(), Some(159));
     }
 }
