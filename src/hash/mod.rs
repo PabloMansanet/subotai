@@ -1,16 +1,14 @@
 use crypto::sha1::Sha1;
 use crypto::digest::Digest;
 
-const KEY_SIZE : usize = 160;
-const KEY_SIZE_BYTES : usize = KEY_SIZE / 8;
-
+pub const KEY_SIZE : usize = 160;
+pub const KEY_SIZE_BYTES : usize = KEY_SIZE / 8;
 
 /// Light Wrapper over a Sha1 hash
 ///
 /// We aren't interested in strong cryptography, but rather
 /// a simple way to generate 160 bit key identifiers.
 #[derive(Debug)]
-#[derive(Clone)]
 pub struct Sha1Hash {
    pub raw : [u8; KEY_SIZE_BYTES],
 }
