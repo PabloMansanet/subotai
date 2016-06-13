@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 extern crate itertools;
-extern crate crypto;
+extern crate rand;
 
 pub mod node;
 pub mod hash;
