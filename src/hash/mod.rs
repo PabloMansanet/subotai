@@ -1,5 +1,6 @@
 use crypto::sha1::Sha1;
 use crypto::digest::Digest;
+use itertools::Zip;
 
 pub const KEY_SIZE : usize = 160;
 pub const KEY_SIZE_BYTES : usize = KEY_SIZE / 8;
@@ -9,6 +10,7 @@ pub const KEY_SIZE_BYTES : usize = KEY_SIZE / 8;
 /// We aren't interested in strong cryptography, but rather
 /// a simple way to generate 160 bit key identifiers.
 #[derive(Debug)]
+#[derive(Clone)]
 pub struct Sha1Hash {
    pub raw : [u8; KEY_SIZE_BYTES],
 }
@@ -32,6 +34,14 @@ impl Sha1Hash {
          hash_string.push_str(&format!("{:x}", byte));
       }
       hash_string
+   }
+
+   pub fn xor_distance(hash_alpha : &Self, hash_beta : &Self) -> Sha1Hash {
+      let mut distance = Sha1Hash::new();
+      for (d, a, b) in Zip::new((&mut distance.raw, &hash_alpha.raw, &hash_beta.raw)) {
+         *d = a^b;
+      }
+      distance
    }
 }
 
