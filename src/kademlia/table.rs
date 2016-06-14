@@ -34,8 +34,8 @@ impl RoutingTable {
    /// Returns a table entry for the specific node with a given hash.
    fn specific_node(&self, key : &Sha1Hash) -> Option<NodeInfo> {
       if let Some(index) = self.bucket_for_node(key){
-         let ref bucket = self.buckets[index];
-         return bucket.entries.iter().find(|ref info| *key == info.key).map(|x| x.clone());
+         let bucket = &self.buckets[index];
+         return bucket.entries.iter().find(|ref info| *key == info.key).cloned();
       }
       None
    }
@@ -44,7 +44,7 @@ impl RoutingTable {
    /// the last bit of their distance set to 1. None if we are
    /// attempting to add the parent key.
    fn bucket_for_node(&self, key : &Sha1Hash) -> Option<usize> {
-       Sha1Hash::xor_distance(&self.parent_key, &key).height()
+       Sha1Hash::xor_distance(&self.parent_key, key).height()
    }
 
 }
