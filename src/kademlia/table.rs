@@ -81,7 +81,10 @@ impl RoutingTable {
    /// Performs a node lookup on the routing table. The lookup result may
    /// contain the specific node, or a list of up to the K closest nodes;
    pub fn lookup(&self, key : &Hash160) -> LookupResult {
-      unimplemented!();
+      match self.specific_node(&key) {
+         Some(info) => LookupResult::Found(info),
+         None => unimplemented!(),
+      }
    }
 
    /// Returns a table entry for the specific node with a given hash.
@@ -97,7 +100,7 @@ impl RoutingTable {
    /// the last bit of their distance set to 1. None if we are
    /// attempting to add the parent key.
    fn bucket_for_node(&self, key : &Hash160) -> Option<usize> {
-       Hash160::xor_distance(&self.parent_key, key).height()
+       (&self.parent_key ^ key).height()
    }
 
    fn revert_conflict(&mut self, conflict : EvictionConflict) {
@@ -145,17 +148,19 @@ mod tests {
        assert_eq!(table.specific_node(&node_info.key), Some(node_info));
     }
 
-    fn fill_with_low_keys(table : &mut RoutingTable) {
-       let any_ip = net::IpAddr::from_str("0.0.0.0").unwrap();
-       for i in 0..super::BUCKET_DEPTH {
-          let mut key = Hash160::blank();
-          key.raw[0] = i as u8;
-          let info = NodeInfo { 
-             key  : key,
-             ip   : any_ip.clone(),
-             port : 0
-          };
-          table.insert_node(info);
+    impl RoutingTable {
+       pub fn fill_bucket(&mut self, bucket_index : usize) {
+          let any_ip = net::IpAddr::from_str("0.0.0.0").unwrap();
+          for i in 0..super::BUCKET_DEPTH {
+             let mut key = Hash160::blank();
+             key.raw[bucket_index] = i as u8;
+             let info = NodeInfo { 
+                key  : key,
+                ip   : any_ip.clone(),
+                port : 0
+             };
+             self.insert_node(info);
+          }
        }
     }
 
@@ -167,7 +172,7 @@ mod tests {
 
        let mut table = RoutingTable::new(parent_key);
 
-       fill_with_low_keys(&mut table);
+       table.fill_bucket(0);
        assert!(table.conflicts.is_empty());
 
        // When we add another node to the same bucket, we cause a conflict.
@@ -196,7 +201,7 @@ mod tests {
 
        let mut table = RoutingTable::new(parent_key);
 
-       fill_with_low_keys(&mut table);
+       table.fill_bucket(0);
        assert!(table.conflicts.is_empty());
 
        // When we add another node to the same bucket, we cause a conflict.
@@ -229,5 +234,8 @@ mod tests {
        table.insert_node(node.clone());
 
        assert_eq!(table.lookup(&node.key), LookupResult::Found(node));
+    }
+
+    fn fill_first_five_buckets() {
     }
 }

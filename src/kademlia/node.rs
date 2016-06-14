@@ -1,5 +1,6 @@
 use node;
 use hash::Hash160;
+use std::ops::BitXor;
 use std::net::UdpSocket;
 use std::io;
 
@@ -18,7 +19,7 @@ impl Node {
 
 impl node::Node<Hash160, Hash160> for Node {
    fn distance(node_alpha : &Self, node_beta : &Self) -> Hash160 {
-      Hash160::xor_distance(&node_alpha.key, &node_beta.key)
+      &node_alpha.key ^ &node_beta.key
    }
 }
 

@@ -1,5 +1,6 @@
 use rand::{thread_rng, Rng};
 use itertools::Zip;
+use std::ops::BitXor;
 
 pub const KEY_SIZE : usize = 160;
 pub const KEY_SIZE_BYTES : usize = KEY_SIZE / 8;
@@ -13,6 +14,30 @@ pub struct Hash160 {
    pub raw : [u8; KEY_SIZE_BYTES],
 }
 
+impl<'a, 'b> BitXor<&'b Hash160> for &'a Hash160 {
+   type Output = Hash160;
+
+   fn bitxor (self, rhs : &'b Hash160) -> Hash160 {
+      let mut result = Hash160::blank();
+      for (d, a, b) in Zip::new((&mut result.raw, &self.raw, &rhs.raw)) {
+         *d = a^b;
+      }
+      result
+   }
+}
+
+impl BitXor for Hash160 {
+   type Output = Hash160;
+
+   fn bitxor (self, rhs : Self) -> Hash160 {
+      let mut raw = self.raw;
+      for (a, b) in raw.iter_mut().zip(rhs.raw.iter()) {
+         *a = *a^b;
+      }
+      self
+   }
+}
+
 impl Hash160 {
    pub fn blank() -> Hash160 {
       Hash160 { raw : [0; KEY_SIZE_BYTES] }
@@ -22,14 +47,6 @@ impl Hash160 {
       let mut hash = Hash160::blank();
       thread_rng().fill_bytes(&mut hash.raw);
       hash
-   }
-
-   pub fn xor_distance(hash_alpha : &Self, hash_beta : &Self) -> Hash160 {
-      let mut distance = Hash160::blank();
-      for (d, a, b) in Zip::new((&mut distance.raw, &hash_alpha.raw, &hash_beta.raw)) {
-         *d = a^b;
-      }
-      distance
    }
 
    /// Computes the bit index of the highest "1". Returns None for a blank hash.
