@@ -14,7 +14,7 @@ pub struct Hash160 {
 }
 
 impl Hash160 {
-   fn blank() -> Hash160 {
+   pub fn blank() -> Hash160 {
       Hash160 { raw : [0; KEY_SIZE_BYTES] }
    }
 
