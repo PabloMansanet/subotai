@@ -150,10 +150,14 @@ mod tests {
 
     impl RoutingTable {
        pub fn fill_bucket(&mut self, bucket_index : usize) {
+          // Otherwise this helper function becomes quite complex.
+          assert!(bucket_index > 7);
           let any_ip = net::IpAddr::from_str("0.0.0.0").unwrap();
           for i in 0..super::BUCKET_DEPTH {
-             let mut key = Hash160::blank();
-             key.raw[bucket_index] = i as u8;
+             let mut key = self.parent_key.clone();
+             key.flip_bit(bucket_index);
+
+             key.raw[0] = i as u8;
              let info = NodeInfo { 
                 key  : key,
                 ip   : any_ip.clone(),
@@ -172,7 +176,7 @@ mod tests {
 
        let mut table = RoutingTable::new(parent_key);
 
-       table.fill_bucket(0);
+       table.fill_bucket(8);
        assert!(table.conflicts.is_empty());
 
        // When we add another node to the same bucket, we cause a conflict.
@@ -201,7 +205,7 @@ mod tests {
 
        let mut table = RoutingTable::new(parent_key);
 
-       table.fill_bucket(0);
+       table.fill_bucket(8);
        assert!(table.conflicts.is_empty());
 
        // When we add another node to the same bucket, we cause a conflict.

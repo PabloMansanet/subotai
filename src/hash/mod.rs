@@ -61,6 +61,12 @@ impl Hash160 {
       }
       None
    }
+
+   pub fn flip_bit(&mut self, position : usize) {
+      if position >= KEY_SIZE { return; }
+      let byte = &mut self.raw[position / 8];
+      *byte = *byte ^ (1 << (position % 8));
+   }
 }
 
 #[cfg(test)]
@@ -88,5 +94,14 @@ mod tests {
        // Last bit (index 159)
        test_hash.raw[19] = 1 << 7;
        assert_eq!(test_hash.height(), Some(159));
+    }
+
+    #[test]
+    fn bit_flipping() {
+       let mut test_hash = Hash160::blank();
+       test_hash.flip_bit(9);
+       assert_eq!(test_hash.raw[1], 2);
+       test_hash.flip_bit(9);
+       assert_eq!(test_hash.raw[1], 0);
     }
 }
