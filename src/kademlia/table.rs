@@ -83,7 +83,7 @@ impl RoutingTable {
    pub fn lookup(&self, key : &Hash160) -> LookupResult {
       match self.specific_node(&key) {
          Some(info) => LookupResult::Found(info),
-         None => unimplemented!(),
+         None => LookupResult::ClosestNodes(self.closest_nodes_to(&key)),
       }
    }
 
@@ -149,11 +149,11 @@ mod tests {
     }
 
     impl RoutingTable {
-       pub fn fill_bucket(&mut self, bucket_index : usize) {
+       pub fn fill_bucket(&mut self, bucket_index : usize, fill_quantity : u8) {
           // Otherwise this helper function becomes quite complex.
           assert!(bucket_index > 7);
           let any_ip = net::IpAddr::from_str("0.0.0.0").unwrap();
-          for i in 0..super::BUCKET_DEPTH {
+          for i in 0..fill_quantity {
              let mut key = self.parent_key.clone();
              key.flip_bit(bucket_index);
 
@@ -176,7 +176,7 @@ mod tests {
 
        let mut table = RoutingTable::new(parent_key);
 
-       table.fill_bucket(8);
+       table.fill_bucket(8, super::BUCKET_DEPTH as u8);
        assert!(table.conflicts.is_empty());
 
        // When we add another node to the same bucket, we cause a conflict.
@@ -205,7 +205,7 @@ mod tests {
 
        let mut table = RoutingTable::new(parent_key);
 
-       table.fill_bucket(8);
+       table.fill_bucket(8, super::BUCKET_DEPTH as u8);
        assert!(table.conflicts.is_empty());
 
        // When we add another node to the same bucket, we cause a conflict.
@@ -240,6 +240,23 @@ mod tests {
        assert_eq!(table.lookup(&node.key), LookupResult::Found(node));
     }
 
-    fn fill_first_five_buckets() {
+    #[test]
+    fn lookup_for_a_not_stored_node() {
+       let mut table = RoutingTable::new(Hash160::random());
+       table.fill_bucket(11, 5);
+       table.fill_bucket(12, 5);
+       table.fill_bucket(13, 5);
+
+       // We construct a node key that would fall in bucket 12, but isn't stored.
+       let mut node_key = table.parent_key.clone();
+       node_key.flip_bit(12);
+       node_key.raw[0] = 0xFF;
+
+       if let LookupResult::ClosestNodes(nodes) = table.lookup(&node_key) {
+          assert_eq!(nodes.len(), 15);
+       }
+       else {
+          panic!("We shouldn't have found the node!");
+       }
     }
 }
