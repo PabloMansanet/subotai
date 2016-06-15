@@ -3,6 +3,7 @@ use hash::Hash160;
 use std::net;
 use std::collections::VecDeque;
 use std::mem;
+use itertools::Itertools;
 
 const K : usize = 20;
 const BUCKET_DEPTH : usize = K;
@@ -21,6 +22,7 @@ pub struct RoutingTable {
 
 /// Bucket size is estimated to be small enough not to warrant
 /// the downsides of using a linked list.
+#[derive(Debug, Clone)]
 struct Bucket {
    entries  : VecDeque<NodeInfo>,
 }
@@ -43,7 +45,8 @@ pub struct NodeInfo {
 #[derive(Debug, PartialEq)]
 pub enum LookupResult {
    Found(NodeInfo), 
-   ClosestNodes(Vec<NodeInfo>)
+   ClosestNodes(Vec<NodeInfo>),
+   Myself,
 }
 
 impl RoutingTable {
@@ -79,11 +82,16 @@ impl RoutingTable {
    }
 
    /// Performs a node lookup on the routing table. The lookup result may
-   /// contain the specific node, or a list of up to the K closest nodes;
-   pub fn lookup(&self, key : &Hash160) -> LookupResult {
-      match self.specific_node(&key) {
+   /// contain the specific node, a list of up to the N closest nodes, or
+   /// report that the parent node itself was requested.
+   pub fn lookup(&self, key : &Hash160, n : usize) -> LookupResult {
+      if *key == self.parent_key {
+         return LookupResult::Myself;
+      } 
+
+      match self.specific_node(key) {
          Some(info) => LookupResult::Found(info),
-         None => LookupResult::ClosestNodes(self.closest_nodes_to(&key)),
+         None => LookupResult::ClosestNodes(self.closest_n_nodes_to(key, n)),
       }
    }
 
@@ -94,6 +102,40 @@ impl RoutingTable {
          return bucket.entries.iter().find(|ref info| *key == info.key).cloned();
       }
       None
+   }
+
+   fn closest_n_nodes_to(&self, key : &Hash160, n : usize) -> Vec<NodeInfo>{
+      let mut closest = Vec::with_capacity(n);
+      // Unwrap because we shouldn't be calling this private method
+      // with our own key as argument.
+      let mut ideal_bucket = self.bucket_for_node(key).unwrap();
+
+      // descending from the ideal bucket
+      for bucket_index in (1..(ideal_bucket+1)).rev() {
+         if closest.len() >= n {
+            break;
+         }
+         self.pour_in_order(&mut closest, self.buckets[bucket_index].clone());
+      }
+      // ascending from above the ideal bucket
+      for bucket_index in (ideal_bucket +1)..KEY_SIZE {
+         if closest.len() >= n {
+            break;
+         }
+         self.pour_in_order(&mut closest, self.buckets[bucket_index].clone());
+      }
+      closest
+   }
+
+   fn pour_in_order (&self, destination : &mut Vec<NodeInfo>, source : Bucket) {
+         let mut nodes_from_bucket = source.entries.into_iter().collect::<Vec<NodeInfo>>();
+
+         let space_left = destination.capacity() - destination.len();
+         if nodes_from_bucket.len() >= space_left {
+            nodes_from_bucket.sort_by_key(|ref info| &info.key ^ &self.parent_key);
+            nodes_from_bucket.truncate(space_left);
+         }
+         destination.append(&mut nodes_from_bucket);
    }
 
    /// Returns the appropriate position for a node, by computing
@@ -237,7 +279,7 @@ mod tests {
        };
        table.insert_node(node.clone());
 
-       assert_eq!(table.lookup(&node.key), LookupResult::Found(node));
+       assert_eq!(table.lookup(&node.key, 20), LookupResult::Found(node));
     }
 
     #[test]
@@ -252,7 +294,7 @@ mod tests {
        node_key.flip_bit(12);
        node_key.raw[0] = 0xFF;
 
-       if let LookupResult::ClosestNodes(nodes) = table.lookup(&node_key) {
+       if let LookupResult::ClosestNodes(nodes) = table.lookup(&node_key,20) {
           assert_eq!(nodes.len(), 15);
        }
        else {

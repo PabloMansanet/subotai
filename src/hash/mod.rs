@@ -9,7 +9,7 @@ pub const KEY_SIZE_BYTES : usize = KEY_SIZE / 8;
 ///
 /// We aren't interested in strong cryptography, but rather
 /// a simple way to generate 160 bit key identifiers.
-#[derive(Debug,Clone,PartialEq)]
+#[derive(Debug,Clone,Eq,Ord,PartialEq,PartialOrd)]
 pub struct Hash160 {
    pub raw : [u8; KEY_SIZE_BYTES],
 }
@@ -32,7 +32,7 @@ impl BitXor for Hash160 {
    fn bitxor (self, rhs : Self) -> Hash160 {
       let mut raw = self.raw;
       for (a, b) in raw.iter_mut().zip(rhs.raw.iter()) {
-         *a = *a^b;
+         *a ^= *b;
       }
       self
    }
@@ -65,7 +65,7 @@ impl Hash160 {
    pub fn flip_bit(&mut self, position : usize) {
       if position >= KEY_SIZE { return; }
       let byte = &mut self.raw[position / 8];
-      *byte = *byte ^ (1 << (position % 8));
+      *byte ^= 1 << (position % 8);
    }
 }
 
