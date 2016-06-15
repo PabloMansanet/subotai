@@ -109,9 +109,11 @@ impl RoutingTable {
       // with our own key as argument.
       let ideal_bucket_index = self.bucket_for_node(key).unwrap();
 
-      let descent_from_ideal = (1..(ideal_bucket_index+1)).rev();
+      let ascent_to_ideal = 1..ideal_bucket_index;
       let ascent_from_above_ideal = (ideal_bucket_index+1)..KEY_SIZE;
-      let lookup_order = descent_from_ideal.chain(ascent_from_above_ideal);
+      let lookup_order = (ideal_bucket_index..ideal_bucket_index)
+                         .chain(ascent_to_ideal)
+                         .chain(ascent_from_above_ideal);
 
       for bucket_index in lookup_order {
          let mut nodes_from_bucket = self.buckets[bucket_index].clone().entries.into_iter().collect::<Vec<NodeInfo>>();
@@ -296,11 +298,55 @@ mod tests {
     #[test]
     fn ascending_lookup_on_a_sparse_table() {
        let mut table = RoutingTable::new(Hash160::random());
-       for i in 10..50.filter(|x| x%2 == 0) {
-         table.fill_bucket(i, 1);
+       for i in (10..50).filter(|x| x%2 == 0) {
+         table.fill_bucket(i, 2);
        }
        let mut node_key = table.parent_key.clone();
        node_key.flip_bit(8); // Bucket 8
+       node_key.raw[0] = 0xFF;
+       if let LookupResult::ClosestNodes(nodes) = table.lookup(&node_key,5) {
+          assert_eq!(nodes.len(), 5);
+
+          // Ensure they are ordered by ascending distance
+          for (current_node, next_node) in nodes.iter().zip(nodes.iter().skip(1)) {
+             assert!((&current_node.key ^ &node_key) <= (&next_node.key ^ &node_key)); 
+          }
+       }
+       else {
+          panic!("We shouldn't have found the node!");
+       }
+    }
+
+    #[test]
+    fn descending_lookup_on_a_sparse_table() {
+       let mut table = RoutingTable::new(Hash160::random());
+       for i in (10..50).filter(|x| x%2 == 0) {
+         table.fill_bucket(i, 2);
+       }
+       let mut node_key = table.parent_key.clone();
+       node_key.flip_bit(51); // Bucket 51
+       node_key.raw[0] = 0xFF;
+       if let LookupResult::ClosestNodes(nodes) = table.lookup(&node_key,5) {
+          assert_eq!(nodes.len(), 5);
+
+          // Ensure they are ordered by ascending distance
+          for (current_node, next_node) in nodes.iter().zip(nodes.iter().skip(1)) {
+             assert!((&current_node.key ^ &node_key) <= (&next_node.key ^ &node_key)); 
+          }
+       }
+       else {
+          panic!("We shouldn't have found the node!");
+       }
+    }
+
+    #[test]
+    fn lookup_on_a_sparse_table() {
+       let mut table = RoutingTable::new(Hash160::random());
+       for i in (10..50).filter(|x| x%2 == 0) {
+         table.fill_bucket(i, 2);
+       }
+       let mut node_key = table.parent_key.clone();
+       node_key.flip_bit(25); // Bucket 25
        node_key.raw[0] = 0xFF;
        if let LookupResult::ClosestNodes(nodes) = table.lookup(&node_key,5) {
           assert_eq!(nodes.len(), 5);
