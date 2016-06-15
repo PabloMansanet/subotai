@@ -3,7 +3,6 @@ use hash::Hash160;
 use std::net;
 use std::collections::VecDeque;
 use std::mem;
-use itertools::Itertools;
 
 const K : usize = 20;
 const BUCKET_DEPTH : usize = K;
@@ -108,34 +107,28 @@ impl RoutingTable {
       let mut closest = Vec::with_capacity(n);
       // Unwrap because we shouldn't be calling this private method
       // with our own key as argument.
-      let mut ideal_bucket = self.bucket_for_node(key).unwrap();
+      let ideal_bucket_index = self.bucket_for_node(key).unwrap();
 
-      // descending from the ideal bucket
-      for bucket_index in (1..(ideal_bucket+1)).rev() {
-         if closest.len() >= n {
+      let descent_from_ideal = (1..(ideal_bucket_index+1)).rev();
+      let ascent_from_above_ideal = (ideal_bucket_index+1)..KEY_SIZE;
+      let lookup_order = descent_from_ideal.chain(ascent_from_above_ideal);
+
+      for bucket_index in lookup_order {
+         self.pour_in_order(&mut closest, self.buckets[bucket_index].clone());
+         if closest.capacity() == closest.len() {
             break;
          }
-         self.pour_in_order(&mut closest, self.buckets[bucket_index].clone());
-      }
-      // ascending from above the ideal bucket
-      for bucket_index in (ideal_bucket +1)..KEY_SIZE {
-         if closest.len() >= n {
-            break;
-         }
-         self.pour_in_order(&mut closest, self.buckets[bucket_index].clone());
       }
       closest
    }
 
-   fn pour_in_order (&self, destination : &mut Vec<NodeInfo>, source : Bucket) {
-         let mut nodes_from_bucket = source.entries.into_iter().collect::<Vec<NodeInfo>>();
+   fn pour_in_order (&self, destination : &mut Vec<NodeInfo>, source : Bucket){
+      let mut nodes_from_bucket = source.entries.into_iter().collect::<Vec<NodeInfo>>();
+      nodes_from_bucket.sort_by_key(|ref info| &info.key ^ &self.parent_key);
 
-         let space_left = destination.capacity() - destination.len();
-         if nodes_from_bucket.len() >= space_left {
-            nodes_from_bucket.sort_by_key(|ref info| &info.key ^ &self.parent_key);
-            nodes_from_bucket.truncate(space_left);
-         }
-         destination.append(&mut nodes_from_bucket);
+      let space_left = destination.capacity() - destination.len();
+      nodes_from_bucket.truncate(space_left);
+      destination.append(&mut nodes_from_bucket);
    }
 
    /// Returns the appropriate position for a node, by computing
