@@ -70,12 +70,12 @@ impl RoutingTable {
          let bucket = &mut self.buckets[index];
          bucket.entries.retain(|ref stored_info| info.key != stored_info.key);
          if bucket.entries.len() == BUCKET_DEPTH {
-            let evicted = bucket.entries.pop_front().unwrap();
-            let conflict = EvictionConflict { evicted  : evicted,
-                                              inserted : info.clone() };
+            let conflict = EvictionConflict { 
+               evicted  : bucket.entries.pop_front().unwrap(),
+               inserted : info.clone() 
+            };
             self.conflicts.push(conflict);
          }
-
          bucket.entries.push_back(info);
       }
    }
@@ -114,21 +114,16 @@ impl RoutingTable {
       let lookup_order = descent_from_ideal.chain(ascent_from_above_ideal);
 
       for bucket_index in lookup_order {
-         self.pour_in_order(&mut closest, self.buckets[bucket_index].clone());
+         let mut nodes_from_bucket = self.buckets[bucket_index].clone().entries.into_iter().collect::<Vec<NodeInfo>>();
+         nodes_from_bucket.sort_by_key(|ref info| &info.key ^ key);
+         let space_left = closest.capacity() - closest.len();
+         nodes_from_bucket.truncate(space_left);
+         closest.append(&mut nodes_from_bucket);
          if closest.capacity() == closest.len() {
             break;
          }
       }
       closest
-   }
-
-   fn pour_in_order (&self, destination : &mut Vec<NodeInfo>, source : Bucket){
-      let mut nodes_from_bucket = source.entries.into_iter().collect::<Vec<NodeInfo>>();
-      nodes_from_bucket.sort_by_key(|ref info| &info.key ^ &self.parent_key);
-
-      let space_left = destination.capacity() - destination.len();
-      nodes_from_bucket.truncate(space_left);
-      destination.append(&mut nodes_from_bucket);
    }
 
    /// Returns the appropriate position for a node, by computing
@@ -289,6 +284,11 @@ mod tests {
 
        if let LookupResult::ClosestNodes(nodes) = table.lookup(&node_key,20) {
           assert_eq!(nodes.len(), 15);
+
+          // Ensure they are ordered by ascending distance
+          for (current_node, next_node) in nodes.iter().zip(nodes.iter().skip(1)) {
+             assert!((&current_node.key ^ &node_key) <= (&next_node.key ^ &node_key)); 
+          }
        }
        else {
           panic!("We shouldn't have found the node!");

@@ -1,6 +1,7 @@
 use rand::{thread_rng, Rng};
 use itertools::Zip;
 use std::ops::BitXor;
+use std::cmp::{PartialOrd, Ordering};
 
 pub const KEY_SIZE : usize = 160;
 pub const KEY_SIZE_BYTES : usize = KEY_SIZE / 8;
@@ -9,15 +10,37 @@ pub const KEY_SIZE_BYTES : usize = KEY_SIZE / 8;
 ///
 /// We aren't interested in strong cryptography, but rather
 /// a simple way to generate 160 bit key identifiers.
-#[derive(Debug,Clone,Eq,Ord,PartialEq,PartialOrd)]
+#[derive(Debug,Clone,PartialEq,Eq)]
 pub struct Hash160 {
    pub raw : [u8; KEY_SIZE_BYTES],
+}
+
+impl PartialOrd for Hash160 {
+   fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+      for (a,b) in self.raw.iter().rev().zip(other.raw.iter().rev()) {
+         match a.cmp(b) {
+            Ordering::Less => return Some(Ordering::Less),
+            Ordering::Greater => return Some(Ordering::Greater),
+            Ordering::Equal => ()
+         }
+      }
+      None 
+   }
+}
+
+impl Ord for Hash160 {
+   fn cmp(&self, other: &Self) -> Ordering {
+      match self.partial_cmp(other) {
+         Some(order) => order,
+         None => Ordering::Equal
+      }
+   }
 }
 
 impl<'a, 'b> BitXor<&'b Hash160> for &'a Hash160 {
    type Output = Hash160;
 
-   fn bitxor (self, rhs : &'b Hash160) -> Hash160 {
+   fn bitxor (self, rhs: &'b Hash160) -> Hash160 {
       let mut result = Hash160::blank();
       for (d, a, b) in Zip::new((&mut result.raw, &self.raw, &rhs.raw)) {
          *d = a^b;
