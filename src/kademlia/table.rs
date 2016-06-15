@@ -105,25 +105,42 @@ impl RoutingTable {
 
    fn closest_n_nodes_to(&self, key : &Hash160, n : usize) -> Vec<NodeInfo>{
       let mut closest = Vec::with_capacity(n);
-      // Unwrap because we shouldn't be calling this private method
-      // with our own key as argument.
-      let ideal_bucket_index = self.bucket_for_node(key).unwrap();
+      let mut master_key = key ^ &self.parent_key;
+      let ideal_bucket = master_key.height().unwrap();
+      let mut floor = ideal_bucket;
+      let mut ceiling = floor + 1;
 
-      let ascent_to_ideal = 1..ideal_bucket_index;
-      let ascent_from_above_ideal = (ideal_bucket_index+1)..KEY_SIZE;
-      let lookup_order = (ideal_bucket_index..ideal_bucket_index)
-                         .chain(ascent_to_ideal)
-                         .chain(ascent_from_above_ideal);
+      while ceiling > 1 {
+         println!("Trying buckets {} to {}", floor, ceiling);
+         for bucket_index in floor..ceiling {
+            print!(" doot");
+            let mut nodes_from_bucket = self.buckets[bucket_index].clone().entries.into_iter().collect::<Vec<NodeInfo>>();
+            nodes_from_bucket.sort_by_key(|ref info| &info.key ^ key);
+            let space_left = closest.capacity() - closest.len();
+            nodes_from_bucket.truncate(space_left);
+            closest.append(&mut nodes_from_bucket);
+            if closest.capacity() == closest.len() {
+               break;
+            }
+         }
+         ceiling = floor;
+         master_key.flip_bit(floor);
+         floor = match master_key.height() {
+            Some(height) => height,
+            None => 1
+         }
+      }
 
-      for bucket_index in lookup_order {
+      // If the master key algorithm wasn't enough, just pour from the higher buckets
+      for bucket_index in (ideal_bucket+1)..KEY_SIZE {
+         if closest.capacity() == closest.len() {
+            break;
+         }
          let mut nodes_from_bucket = self.buckets[bucket_index].clone().entries.into_iter().collect::<Vec<NodeInfo>>();
          nodes_from_bucket.sort_by_key(|ref info| &info.key ^ key);
          let space_left = closest.capacity() - closest.len();
          nodes_from_bucket.truncate(space_left);
          closest.append(&mut nodes_from_bucket);
-         if closest.capacity() == closest.len() {
-            break;
-         }
       }
       closest
    }
@@ -303,7 +320,6 @@ mod tests {
        }
        let mut node_key = table.parent_key.clone();
        node_key.flip_bit(8); // Bucket 8
-       node_key.raw[0] = 0xFF;
        if let LookupResult::ClosestNodes(nodes) = table.lookup(&node_key,5) {
           assert_eq!(nodes.len(), 5);
 
