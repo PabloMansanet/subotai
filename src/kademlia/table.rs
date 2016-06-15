@@ -12,7 +12,7 @@ const BUCKET_DEPTH : usize = K;
 ///
 /// The structure employs least-recently seen eviction. Conflicts generated
 /// by evicting a node by inserting a newer one remain tracked, so they can
-/// can be resolved later.
+/// be resolved later.
 pub struct RoutingTable {
    parent_key : Hash160,
    buckets    : Vec<Bucket>,
@@ -46,6 +46,47 @@ pub enum LookupResult {
    Found(NodeInfo), 
    ClosestNodes(Vec<NodeInfo>),
    Myself,
+}
+
+pub struct MasterKey {
+   distance     : Hash160,
+   floor        : usize,
+   ceiling      : usize,
+   initial      : usize,
+}
+
+impl MasterKey {
+   fn new(distance : Hash160) -> MasterKey {
+      MasterKey { 
+         distance : distance,
+         initial  : distance.height().unwrap(),
+         floor    : initial,
+         ceiling  : initial + 1 
+      }
+   }
+}
+
+impl Iterator for MasterKey {
+//   type Item = usize;
+//
+//   fn next(&mut self) -> Option<usize> {
+//      if floor == KEY_SIZE {
+//         None
+//      }
+//      else if ceiling - floor > 0 {
+//         let ret = Some(floor)
+//         floor += 1;
+//         ret
+//      } else {
+//         ceiling -= 1; 
+//         master_key.flip_bit(floor);
+//
+//         match master_key.height() {
+//            Some(height) => floor = height,
+//            None => { floor = 
+//         }
+//      } 
+//   }
 }
 
 impl RoutingTable {
@@ -111,16 +152,14 @@ impl RoutingTable {
       let mut ceiling = floor + 1;
 
       while ceiling > 1 {
-         println!("Trying buckets {} to {}", floor, ceiling);
          for bucket_index in floor..ceiling {
-            print!(" doot");
             let mut nodes_from_bucket = self.buckets[bucket_index].clone().entries.into_iter().collect::<Vec<NodeInfo>>();
             nodes_from_bucket.sort_by_key(|ref info| &info.key ^ key);
             let space_left = closest.capacity() - closest.len();
             nodes_from_bucket.truncate(space_left);
             closest.append(&mut nodes_from_bucket);
             if closest.capacity() == closest.len() {
-               break;
+               return closest;
             }
          }
          ceiling = floor;
@@ -357,31 +396,4 @@ mod tests {
           panic!("We shouldn't have found the node!");
        }
     }
-
-    #[test]
-    fn lookup_on_a_randomized_table() {
-       let mut table = RoutingTable::new(Hash160::random());
-       let any_ip = net::IpAddr::from_str("0.0.0.0").unwrap();
-       for _ in 0..100 {
-          table.insert_node(NodeInfo {
-             key  : Hash160::random(),
-             ip   : any_ip.clone(),
-             port : 0
-          });
-       }
-
-       let node_key = Hash160::random();
-       if let LookupResult::ClosestNodes(nodes) = table.lookup(&node_key, 30) {
-          assert_eq!(nodes.len(), 30);
-
-          // Ensure they are ordered by ascending distance
-          for (current_node, next_node) in nodes.iter().zip(nodes.iter().skip(1)) {
-             assert!((&current_node.key ^ &node_key) <= (&next_node.key ^ &node_key)); 
-          }
-       }
-       else {
-          panic!("You should go play the lottery...");
-       }
-    }
-
 }
