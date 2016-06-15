@@ -6,7 +6,7 @@ use std::cmp::{PartialOrd, Ordering};
 pub const KEY_SIZE : usize = 160;
 pub const KEY_SIZE_BYTES : usize = KEY_SIZE / 8;
 
-/// Light wrapper over a 160 bit hash
+/// Light wrapper over a little endian 160 bit hash
 ///
 /// We aren't interested in strong cryptography, but rather
 /// a simple way to generate 160 bit key identifiers.

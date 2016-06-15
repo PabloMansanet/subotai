@@ -222,8 +222,6 @@ mod tests {
 
        let conflict = table.conflicts.first().unwrap();
        // We evicted the oldest node, which has a blank key.
-       assert_eq!(conflict.evicted.key, Hash160::blank());
-       // We inserted the newest node, but it remains referenced in the conflict.
        assert!(table.specific_node(&conflict.inserted.key).is_some());
     }
 
@@ -294,4 +292,27 @@ mod tests {
           panic!("We shouldn't have found the node!");
        }
     }
+
+    #[test]
+    fn ascending_lookup_on_a_sparse_table() {
+       let mut table = RoutingTable::new(Hash160::random());
+       for i in 10..50.filter(|x| x%2 == 0) {
+         table.fill_bucket(i, 1);
+       }
+       let mut node_key = table.parent_key.clone();
+       node_key.flip_bit(8); // Bucket 8
+       node_key.raw[0] = 0xFF;
+       if let LookupResult::ClosestNodes(nodes) = table.lookup(&node_key,5) {
+          assert_eq!(nodes.len(), 5);
+
+          // Ensure they are ordered by ascending distance
+          for (current_node, next_node) in nodes.iter().zip(nodes.iter().skip(1)) {
+             assert!((&current_node.key ^ &node_key) <= (&next_node.key ^ &node_key)); 
+          }
+       }
+       else {
+          panic!("We shouldn't have found the node!");
+       }
+    }
+
 }
