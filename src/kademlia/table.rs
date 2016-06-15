@@ -165,7 +165,6 @@ impl Bucket {
    pub fn new() -> Bucket {
       Bucket { entries : VecDeque::<NodeInfo>::with_capacity(BUCKET_DEPTH) }
    }
-
 }
 
 #[cfg(test)]
@@ -288,28 +287,10 @@ mod tests {
     }
 
     #[test]
-    fn lookup_for_a_not_stored_node() {
-       let mut table = RoutingTable::new(Hash160::random());
-       table.fill_bucket(11, 5);
-       table.fill_bucket(12, 5);
-       table.fill_bucket(13, 5);
-
-       // We construct a node key that would fall in bucket 12, but isn't stored.
-       let mut node_key = table.parent_key.clone();
-       node_key.flip_bit(12);
-       node_key.raw[0] = 0xFF;
-
-       if let LookupResult::ClosestNodes(nodes) = table.lookup(&node_key,20) {
-          assert_eq!(nodes.len(), 15);
-
-          // Ensure they are ordered by ascending distance
-          for (current_node, next_node) in nodes.iter().zip(nodes.iter().skip(1)) {
-             assert!((&current_node.key ^ &node_key) <= (&next_node.key ^ &node_key)); 
-          }
-       }
-       else {
-          panic!("We shouldn't have found the node!");
-       }
+    fn lookup_for_self() {
+       let parent_key = Hash160::random();
+       let table = RoutingTable::new(parent_key.clone());
+       assert_eq!(table.lookup(&parent_key, 20), LookupResult::Myself);
     }
 
     #[test]
@@ -374,6 +355,32 @@ mod tests {
        }
        else {
           panic!("We shouldn't have found the node!");
+       }
+    }
+
+    #[test]
+    fn lookup_on_a_randomized_table() {
+       let mut table = RoutingTable::new(Hash160::random());
+       let any_ip = net::IpAddr::from_str("0.0.0.0").unwrap();
+       for _ in 0..100 {
+          table.insert_node(NodeInfo {
+             key  : Hash160::random(),
+             ip   : any_ip.clone(),
+             port : 0
+          });
+       }
+
+       let node_key = Hash160::random();
+       if let LookupResult::ClosestNodes(nodes) = table.lookup(&node_key, 30) {
+          assert_eq!(nodes.len(), 30);
+
+          // Ensure they are ordered by ascending distance
+          for (current_node, next_node) in nodes.iter().zip(nodes.iter().skip(1)) {
+             assert!((&current_node.key ^ &node_key) <= (&next_node.key ^ &node_key)); 
+          }
+       }
+       else {
+          panic!("You should go play the lottery...");
        }
     }
 
