@@ -61,6 +61,76 @@ impl BitXor for Hash160 {
    }
 }
 
+pub struct Zeroes { 
+   hash  : Hash160,
+   index : usize,
+   rev   : usize
+}
+
+pub struct Ones { 
+   hash  : Hash160,
+   index : usize,
+   rev   : usize,
+}
+
+impl Iterator for Zeroes {
+   type Item = usize;
+
+   fn next(&mut self) -> Option<usize> {
+      while self.index < self.rev {
+         let value_at_index = self.hash.raw[self.index / 8] & (1 << (self.index % 8));
+         self.index += 1;
+         if value_at_index == 0 {
+            return Some(self.index - 1);
+         }
+      }
+      None
+   }
+}
+
+impl Iterator for Ones {
+   type Item = usize;
+
+   fn next(&mut self) -> Option<usize> {
+      while self.index < self.rev {
+         let value_at_index = self.hash.raw[self.index / 8] & (1 << (self.index % 8));
+         self.index += 1;
+         if value_at_index == 1 {
+            return Some(self.index - 1);
+         }
+      }
+      None
+   }
+}
+
+impl DoubleEndedIterator for Zeroes {
+   fn next_back(&mut self) -> Option<usize> {
+      while self.index < self.rev {
+         let value_at_rev = self.hash.raw[(self.rev-1) / 8] & (1 << ((self.rev-1) % 8));
+         self.rev -= 1;
+         if value_at_rev == 0 {
+            return Some(self.rev);
+         }
+      }
+      None
+   }
+}
+
+impl DoubleEndedIterator for Ones {
+   fn next_back(&mut self) -> Option<usize> {
+      while self.index < self.rev {
+         let value_at_rev = self.hash.raw[(self.rev-1) / 8] & (1 << ((self.rev-1) % 8));
+         self.rev -= 1;
+         if value_at_rev == 1 {
+            return Some(self.rev);
+         }
+      }
+      None
+   }
+}
+
+
+
 impl Hash160 {
    pub fn blank() -> Hash160 {
       Hash160 { raw : [0; KEY_SIZE_BYTES] }
@@ -70,6 +140,22 @@ impl Hash160 {
       let mut hash = Hash160::blank();
       thread_rng().fill_bytes(&mut hash.raw);
       hash
+   }
+
+   pub fn zeroes(self) -> Zeroes {
+      Zeroes {
+         hash  : self,
+         index : 0,
+         rev   : KEY_SIZE
+      }
+   }
+
+   pub fn ones(self) -> Ones {
+      Ones {
+         hash  : self,
+         index : 0,
+         rev   : KEY_SIZE
+      }
    }
 
    /// Computes the bit index of the highest "1". Returns None for a blank hash.
