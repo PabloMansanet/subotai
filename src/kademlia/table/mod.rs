@@ -1,6 +1,7 @@
 use hash::KEY_SIZE;
 use hash::Hash160;
 use std::net;
+use std::cmp;
 use std::collections::VecDeque;
 use std::mem;
 
@@ -17,9 +18,8 @@ const BUCKET_DEPTH : usize = K;
 /// by evicting a node by inserting a newer one remain tracked, so they can
 /// be resolved later.
 pub struct RoutingTable {
-   parent_key : Hash160,
-   buckets    : Vec<Bucket>,
-   conflicts  : Vec<EvictionConflict>,
+   buckets        : Vec<Bucket>,
+   conflicts      : Vec<EvictionConflict>,
 }
 
 /// Bucket size is estimated to be small enough not to warrant
@@ -39,88 +39,88 @@ struct EvictionConflict {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct NodeInfo {
-   pub key  : Hash160,
-   pub ip   : net::IpAddr,
-   pub port : u16,
+   pub node_id : Hash160,
+   pub ip      : Option<net::IpAddr>,
+   pub port    : Option<u16>,
 }
 
 #[derive(Debug, PartialEq)]
 pub enum LookupResult {
    Found(NodeInfo), 
    ClosestNodes(Vec<NodeInfo>),
-   Myself,
 }
 
 impl RoutingTable {
-   pub fn new(parent_key : Hash160) -> RoutingTable {
+   pub fn new(parent_node_id : Hash160) -> RoutingTable {
       let mut buckets = Vec::<Bucket>::with_capacity(KEY_SIZE);
-      for _ in 0..KEY_SIZE {
-         buckets.push(Bucket::new());
+      for i in 0..KEY_SIZE {
+         buckets.push(Bucket::new(i));
       }
 
-      RoutingTable { 
-         parent_key : parent_key,
+      let mut table = RoutingTable { 
          buckets : buckets,
          conflicts  : Vec::new() 
-      }
+      };
+
+      // Store the parent node at entry zero.
+      table.buckets[0].entries.push_back( NodeInfo { 
+         node_id : parent_node_id, 
+         ip  : None, 
+         port : None
+      });
+      table
    }
 
    /// Inserts a node in the routing table. Employs least-recently-seen eviction
    /// by kicking out the oldest node in case the bucket is full, and registering
    /// an eviction conflict that can be revised later.
    pub fn insert_node(&mut self, info : NodeInfo) {
-      if let Some(index) = self.bucket_for_node(&info.key) {
-         let bucket = &mut self.buckets[index];
-         bucket.entries.retain(|ref stored_info| info.key != stored_info.key);
-         if bucket.entries.len() == BUCKET_DEPTH {
-            let conflict = EvictionConflict { 
-               evicted  : bucket.entries.pop_front().unwrap(),
-               inserted : info.clone() 
-            };
-            self.conflicts.push(conflict);
-         }
-         bucket.entries.push_back(info);
+      let index = self.bucket_for_node(&info.node_id);
+      let bucket = &mut self.buckets[index];
+      bucket.entries.retain(|ref stored_info| info.node_id != stored_info.node_id);
+      if bucket.entries.len() == BUCKET_DEPTH {
+         let conflict = EvictionConflict { 
+            evicted  : bucket.entries.pop_front().unwrap(),
+            inserted : info.clone() 
+         };
+         self.conflicts.push(conflict);
       }
+      bucket.entries.push_back(info);
    }
 
    /// Performs a node lookup on the routing table. The lookup result may
    /// contain the specific node, a list of up to the N closest nodes, or
    /// report that the parent node itself was requested.
-   pub fn lookup(&self, key : &Hash160, n : usize) -> LookupResult {
-      if *key == self.parent_key {
-         return LookupResult::Myself;
-      } 
-
-      match self.specific_node(key) {
+   pub fn lookup(&self, node_id : &Hash160, n : usize) -> LookupResult {
+      match self.specific_node(node_id) {
          Some(info) => LookupResult::Found(info),
-         None => LookupResult::ClosestNodes(self.closest_n_nodes_to(key, n)),
+         None => LookupResult::ClosestNodes(self.closest_n_nodes_to(node_id, n)),
       }
    }
 
    /// Returns a table entry for the specific node with a given hash.
-   fn specific_node(&self, key : &Hash160) -> Option<NodeInfo> {
-      if let Some(index) = self.bucket_for_node(key){
-         let bucket = &self.buckets[index];
-         return bucket.entries.iter().find(|ref info| *key == info.key).cloned();
-      }
-      None
+   fn specific_node(&self, node_id : &Hash160) -> Option<NodeInfo> {
+      let index = self.bucket_for_node(node_id);
+      let bucket = &self.buckets[index];
+      bucket.entries.iter().find(|ref info| *node_id == info.node_id).cloned()
    }
 
-   fn closest_n_nodes_to(&self, key : &Hash160, n : usize) -> Vec<NodeInfo> {
+   fn closest_n_nodes_to(&self, node_id : &Hash160, n : usize) -> Vec<NodeInfo> {
       let mut closest = Vec::with_capacity(n);
-      let distance = &self.parent_key ^ key;
+      let parent_node_id = &self.buckets[0].entries[0].node_id;
+      let distance = parent_node_id ^ node_id;
       let descent  = distance.clone().ones().rev();
       let ascent   = distance.clone().zeroes();
       let lookup_order = descent.chain(ascent);
 
       for bucket_index in lookup_order {
-         if self.buckets[bucket_index].entries.len() == 0 {
+         if self.buckets[bucket_index].entries.is_empty() {
             continue;
          }
          
          let mut nodes_from_bucket = self.buckets[bucket_index].entries.clone().into_iter().collect::<Vec<NodeInfo>>();
          println!("Trying bucket {} with {} entries", bucket_index, nodes_from_bucket.len());
-         nodes_from_bucket.sort_by_key(|ref info| &info.key ^ key);
+         nodes_from_bucket.sort_by_key(|ref info| &info.node_id ^ node_id);
          let space_left = closest.capacity() - closest.len();
          nodes_from_bucket.truncate(space_left);
          closest.append(&mut nodes_from_bucket);
@@ -133,23 +133,26 @@ impl RoutingTable {
    }
 
    /// Returns the appropriate position for a node, by computing
-   /// the last bit of their distance set to 1. None if we are
-   /// attempting to add the parent key.
-   fn bucket_for_node(&self, key : &Hash160) -> Option<usize> {
-       (&self.parent_key ^ key).height()
+   /// the last bit of their distance set to 1. If we are requesting
+   /// the bucket for this table's own parent node, we offer bucket 0.
+   fn bucket_for_node(&self, node_id : &Hash160) -> usize {
+      let parent_node_id = &self.buckets[0].entries[0].node_id;
+       match (parent_node_id ^ node_id).height() {
+          Some(bucket) => bucket,
+          None => 0
+       }
    }
 
    fn revert_conflict(&mut self, conflict : EvictionConflict) {
-      if let Some(index) = self.bucket_for_node(&conflict.inserted.key) {
-         let bucket  = &mut self.buckets[index];
-         let evictor = &mut bucket.entries.iter_mut().find(|ref info| conflict.inserted.key == info.key).unwrap();
-         mem::replace::<NodeInfo>(evictor, conflict.evicted);
-      }
+      let index = self.bucket_for_node(&conflict.inserted.node_id);
+      let bucket  = &mut self.buckets[index];
+      let evictor = &mut bucket.entries.iter_mut().find(|ref info| conflict.inserted.node_id == info.node_id).unwrap();
+      mem::replace::<NodeInfo>(evictor, conflict.evicted);
    }
 }
 
 impl Bucket {
-   pub fn new() -> Bucket {
-      Bucket { entries : VecDeque::<NodeInfo>::with_capacity(BUCKET_DEPTH) }
+   pub fn new(bucket_index : usize) -> Bucket {
+      Bucket { entries : VecDeque::<NodeInfo>::with_capacity(cmp::min(2^bucket_index, BUCKET_DEPTH)) }
    }
 }
