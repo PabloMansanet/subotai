@@ -54,7 +54,7 @@ impl RoutingTable {
    pub fn new(parent_node_id : Hash160) -> RoutingTable {
       let mut buckets = Vec::<Bucket>::with_capacity(KEY_SIZE);
       for i in 0..KEY_SIZE {
-         buckets.push(Bucket::new(i));
+         buckets.push(Bucket::for_distances(i));
       }
 
       let mut table = RoutingTable { 
@@ -152,7 +152,7 @@ impl RoutingTable {
 }
 
 impl Bucket {
-   pub fn new(bucket_index : usize) -> Bucket {
-      Bucket { entries : VecDeque::<NodeInfo>::with_capacity(cmp::min(2^bucket_index, BUCKET_DEPTH)) }
+   pub fn for_distances(distance : usize) -> Bucket {
+      Bucket { entries : VecDeque::<NodeInfo>::with_capacity(cmp::min(2^distance, BUCKET_DEPTH)) }
    }
 }
