@@ -133,8 +133,8 @@ impl RoutingTable {
    }
 
    /// Returns the appropriate position for a node, by computing
-   /// the last bit of their distance set to 1. If we are requesting
-   /// the bucket for this table's own parent node, we offer bucket 0.
+   /// the index where their prefix starts differing. If we are requesting
+   /// the bucket for this table's own parent node, we point at bucket 0.
    fn bucket_for_node(&self, node_id : &Hash160) -> usize {
       let parent_node_id = &self.buckets[0].entries[0].node_id;
        match (parent_node_id ^ node_id).height() {
