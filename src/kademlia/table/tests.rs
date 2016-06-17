@@ -2,6 +2,7 @@ use super::*;
 use hash::Hash160;
 use hash::KEY_SIZE;
 use rand::{thread_rng, Rng};
+use std::collections::VecDeque;
 
 fn node_info_no_net(node_id : Hash160) -> NodeInfo {
    NodeInfo {
@@ -9,6 +10,12 @@ fn node_info_no_net(node_id : Hash160) -> NodeInfo {
       ip   : None,
       port : None
    }
+}
+
+#[test]
+fn sanity_check() {
+   let vecdeque = VecDeque::<u32>::with_capacity(9);
+   assert_eq!(vecdeque.capacity(),9);
 }
 
 #[test]

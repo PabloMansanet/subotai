@@ -1,7 +1,6 @@
 use hash::KEY_SIZE;
 use hash::Hash160;
 use std::net;
-use std::cmp;
 use std::collections::VecDeque;
 use std::mem;
 
@@ -53,8 +52,8 @@ pub enum LookupResult {
 impl RoutingTable {
    pub fn new(parent_node_id : Hash160) -> RoutingTable {
       let mut buckets = Vec::<Bucket>::with_capacity(KEY_SIZE);
-      for i in 0..KEY_SIZE {
-         buckets.push(Bucket::for_distances(i));
+      for _ in 0..KEY_SIZE {
+         buckets.push(Bucket::new());
       }
 
       let mut table = RoutingTable { 
@@ -110,7 +109,7 @@ impl RoutingTable {
       let parent_node_id = &self.buckets[0].entries[0].node_id;
       let distance = parent_node_id ^ node_id;
       let descent  = distance.clone().ones().rev();
-      let ascent   = distance.clone().zeroes();
+      let ascent   = distance.zeroes();
       let lookup_order = descent.chain(ascent);
 
       for bucket_index in lookup_order {
@@ -119,7 +118,6 @@ impl RoutingTable {
          }
          
          let mut nodes_from_bucket = self.buckets[bucket_index].entries.clone().into_iter().collect::<Vec<NodeInfo>>();
-         println!("Trying bucket {} with {} entries", bucket_index, nodes_from_bucket.len());
          nodes_from_bucket.sort_by_key(|ref info| &info.node_id ^ node_id);
          let space_left = closest.capacity() - closest.len();
          nodes_from_bucket.truncate(space_left);
@@ -152,7 +150,9 @@ impl RoutingTable {
 }
 
 impl Bucket {
-   pub fn for_distances(distance : usize) -> Bucket {
-      Bucket { entries : VecDeque::<NodeInfo>::with_capacity(cmp::min(2^distance, BUCKET_DEPTH)) }
+   fn new() -> Bucket {
+      Bucket{
+         entries: VecDeque::with_capacity(BUCKET_DEPTH)
+      }
    }
 }
