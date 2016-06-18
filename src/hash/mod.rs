@@ -95,7 +95,7 @@ impl Iterator for Ones {
       while self.index < self.rev {
          let value_at_index = self.hash.raw[self.index / 8] & (1 << (self.index % 8));
          self.index += 1;
-         if value_at_index == 1 {
+         if value_at_index != 0 {
             return Some(self.index - 1);
          }
       }
@@ -121,7 +121,7 @@ impl DoubleEndedIterator for Ones {
       while self.index < self.rev {
          let value_at_rev = self.hash.raw[(self.rev-1) / 8] & (1 << ((self.rev-1) % 8));
          self.rev -= 1;
-         if value_at_rev == 1 {
+         if value_at_rev != 0 {
             return Some(self.rev);
          }
       }
@@ -212,5 +212,22 @@ mod tests {
        assert_eq!(test_hash.raw[1], 2);
        test_hash.flip_bit(9);
        assert_eq!(test_hash.raw[1], 0);
+    }
+
+    #[test]
+    fn iterating_over_ones() {
+       let mut test_hash = Hash160::blank();
+       let bits = vec![5usize,20,40];
+
+       for bit in &bits {
+          test_hash.flip_bit(*bit);
+       }
+
+       println!("{:?}",test_hash);
+
+       for (actual, expected) in test_hash.ones().zip(bits) {
+          println!("Doot");
+          assert_eq!(actual, expected);
+       }
     }
 }

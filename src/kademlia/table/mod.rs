@@ -97,6 +97,14 @@ impl RoutingTable {
       }
    }
 
+   fn all_nodes(&self) -> AllNodes {
+      AllNodes {
+         routing_table  : &self,
+         current_bucket : Vec::with_capacity(BUCKET_DEPTH),
+         bucket_index   : 0,
+      }
+   }
+
    /// Returns a table entry for the specific node with a given hash.
    fn specific_node(&self, node_id : &Hash160) -> Option<NodeInfo> {
       let index = self.bucket_for_node(node_id);
@@ -111,7 +119,7 @@ impl RoutingTable {
       let descent  = distance.clone().ones().rev();
       let ascent   = distance.zeroes();
       let lookup_order = descent.chain(ascent);
-
+      
       for bucket_index in lookup_order {
          if self.buckets[bucket_index].entries.is_empty() {
             continue;
@@ -147,6 +155,28 @@ impl RoutingTable {
       let evictor = &mut bucket.entries.iter_mut().find(|ref info| conflict.inserted.node_id == info.node_id).unwrap();
       mem::replace::<NodeInfo>(evictor, conflict.evicted);
    }
+}
+
+/// Produces copies of all known nodes in no particular order
+/// starting from self. The invariant is weakly held, i.e. the table
+/// may be modified through iteration.
+pub struct AllNodes<'a> {
+   routing_table  : &'a RoutingTable,
+   current_bucket : Vec<NodeInfo>,
+   bucket_index   : usize,
+}
+
+impl<'a> Iterator for AllNodes<'a> {
+   type Item = NodeInfo;
+
+   fn next(&mut self) -> Option<NodeInfo> {
+      while self.bucket_index < KEY_SIZE && self.current_bucket.is_empty() {
+         let mut new_bucket = self.routing_table.buckets[self.bucket_index].entries.clone().into_iter().collect::<Vec<NodeInfo>>();
+         self.current_bucket.append(&mut new_bucket);
+         self.bucket_index += 1;
+      }
+      self.current_bucket.pop()
+   } 
 }
 
 impl Bucket {

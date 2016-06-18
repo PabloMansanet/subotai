@@ -2,7 +2,6 @@ use super::*;
 use hash::Hash160;
 use hash::KEY_SIZE;
 use rand::{thread_rng, Rng};
-use std::collections::VecDeque;
 
 fn node_info_no_net(node_id : Hash160) -> NodeInfo {
    NodeInfo {
@@ -10,12 +9,6 @@ fn node_info_no_net(node_id : Hash160) -> NodeInfo {
       ip   : None,
       port : None
    }
-}
-
-#[test]
-fn sanity_check() {
-   let vecdeque = VecDeque::<u32>::with_capacity(9);
-   assert_eq!(vecdeque.capacity(),9);
 }
 
 #[test]
@@ -169,13 +162,21 @@ fn lookup_on_a_randomized_table() {
    }
    let mut node_id = parent_node_id.clone();
    node_id.mutate_random_bits(20);
-   if let LookupResult::ClosestNodes(nodes) = table.lookup(&node_id,30) {
-      assert_eq!(nodes.len(), 30);
+   if let LookupResult::ClosestNodes(nodes) = table.lookup(&node_id,20) {
+      assert_eq!(nodes.len(), 20);
 
-      // Ensure they are ordered by ascending distance
-      for (current_node, next_node) in nodes.iter().zip(nodes.iter().skip(1)) {
-         assert!((&current_node.node_id ^ &node_id) <= (&next_node.node_id ^ &node_id)); 
+      // Ensure they are ordered by ascending distance by comparing to a brute force
+      // sorted list of nodes
+      let mut ordered_nodes = 
+         table
+         .all_nodes()
+         .collect::<Vec<NodeInfo>>();
+      ordered_nodes.sort_by_key(|ref info| &info.node_id ^ &node_id);
+
+      for (a, b) in nodes.iter().zip(ordered_nodes.iter()) {
+         assert_eq!(a, b);
       }
+
    }
    else {
       panic!("We shouldn't have found the node!");
