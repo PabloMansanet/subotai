@@ -1,6 +1,6 @@
 use super::*;
 use hash::Hash;
-use hash::KEY_SIZE;
+use hash::HASH_SIZE;
 use rand::{thread_rng, Rng};
 
 fn node_info_no_net(node_id : Hash) -> NodeInfo {
@@ -203,7 +203,7 @@ impl Hash {
    pub fn mutate_random_bits(&mut self, number_of_bits : u8) {
       for _ in 0..number_of_bits {
          
-         let index = thread_rng().gen::<usize>() % KEY_SIZE;
+         let index = thread_rng().gen::<usize>() % HASH_SIZE;
          self.flip_bit(index);
       }
    }

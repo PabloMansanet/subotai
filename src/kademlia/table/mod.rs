@@ -1,4 +1,4 @@
-use hash::KEY_SIZE;
+use hash::HASH_SIZE;
 use hash::Hash;
 use std::net;
 use std::collections::VecDeque;
@@ -41,8 +41,8 @@ impl RoutingTable {
    /// Constructs a routing table based on a parent node id. Other nodes
    /// will be stored in this table based on their distance to the node id provided.
    pub fn new(parent_node_id: Hash) -> RoutingTable {
-      let mut buckets = Vec::<Bucket>::with_capacity(KEY_SIZE);
-      for _ in 0..KEY_SIZE {
+      let mut buckets = Vec::<Bucket>::with_capacity(HASH_SIZE);
+      for _ in 0..HASH_SIZE {
          buckets.push(Bucket::new());
       }
 
@@ -189,7 +189,7 @@ impl<'a> Iterator for AllNodes<'a> {
    type Item = NodeInfo;
 
    fn next(&mut self) -> Option<NodeInfo> {
-      while self.bucket_index < KEY_SIZE && self.current_bucket.is_empty() {
+      while self.bucket_index < HASH_SIZE && self.current_bucket.is_empty() {
          let mut new_bucket = self.routing_table.buckets[self.bucket_index].entries.clone().into_iter().collect::<Vec<NodeInfo>>();
          new_bucket.sort_by_key(|ref info| &info.node_id ^ &self.routing_table.parent_node_id);
          self.current_bucket.append(&mut new_bucket);
