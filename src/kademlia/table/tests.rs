@@ -151,7 +151,7 @@ fn lookup_on_a_sparse_table() {
 }
 
 #[test]
-fn lookup_on_a_randomized_table() {
+fn efficient_bounce_lookup_on_a_randomized_table() {
    let parent_node_id = Hash160::random();
    let mut table = RoutingTable::new(parent_node_id.clone());
    for _ in 0..300 {
@@ -160,9 +160,11 @@ fn lookup_on_a_randomized_table() {
       node_id.mutate_random_bits(3);
       table.insert_node(node_info_no_net(node_id));
    }
+
+   // We construct an origin node from which to calculate distances for the lookup.
    let mut node_id = parent_node_id.clone();
    node_id.mutate_random_bits(20);
-   if let LookupResult::ClosestNodes(nodes) = table.lookup(&node_id,20) {
+   if let LookupResult::ClosestNodes(nodes) = table.lookup(&node_id, 20) {
       assert_eq!(nodes.len(), 20);
 
       // Ensure they are ordered by ascending distance by comparing to a brute force
@@ -176,7 +178,6 @@ fn lookup_on_a_randomized_table() {
       for (a, b) in nodes.iter().zip(ordered_nodes.iter()) {
          assert_eq!(a, b);
       }
-
    }
    else {
       panic!("We shouldn't have found the node!");

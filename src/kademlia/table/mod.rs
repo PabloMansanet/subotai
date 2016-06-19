@@ -21,21 +21,6 @@ pub struct RoutingTable {
    conflicts      : Vec<EvictionConflict>,
 }
 
-/// Bucket size is estimated to be small enough not to warrant
-/// the downsides of using a linked list.
-#[derive(Debug, Clone)]
-struct Bucket {
-   entries  : VecDeque<NodeInfo>,
-}
-
-/// Represents a conflict derived from attempting to insert a node in a full
-/// bucket. 
-#[derive(Debug,Clone)]
-struct EvictionConflict {
-   evicted  : NodeInfo,
-   inserted : NodeInfo
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct NodeInfo {
    pub node_id : Hash160,
@@ -50,6 +35,8 @@ pub enum LookupResult {
 }
 
 impl RoutingTable {
+   /// Constructs a routing table based on a parent node id. Other nodes
+   /// will be stored in this table based on their distance to the node id provided.
    pub fn new(parent_node_id : Hash160) -> RoutingTable {
       let mut buckets = Vec::<Bucket>::with_capacity(KEY_SIZE);
       for _ in 0..KEY_SIZE {
@@ -90,6 +77,17 @@ impl RoutingTable {
    /// Performs a node lookup on the routing table. The lookup result may
    /// contain the specific node, a list of up to the N closest nodes, or
    /// report that the parent node itself was requested.
+   ///
+   /// This employs an algorithm I have named "bounce lookup", which obtains
+   /// the closest nodes to a given origin walking through the minimum 
+   /// amount of buckets. Please let me know if it exists already, haven't 
+   /// found it any other implementation. It consists of:
+   /// * Calculating the XOR distance between the parent node ID and the 
+   /// lookup node ID.
+   /// * Checking the buckets indexed by the position of every "1" in said
+   /// distance hash, in descending order.
+   /// * "Bounce" back up, checking the buckets indexed by the position of
+   /// every "0" in that distance hash, in ascending order.
    pub fn lookup(&self, node_id : &Hash160, n : usize) -> LookupResult {
       match self.specific_node(node_id) {
          Some(info) => LookupResult::Found(info),
@@ -97,7 +95,13 @@ impl RoutingTable {
       }
    }
 
-   fn all_nodes(&self) -> AllNodes {
+   /// Returns an iterator over all stored nodes, ordered by ascending
+   /// distance to the parent node. This iterator is designed for concurrent
+   /// access to the data structure, and as such it isn't guaranteed that it
+   /// will return a "snapshot" of all nodes for a specific moment in time. 
+   /// Buckets already visited may be modified elsewhere through iteraton, 
+   /// and unvisited buckets may accrue new nodes.
+   pub fn all_nodes(&self) -> AllNodes {
       AllNodes {
          routing_table  : &self,
          current_bucket : Vec::with_capacity(BUCKET_DEPTH),
@@ -112,6 +116,7 @@ impl RoutingTable {
       bucket.entries.iter().find(|ref info| *node_id == info.node_id).cloned()
    }
 
+   /// Bounce lookup algorithm.
    fn closest_n_nodes_to(&self, node_id : &Hash160, n : usize) -> Vec<NodeInfo> {
       let mut closest = Vec::with_capacity(n);
       let parent_node_id = &self.buckets[0].entries[0].node_id;
@@ -157,13 +162,28 @@ impl RoutingTable {
    }
 }
 
-/// Produces copies of all known nodes in no particular order
-/// starting from self. The invariant is weakly held, i.e. the table
+/// Produces copies of all known nodes, ordered in ascending
+/// distance from self. It's a weak invariant, i.e. the table
 /// may be modified through iteration.
 pub struct AllNodes<'a> {
    routing_table  : &'a RoutingTable,
    current_bucket : Vec<NodeInfo>,
    bucket_index   : usize,
+}
+
+/// Represents a conflict derived from attempting to insert a node in a full
+/// bucket. 
+#[derive(Debug,Clone)]
+struct EvictionConflict {
+   evicted  : NodeInfo,
+   inserted : NodeInfo
+}
+
+/// Bucket size is estimated to be small enough not to warrant
+/// the downsides of using a linked list.
+#[derive(Debug, Clone)]
+struct Bucket {
+   entries  : VecDeque<NodeInfo>,
 }
 
 impl<'a> Iterator for AllNodes<'a> {
@@ -172,6 +192,7 @@ impl<'a> Iterator for AllNodes<'a> {
    fn next(&mut self) -> Option<NodeInfo> {
       while self.bucket_index < KEY_SIZE && self.current_bucket.is_empty() {
          let mut new_bucket = self.routing_table.buckets[self.bucket_index].entries.clone().into_iter().collect::<Vec<NodeInfo>>();
+         new_bucket.sort_by_key(|ref info| &info.node_id ^ &self.routing_table.buckets[0].entries[0].node_id);
          self.current_bucket.append(&mut new_bucket);
          self.bucket_index += 1;
       }
