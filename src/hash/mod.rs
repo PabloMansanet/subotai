@@ -6,16 +6,16 @@ use std::cmp::{PartialOrd, Ordering};
 pub const KEY_SIZE : usize = 160;
 pub const KEY_SIZE_BYTES : usize = KEY_SIZE / 8;
 
-/// Light wrapper over a little endian 160 bit hash
+/// Light wrapper over a little endian `KEY_SIZE` bit hash
 ///
 /// We aren't interested in strong cryptography, but rather
-/// a simple way to generate 160 bit key identifiers.
+/// a simple way to generate `KEY_SIZE` bit key identifiers.
 #[derive(Debug,Clone,PartialEq,Eq)]
-pub struct Hash160 {
+pub struct Hash {
    pub raw : [u8; KEY_SIZE_BYTES],
 }
 
-impl PartialOrd for Hash160 {
+impl PartialOrd for Hash {
    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
       for (a,b) in self.raw.iter().rev().zip(other.raw.iter().rev()) {
          match a.cmp(b) {
@@ -28,7 +28,7 @@ impl PartialOrd for Hash160 {
    }
 }
 
-impl Ord for Hash160 {
+impl Ord for Hash {
    fn cmp(&self, other: &Self) -> Ordering {
       match self.partial_cmp(other) {
          Some(order) => order,
@@ -37,11 +37,11 @@ impl Ord for Hash160 {
    }
 }
 
-impl<'a, 'b> BitXor<&'b Hash160> for &'a Hash160 {
-   type Output = Hash160;
+impl<'a, 'b> BitXor<&'b Hash> for &'a Hash {
+   type Output = Hash;
 
-   fn bitxor (self, rhs: &'b Hash160) -> Hash160 {
-      let mut result = Hash160::blank();
+   fn bitxor (self, rhs: &'b Hash) -> Hash {
+      let mut result = Hash::blank();
       for (d, a, b) in Zip::new((&mut result.raw, &self.raw, &rhs.raw)) {
          *d = a^b;
       }
@@ -49,10 +49,10 @@ impl<'a, 'b> BitXor<&'b Hash160> for &'a Hash160 {
    }
 }
 
-impl BitXor for Hash160 {
-   type Output = Hash160;
+impl BitXor for Hash {
+   type Output = Hash;
 
-   fn bitxor (self, rhs : Self) -> Hash160 {
+   fn bitxor (self, rhs: Self) -> Hash {
       let mut raw = self.raw;
       for (a, b) in raw.iter_mut().zip(rhs.raw.iter()) {
          *a ^= *b;
@@ -62,13 +62,13 @@ impl BitXor for Hash160 {
 }
 
 pub struct Zeroes { 
-   hash  : Hash160,
+   hash  : Hash,
    index : usize,
    rev   : usize
 }
 
 pub struct Ones { 
-   hash  : Hash160,
+   hash  : Hash,
    index : usize,
    rev   : usize,
 }
@@ -129,15 +129,13 @@ impl DoubleEndedIterator for Ones {
    }
 }
 
-
-
-impl Hash160 {
-   pub fn blank() -> Hash160 {
-      Hash160 { raw : [0; KEY_SIZE_BYTES] }
+impl Hash {
+   pub fn blank() -> Hash {
+      Hash { raw : [0; KEY_SIZE_BYTES] }
    }
 
-   pub fn random() -> Hash160 {
-      let mut hash = Hash160::blank();
+   pub fn random() -> Hash {
+      let mut hash = Hash::blank();
       thread_rng().fill_bytes(&mut hash.raw);
       hash
    }
@@ -184,12 +182,12 @@ mod tests {
 
     #[test]
     fn random_generation() {
-       assert!(Hash160::random() != Hash160::random());
+       assert!(Hash::random() != Hash::random());
     }
 
     #[test]
     fn computing_height() {
-       let mut test_hash = Hash160::blank();
+       let mut test_hash = Hash::blank();
        assert!(test_hash.height().is_none());
        
        // First bit
@@ -207,7 +205,7 @@ mod tests {
 
     #[test]
     fn bit_flipping() {
-       let mut test_hash = Hash160::blank();
+       let mut test_hash = Hash::blank();
        test_hash.flip_bit(9);
        assert_eq!(test_hash.raw[1], 2);
        test_hash.flip_bit(9);
@@ -216,7 +214,7 @@ mod tests {
 
     #[test]
     fn iterating_over_ones() {
-       let mut test_hash = Hash160::blank();
+       let mut test_hash = Hash::blank();
        let bits = vec![5usize,20,40];
 
        for bit in &bits {
@@ -226,7 +224,6 @@ mod tests {
        println!("{:?}",test_hash);
 
        for (actual, expected) in test_hash.ones().zip(bits) {
-          println!("Doot");
           assert_eq!(actual, expected);
        }
     }
