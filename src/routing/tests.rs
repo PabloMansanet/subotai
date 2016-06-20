@@ -186,7 +186,7 @@ fn efficient_bounce_lookup_on_a_randomized_table() {
 }
 
 impl Table {
-   pub fn fill_bucket(&mut self, bucket_index : usize, fill_quantity : u8) {
+   pub fn fill_bucket(&self, bucket_index : usize, fill_quantity : u8) {
       // Otherwise this helper function becomes quite complex.
       assert!(bucket_index > 7);
       for i in 0..fill_quantity {
