@@ -30,21 +30,21 @@ impl Hash {
       hash
    }
 
-   /// Consumes the hash, providing an iterator through the indices
+   /// Provides an iterator through the indices
    /// of each of its "0" bits.
-   pub fn zeroes(self) -> Zeroes {
+   pub fn zeroes(&self) -> Zeroes {
       Zeroes {
-         hash  : self,
+         hash  : &self,
          index : 0,
          rev   : HASH_SIZE
       }
    }
 
-   /// Consumes the hash, providing an iterator through the indices
+   /// Provides an iterator through the indices
    /// of each of its "1" bits.
-   pub fn ones(self) -> Ones {
+   pub fn ones(&self) -> Ones {
       Ones {
-         hash  : self,
+         hash  : &self,
          index : 0,
          rev   : HASH_SIZE
       }
@@ -72,20 +72,20 @@ impl Hash {
 }
 
 /// Iterator through the indices of each '0' in a hash.
-pub struct Zeroes { 
-   hash  : Hash,
+pub struct Zeroes<'a> { 
+   hash  : &'a Hash,
    index : usize,
    rev   : usize
 }
 
 /// Iterator through the indices of each '1' in a hash.
-pub struct Ones { 
-   hash  : Hash,
+pub struct Ones<'a> { 
+   hash  : &'a Hash,
    index : usize,
    rev   : usize,
 }
 
-impl Iterator for Zeroes {
+impl<'a> Iterator for Zeroes<'a> {
    type Item = usize;
 
    fn next(&mut self) -> Option<usize> {
@@ -100,7 +100,7 @@ impl Iterator for Zeroes {
    }
 }
 
-impl Iterator for Ones {
+impl<'a> Iterator for Ones<'a> {
    type Item = usize;
 
    fn next(&mut self) -> Option<usize> {
@@ -115,7 +115,7 @@ impl Iterator for Ones {
    }
 }
 
-impl DoubleEndedIterator for Zeroes {
+impl<'a> DoubleEndedIterator for Zeroes<'a> {
    fn next_back(&mut self) -> Option<usize> {
       while self.index < self.rev {
          let value_at_rev = self.hash.raw[(self.rev-1) / 8] & (1 << ((self.rev-1) % 8));
@@ -128,7 +128,7 @@ impl DoubleEndedIterator for Zeroes {
    }
 }
 
-impl DoubleEndedIterator for Ones {
+impl<'a> DoubleEndedIterator for Ones<'a> {
    fn next_back(&mut self) -> Option<usize> {
       while self.index < self.rev {
          let value_at_rev = self.hash.raw[(self.rev-1) / 8] & (1 << ((self.rev-1) % 8));

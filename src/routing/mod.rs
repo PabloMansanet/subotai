@@ -127,7 +127,7 @@ impl Table {
    fn closest_n_nodes_to(&self, node_id: &Hash, n: usize) -> Vec<NodeInfo> {
       let mut closest = Vec::with_capacity(n);
       let distance = &self.parent_node_id ^ node_id;
-      let descent  = distance.clone().ones().rev();
+      let descent  = distance.ones().rev();
       let ascent   = distance.zeroes();
       let lookup_order = descent.chain(ascent);
       
@@ -198,7 +198,7 @@ impl<'a> Iterator for AllNodes<'a> {
 
    fn next(&mut self) -> Option<NodeInfo> {
       while self.bucket_index < HASH_SIZE && self.current_bucket.is_empty() {
-         let mut new_bucket = {
+         let mut new_bucket = { // Lock scope
             self.table.buckets[self.bucket_index].entries.lock().unwrap().clone()
          }.into_iter().collect::<Vec<NodeInfo>>();
 

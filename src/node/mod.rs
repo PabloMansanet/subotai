@@ -36,9 +36,9 @@ impl Node {
       let mut buffer = [0u8; SOCKET_BUFFER_SIZE_BYTES];
 
       loop {
-         if let Ok((byes, source)) = socket.recv_from(&mut buffer) {
+         if let Ok((bytes, source)) = socket.recv_from(&mut buffer) {
             if let Some(table) = table_weak.upgrade() {
-               table.process_incoming_rpc(&buffer, bytes, source),
+               table.process_incoming_rpc(&buffer, bytes, source);
             }
          }
 
@@ -57,11 +57,10 @@ impl routing::Table {
 #[cfg(test)]
 mod tests {
    use node;
-   use super::*;
 
    #[test]
-   fn concurrent_access_to_table() {
-      let node = node::Node::new(50000).unwrap();
-
+   fn node_ping() {
+      let node_alpha = node::Node::new(50000).unwrap();
+      let node_beta  = node::Node::new(50001).unwrap();
    }
 }
