@@ -16,36 +16,23 @@ pub enum Destination {
 
 #[derive(RustcDecodable, RustcEncodable)]
 pub enum Payload {
-   Ping(PingPayload),
+   Ping,
+   PingResponse,
    Store(StorePayload),
    FindNode(FindNodePayload),
+   FindNodeResponse(FindNodeResponsePayload),
    FindValue(FindValuePayload),
+   FindValueResponse(FindValueResponsePayload),
 }
 
-pub struct Builder {
-   destination: rpc::Destination,
-}
-
-pub enum BuildError {
-   InvalidConfiguration,
-}
-
-impl Builder {
-   pub fn destination(mut self, destination: rpc::Destination) -> Self {
-      self.destination = destination;
-      self
-   }
-
-   pub fn ping(mut self) -> Result<rpc::Rpc, BuildError> {
-      Ok(rpc::Rpc {
-         destination : self.destination,
-         payload     : Payload::Ping(PingPayload),
-      })
+impl Rpc {
+   pub fn ping(destination: Destination) -> Rpc {
+      Rpc {
+         destination : destination,
+         payload     : Payload::Ping,
+      }
    }
 }
-
-#[derive(RustcDecodable, RustcEncodable)]
-pub struct PingPayload;
 
 #[derive(RustcDecodable, RustcEncodable)]
 pub struct StorePayload;
@@ -56,5 +43,8 @@ pub struct FindNodePayload;
 #[derive(RustcDecodable, RustcEncodable)]
 pub struct FindValuePayload;
 
+#[derive(RustcDecodable, RustcEncodable)]
+pub struct FindNodeResponsePayload;
 
-
+#[derive(RustcDecodable, RustcEncodable)]
+pub struct FindValueResponsePayload;
