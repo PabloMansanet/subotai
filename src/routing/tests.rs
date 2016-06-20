@@ -14,7 +14,7 @@ fn node_info_no_net(node_id : Hash) -> NodeInfo {
 #[test]
 fn inserting_and_retrieving_specific_node() {
    let node_info = node_info_no_net(Hash::random());
-   let mut table = RoutingTable::new(Hash::random());
+   let table = Table::new(Hash::random());
    table.insert_node(node_info.clone());
    assert_eq!(table.specific_node(&node_info.node_id), Some(node_info));
 }
@@ -24,19 +24,20 @@ fn inserting_in_a_full_bucket_causes_eviction_conflict() {
    let mut parent_node_id = Hash::blank();
    parent_node_id.raw[1] = 1; // This will guarantee all nodes will fall on the same bucket.
 
-   let mut table = RoutingTable::new(parent_node_id);
+   let table = Table::new(parent_node_id);
 
    table.fill_bucket(8, super::BUCKET_DEPTH as u8);
-   assert!(table.conflicts.is_empty());
+   assert!(table.conflicts.lock().unwrap().is_empty());
 
    // When we add another node to the same bucket, we cause a conflict.
    let mut node_id = Hash::blank();
    node_id.raw[0] = 0xFF;
    let info = node_info_no_net(node_id);
    table.insert_node(info);
-   assert_eq!(table.conflicts.len(), 1);
+   let conflicts = table.conflicts.lock().unwrap();
+   assert_eq!(conflicts.len(), 1); 
 
-   let conflict = table.conflicts.first().unwrap();
+   let conflict = conflicts.first().unwrap(); 
    // We evicted the oldest node, which has a blank node_id.
    assert!(table.specific_node(&conflict.inserted.node_id).is_some());
 }
@@ -46,18 +47,18 @@ fn reverting_an_eviction_conflict_reinserts_the_evicted_node_in_place_of_evictor
    let mut parent_node_id = Hash::blank();
    parent_node_id.raw[1] = 1; // This will guarantee all nodes will fall on the same bucket.
 
-   let mut table = RoutingTable::new(parent_node_id);
+   let table = Table::new(parent_node_id);
 
    table.fill_bucket(8, super::BUCKET_DEPTH as u8);
-   assert!(table.conflicts.is_empty());
+   assert!(table.conflicts.lock().unwrap().is_empty());
 
    // When we add another node to the same bucket, we cause a conflict.
    let mut node_id = Hash::blank();
    node_id.raw[0] = 0xFF;
    let info = node_info_no_net(node_id);
    table.insert_node(info);
-   assert_eq!(table.conflicts.len(), 1);
-   let conflict = table.conflicts.pop().unwrap();
+   assert_eq!(table.conflicts.lock().unwrap().len(), 1);
+   let conflict = table.conflicts.lock().unwrap().pop().unwrap();
 
    table.revert_conflict(conflict.clone());
    // The evictor has been removed.
@@ -68,7 +69,7 @@ fn reverting_an_eviction_conflict_reinserts_the_evicted_node_in_place_of_evictor
 
 #[test]
 fn lookup_for_a_stored_node() { 
-   let mut table = RoutingTable::new(Hash::random());
+   let table = Table::new(Hash::random());
    let node = node_info_no_net(Hash::random());
    table.insert_node(node.clone());
 
@@ -78,14 +79,14 @@ fn lookup_for_a_stored_node() {
 #[test]
 fn lookup_for_self() {
    let parent_node_id = Hash::random();
-   let table = RoutingTable::new(parent_node_id.clone());
+   let table = Table::new(parent_node_id.clone());
    assert_eq!(table.lookup(&parent_node_id, 20), LookupResult::Myself);
 }
 
 #[test]
 fn ascending_lookup_on_a_sparse_table() {
    let parent_node_id = Hash::random();
-   let mut table = RoutingTable::new(parent_node_id.clone());
+   let table = Table::new(parent_node_id.clone());
    for i in (10..50).filter(|x| x%2 == 0) {
      table.fill_bucket(i, 2);
    }
@@ -107,7 +108,7 @@ fn ascending_lookup_on_a_sparse_table() {
 #[test]
 fn descending_lookup_on_a_sparse_table() {
    let parent_node_id = Hash::random();
-   let mut table = RoutingTable::new(parent_node_id.clone());
+   let table = Table::new(parent_node_id.clone());
    for i in (10..50).filter(|x| x%2 == 0) {
      table.fill_bucket(i, 2);
    }
@@ -130,7 +131,7 @@ fn descending_lookup_on_a_sparse_table() {
 #[test]
 fn lookup_on_a_sparse_table() {
    let parent_node_id = Hash::random();
-   let mut table = RoutingTable::new(parent_node_id.clone());
+   let table = Table::new(parent_node_id.clone());
    for i in (10..50).filter(|x| x%2 == 0) {
      table.fill_bucket(i, 2);
    }
@@ -153,7 +154,7 @@ fn lookup_on_a_sparse_table() {
 #[test]
 fn efficient_bounce_lookup_on_a_randomized_table() {
    let parent_node_id = Hash::random();
-   let mut table = RoutingTable::new(parent_node_id.clone());
+   let table = Table::new(parent_node_id.clone());
    for _ in 0..300 {
       // We create node_ids that will distribute more or less uniformly over the buckets.
       let mut node_id = parent_node_id.clone();
@@ -184,7 +185,7 @@ fn efficient_bounce_lookup_on_a_randomized_table() {
    }
 }
 
-impl RoutingTable {
+impl Table {
    pub fn fill_bucket(&mut self, bucket_index : usize, fill_quantity : u8) {
       // Otherwise this helper function becomes quite complex.
       assert!(bucket_index > 7);

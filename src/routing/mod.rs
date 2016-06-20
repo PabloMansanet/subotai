@@ -3,6 +3,7 @@ use hash::Hash;
 use std::net;
 use std::collections::VecDeque;
 use std::mem;
+use std::sync::Mutex;
 
 #[cfg(test)]
 mod tests;
@@ -16,9 +17,9 @@ const BUCKET_DEPTH : usize = K;
 /// The structure employs least-recently seen eviction. Conflicts generated
 /// by evicting a node by inserting a newer one remain tracked, so they can
 /// be resolved later.
-pub struct RoutingTable {
+pub struct Table {
    buckets        : Vec<Bucket>,
-   conflicts      : Vec<EvictionConflict>,
+   conflicts      : Mutex<Vec<EvictionConflict>>,
    parent_node_id : Hash,
 }
 
@@ -36,19 +37,19 @@ pub enum LookupResult {
    ClosestNodes(Vec<NodeInfo>),
 }
 
-impl RoutingTable {
+impl Table {
 
    /// Constructs a routing table based on a parent node id. Other nodes
    /// will be stored in this table based on their distance to the node id provided.
-   pub fn new(parent_node_id: Hash) -> RoutingTable {
+   pub fn new(parent_node_id: Hash) -> Table {
       let mut buckets = Vec::<Bucket>::with_capacity(HASH_SIZE);
       for _ in 0..HASH_SIZE {
          buckets.push(Bucket::new());
       }
 
-      RoutingTable { 
+      Table { 
          buckets        : buckets,
-         conflicts      : Vec::new(),
+         conflicts      : Mutex::new(Vec::new()),
          parent_node_id : parent_node_id,
       }
    }
@@ -56,18 +57,21 @@ impl RoutingTable {
    /// Inserts a node in the routing table. Employs least-recently-seen eviction
    /// by kicking out the oldest node in case the bucket is full, and registering
    /// an eviction conflict that can be revised later.
-   pub fn insert_node(&mut self, info: NodeInfo) {
+   pub fn insert_node(&self, info: NodeInfo) {
       if let Some(index) = self.bucket_for_node(&info.node_id) {
-         let bucket = &mut self.buckets[index];
-         bucket.entries.retain(|ref stored_info| info.node_id != stored_info.node_id);
-         if bucket.entries.len() == BUCKET_DEPTH {
+         let bucket = &self.buckets[index];
+         let mut entries = bucket.entries.lock().unwrap();
+
+         entries.retain(|ref stored_info| info.node_id != stored_info.node_id);
+         if entries.len() == BUCKET_DEPTH {
             let conflict = EvictionConflict { 
-               evicted  : bucket.entries.pop_front().unwrap(),
+               evicted  : entries.pop_front().unwrap(),
                inserted : info.clone() 
             };
-            self.conflicts.push(conflict);
+            let mut conflicts = self.conflicts.lock().unwrap();
+            conflicts.push(conflict);
          }
-         bucket.entries.push_back(info);
+         entries.push_back(info);
       }
    }
 
@@ -104,7 +108,7 @@ impl RoutingTable {
    /// and unvisited buckets may accrue new nodes.
    pub fn all_nodes(&self) -> AllNodes {
       AllNodes {
-         routing_table  : &self,
+         table          : &self,
          current_bucket : Vec::with_capacity(BUCKET_DEPTH),
          bucket_index   : 0,
       }
@@ -113,8 +117,8 @@ impl RoutingTable {
    /// Returns a table entry for the specific node with a given hash.
    fn specific_node(&self, node_id: &Hash) -> Option<NodeInfo> {
       if let Some(index) = self.bucket_for_node(node_id) {
-         let bucket = &self.buckets[index];
-         return bucket.entries.iter().find(|ref info| *node_id == info.node_id).cloned();
+         let entries = &self.buckets[index].entries.lock().unwrap();
+         return entries.iter().find(|ref info| *node_id == info.node_id).cloned();
       }
       None
    }
@@ -128,11 +132,12 @@ impl RoutingTable {
       let lookup_order = descent.chain(ascent);
       
       for bucket_index in lookup_order {
-         if self.buckets[bucket_index].entries.is_empty() {
+         let entries = self.buckets[bucket_index].entries.lock().unwrap();
+         if entries.is_empty() {
             continue;
          }
          
-         let mut nodes_from_bucket = self.buckets[bucket_index].entries.clone().into_iter().collect::<Vec<NodeInfo>>();
+         let mut nodes_from_bucket = entries.clone().into_iter().collect::<Vec<NodeInfo>>();
          nodes_from_bucket.sort_by_key(|ref info| &info.node_id ^ node_id);
          let space_left = closest.capacity() - closest.len();
          nodes_from_bucket.truncate(space_left);
@@ -152,10 +157,10 @@ impl RoutingTable {
        (&self.parent_node_id ^ node_id).height()
    }
 
-   fn revert_conflict(&mut self, conflict: EvictionConflict) {
+   fn revert_conflict(&self, conflict: EvictionConflict) {
       if let Some(index) = self.bucket_for_node(&conflict.inserted.node_id) {
-         let bucket  = &mut self.buckets[index];
-         let evictor = &mut bucket.entries.iter_mut().find(|ref info| conflict.inserted.node_id == info.node_id).unwrap();
+         let mut entries = self.buckets[index].entries.lock().unwrap();
+         let evictor = &mut entries.iter_mut().find(|ref info| conflict.inserted.node_id == info.node_id).unwrap();
          mem::replace::<NodeInfo>(evictor, conflict.evicted);
       }
    }
@@ -165,7 +170,7 @@ impl RoutingTable {
 /// distance from self. It's a weak invariant, i.e. the table
 /// may be modified through iteration.
 pub struct AllNodes<'a> {
-   routing_table  : &'a RoutingTable,
+   table          : &'a Table,
    current_bucket : Vec<NodeInfo>,
    bucket_index   : usize,
 }
@@ -180,9 +185,12 @@ struct EvictionConflict {
 
 /// Bucket size is estimated to be small enough not to warrant
 /// the downsides of using a linked list.
-#[derive(Debug, Clone)]
+///
+/// Each vector of bucket entries is protected under its own mutex, to guarantee 
+/// concurrent access to the table.
+#[derive(Debug)]
 struct Bucket {
-   entries  : VecDeque<NodeInfo>,
+   entries: Mutex<VecDeque<NodeInfo>>,
 }
 
 impl<'a> Iterator for AllNodes<'a> {
@@ -190,8 +198,11 @@ impl<'a> Iterator for AllNodes<'a> {
 
    fn next(&mut self) -> Option<NodeInfo> {
       while self.bucket_index < HASH_SIZE && self.current_bucket.is_empty() {
-         let mut new_bucket = self.routing_table.buckets[self.bucket_index].entries.clone().into_iter().collect::<Vec<NodeInfo>>();
-         new_bucket.sort_by_key(|ref info| &info.node_id ^ &self.routing_table.parent_node_id);
+         let mut new_bucket = {
+            self.table.buckets[self.bucket_index].entries.lock().unwrap().clone()
+         }.into_iter().collect::<Vec<NodeInfo>>();
+
+         new_bucket.sort_by_key(|ref info| &info.node_id ^ &self.table.parent_node_id);
          self.current_bucket.append(&mut new_bucket);
          self.bucket_index += 1;
       }
@@ -202,7 +213,7 @@ impl<'a> Iterator for AllNodes<'a> {
 impl Bucket {
    fn new() -> Bucket {
       Bucket{
-         entries: VecDeque::with_capacity(BUCKET_DEPTH)
+         entries: Mutex::new(VecDeque::with_capacity(BUCKET_DEPTH))
       }
    }
 }
