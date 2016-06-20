@@ -23,7 +23,7 @@ impl Node {
       let table = Arc::new(routing::Table::new(id.clone()));
       let table_weak = Arc::downgrade(&table);
       let socket = try!(net::UdpSocket::bind(("0.0.0.0", port)));
-      socket.set_read_timeout(Some(Duration::new(SOCKET_TIMEOUT_S,0)));
+      try!(socket.set_read_timeout(Some(Duration::new(SOCKET_TIMEOUT_S,0))));
 
       thread::spawn(move || { Node::reception_loop(table_weak, socket); });
 
@@ -58,9 +58,9 @@ impl routing::Table {
 mod tests {
    use node;
 
-   #[test]
-   fn node_ping() {
-      let node_alpha = node::Node::new(50000).unwrap();
-      let node_beta  = node::Node::new(50001).unwrap();
-   }
+//   #[test]
+//   fn node_ping() {
+//      let node_alpha = node::Node::new(50000).unwrap();
+//      let node_beta  = node::Node::new(50001).unwrap();
+//   }
 }

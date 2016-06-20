@@ -2,6 +2,7 @@ use rand::{thread_rng, Rng};
 use itertools::Zip;
 use std::ops::BitXor;
 use std::cmp::{PartialOrd, Ordering};
+use rustc_serialize::hex;
 
 
 /// Hash length in bits. Generally 160 for Kademlia variants.
@@ -12,7 +13,7 @@ pub const HASH_SIZE_BYTES : usize = HASH_SIZE / 8;
 ///
 /// We aren't interested in strong cryptography, but rather
 /// a simple way to generate `HASH_SIZE` bit key identifiers.
-#[derive(Debug,Clone,PartialEq,Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, RustcEncodable, RustcDecodable)]
 pub struct Hash {
    pub raw : [u8; HASH_SIZE_BYTES],
 }
