@@ -5,7 +5,7 @@ extern crate rand;
 
 pub mod node;
 pub mod hash;
-pub mod kademlia;
+pub mod routing;
 
 #[cfg(test)]
 mod tests {
