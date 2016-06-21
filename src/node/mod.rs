@@ -1,26 +1,21 @@
-use hash::Hash;
-use bincode::serde;
 use routing;
 use rpc;
-use std::net;
-use std::io;
-use std::thread;
-use std::sync::mpsc::channel;
-use std::sync::Weak;
-use std::sync::Arc;
-use std::time::Duration;
+
+use hash::Hash;
+use bincode::serde;
+use std::{net, io, thread, time};
+use std::sync::{ Weak, Arc};
 
 pub const SOCKET_BUFFER_SIZE_BYTES : usize = 65536;
 pub const SOCKET_TIMEOUT_S         : u64   = 5;
 
 /// Subotai node. 
 ///
-/// On construction, two detached threads are launched, one of them for packet
-/// reception, and another for the management of asynchronous operations.
-pub struct Node {
+/// On construction, a detached thread for packet reception is
+/// launched.
+ pub struct Node {
    pub id     : Hash,
    table      : routing::Table,
-   operations : rpc::operations::Table,
    outbound   : net::UdpSocket,
    inbound    : net::UdpSocket,
 }
@@ -28,21 +23,18 @@ pub struct Node {
 impl Node {
    pub fn new(inbound_port: u16, outbound_port: u16) -> io::Result<Arc<Node>> {
       let id = Hash::random();
+
       let node = Arc::new(Node {
          id         : id.clone(),
          table      : routing::Table::new(id),
-         operations : rpc::operations::Table::new(),
          inbound    : try!(net::UdpSocket::bind(("0.0.0.0", inbound_port))),
          outbound   : try!(net::UdpSocket::bind(("0.0.0.0", outbound_port))),
       });
 
-      try!(node.inbound.set_read_timeout(Some(Duration::new(SOCKET_TIMEOUT_S,0))));
+      try!(node.inbound.set_read_timeout(Some(time::Duration::new(SOCKET_TIMEOUT_S,0))));
 
       let reception_node = Arc::downgrade(&node);
       thread::spawn(move || { Node::reception_loop(reception_node) });
-
-      let operations_node = Arc::downgrade(&node);
-      thread::spawn(move || { Node::operations_loop(operations_node) });
 
       Ok(node)
    }
@@ -70,14 +62,6 @@ impl Node {
          if let Ok((_, source)) = node.inbound.recv_from(&mut buffer) {
             node.table.process_incoming_rpc(&buffer, source);
          }
-      }
-   }
-
-   fn operations_loop(node: Weak<Node>) {
-      let mut buffer = [0u8; SOCKET_BUFFER_SIZE_BYTES];
-
-      while let Some(node) = node.upgrade() {
-
       }
    }
 }

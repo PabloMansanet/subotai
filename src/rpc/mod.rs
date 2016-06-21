@@ -3,8 +3,6 @@ use bincode;
 use node;
 use hash;
 
-pub mod operations;
-
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug)]
 pub struct Rpc {
    pub kind        : Kind,
