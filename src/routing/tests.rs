@@ -6,8 +6,7 @@ use rand::{thread_rng, Rng};
 fn node_info_no_net(node_id : Hash) -> NodeInfo {
    NodeInfo {
       node_id : node_id,
-      ip   : None,
-      port : None
+      address : None,
    }
 }
 

@@ -26,8 +26,7 @@ pub struct Table {
 #[derive(Debug, Clone, PartialEq)]
 pub struct NodeInfo {
    pub node_id : Hash,
-   pub ip      : Option<net::IpAddr>,
-   pub port    : Option<u16>,
+   pub address : Option<net::SocketAddr>,
 }
 
 #[derive(Debug, PartialEq)]

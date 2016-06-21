@@ -1,6 +1,6 @@
 use hash::Hash;
 use routing;
-use rpc::Rpc;
+use rpc;
 use std::net;
 use std::io;
 use std::thread;
@@ -33,8 +33,15 @@ impl Node {
       Ok(Node {id: id, table: table, outbound: outbound})
    }
 
-   pub fn send_rpc(&self, rpc: Rpc) {
-      unimplemented!();  
+   pub fn send_rpc(&self, rpc: &rpc::Rpc, destination: &routing::NodeInfo) {
+      if let Some(address) = destination.address {
+         let payload = rpc.serialize();
+         self.outbound.send_to(&payload, address);
+      }
+      else {  
+         // Perform lookup.
+         unimplemented!();  
+      }
    }
 
    /// Receives and processes data as long as the table is alive. Will gracefully exit, at most,
@@ -54,7 +61,6 @@ impl Node {
          }
       }
    }
-
 }
 
 impl routing::Table {
@@ -64,19 +70,26 @@ impl routing::Table {
 
 #[cfg(test)]
 mod tests {
-//   use node;
-//   use rpc;
-//
-//   #[test]
-//   fn node_ping() {
-//      let node_alpha = node::Node::new(50000, 50001).unwrap();
-//      let node_beta  = node::Node::new(50002, 50003).unwrap();
-//
-//      let alpha_address = ("localhost:50000");
-//      let beta_address  = ("localhost:50002");
-//
-//      let ping = rpc::Rpc::ping(rpc::Destinaton::Address(beta_address));
-//
-//      node_alpha.send_rpc(ping);
-//   }
+   use node;
+   use rpc;
+   use routing;
+   use std::net;
+   use std::str::FromStr;
+
+   #[test]
+   fn node_ping() {
+      let alpha = node::Node::new(50000, 50001).unwrap();
+      let beta  = node::Node::new(50002, 50003).unwrap();
+
+      let ip = net::IpAddr::from_str("127.0.0.1").unwrap();
+      let address_beta = net::SocketAddr::new(ip, 50002);
+
+      let info_beta = routing::NodeInfo { 
+         node_id : beta.id,
+         address : Some(address_beta),
+      };
+      let ping = rpc::Rpc::ping();
+
+      alpha.send_rpc(&ping, &info_beta);
+   }
 }
