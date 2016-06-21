@@ -13,30 +13,42 @@ pub const SOCKET_TIMEOUT_S         : u64   = 5;
 ///
 /// On construction, a detached thread for packet reception is
 /// launched.
- pub struct Node {
-   pub id     : Hash,
-   table      : routing::Table,
-   outbound   : net::UdpSocket,
-   inbound    : net::UdpSocket,
+pub struct Node {
+   resources: Arc<Resources>,
+}
+
+struct Resources {
+   pub id   : Hash,
+   table    : routing::Table,
+   outbound : net::UdpSocket,
+   inbound  : net::UdpSocket,
+   state    : State,
+}
+
+enum State {
+   Alive,
+   Error,
+   ShuttingDown,
 }
 
 impl Node {
-   pub fn new(inbound_port: u16, outbound_port: u16) -> io::Result<Arc<Node>> {
+   pub fn new(inbound_port: u16, outbound_port: u16) -> io::Result<Node> {
       let id = Hash::random();
 
-      let node = Arc::new(Node {
+      let resources = Arc::new(Resources {
          id         : id.clone(),
          table      : routing::Table::new(id),
          inbound    : try!(net::UdpSocket::bind(("0.0.0.0", inbound_port))),
          outbound   : try!(net::UdpSocket::bind(("0.0.0.0", outbound_port))),
+         state      : State::Alive,
       });
 
-      try!(node.inbound.set_read_timeout(Some(time::Duration::new(SOCKET_TIMEOUT_S,0))));
+      try!(resources.inbound.set_read_timeout(Some(time::Duration::new(SOCKET_TIMEOUT_S,0))));
 
-      let reception_node = Arc::downgrade(&node);
-      thread::spawn(move || { Node::reception_loop(reception_node) });
+      let weak_resources = Arc::downgrade(&resources);
+      thread::spawn(move || { Node::reception_loop(weak_resources) });
 
-      Ok(node)
+      Ok( Node{ resources: resources } )
    }
 
    /// Sends an RPC to a destination node. If the node address is known, the RPC will
@@ -44,7 +56,7 @@ impl Node {
    pub fn send_rpc(&self, rpc: &rpc::Rpc, destination: &routing::NodeInfo)-> io::Result<()> {
       if let Some(address) = destination.address {
          let payload = rpc.serialize();
-         try!(self.outbound.send_to(&payload, address));
+         try!(self.resources.outbound.send_to(&payload, address));
       }
       else {  
          // Perform lookup.
@@ -55,17 +67,23 @@ impl Node {
 
    /// Receives and processes data as long as the table is alive. Will gracefully exit, at most,
    /// `SOCKET_TIMEOUT_S` seconds after the table is dropped.
-   fn reception_loop(weak: Weak<Node>) {
+   fn reception_loop(weak: Weak<Resources>) {
       let mut buffer = [0u8; SOCKET_BUFFER_SIZE_BYTES];
 
       while let Some(strong) = weak.upgrade() {
+         if let State::ShuttingDown = strong.state {
+            break;
+         }
+
          if let Ok((_, source)) = strong.inbound.recv_from(&mut buffer) {
-            Node::process_incoming_rpc(weak.clone(), &buffer, source);
+            strong.process_incoming_rpc(&buffer, source);
          }
       }
    }
+}
 
-   fn process_incoming_rpc(weak: Weak<Node>, buffer: &[u8], mut source: net::SocketAddr) -> serde::DeserializeResult<()> {
+impl Resources {
+   fn process_incoming_rpc(&self, buffer: &[u8], mut source: net::SocketAddr) -> serde::DeserializeResult<()> {
       let rpc = try!(rpc::Rpc::deserialize(buffer));
 
       source.set_port(rpc.reply_port);
@@ -74,20 +92,16 @@ impl Node {
          address : Some(source),
       };
 
-      if let Some(strong) = weak.upgrade() {
-         match rpc.kind {
-            rpc::Kind::Ping => Node::handle_ping(weak, rpc, sender),
-            _ => (),
-         }
+      match rpc.kind {
+         rpc::Kind::Ping => self.handle_ping(rpc, sender),
+         _ => (),
       }
       Ok(())
    }
 
-   fn handle_ping(weak: Weak<Node>, ping: rpc::Rpc, sender: routing::NodeInfo){
-      if let Some(strong) = weak.upgrade() {
-         strong.table.insert_node(sender);
-         // TODO send ping response
-      }
+   fn handle_ping(&self, ping: rpc::Rpc, sender: routing::NodeInfo){
+      self.table.insert_node(sender);
+      // TODO send ping response
    }
 }
 
@@ -112,24 +126,24 @@ mod tests {
       let address_beta = net::SocketAddr::new(ip, 50002);
 
       let info_beta = routing::NodeInfo { 
-         node_id : beta.id.clone(),
+         node_id : beta.resources.id.clone(),
          address : Some(address_beta),
       };
-      let ping = rpc::Rpc::ping(alpha.id.clone(), 50000);
+      let ping = rpc::Rpc::ping(alpha.resources.id.clone(), 50000);
 
       // Before sending the ping, beta does not know about alpha.
-      assert!(beta.table.specific_node(&alpha.id).is_none());
+      assert!(beta.resources.table.specific_node(&alpha.resources.id).is_none());
 
       // Alpha pings beta.
       alpha.send_rpc(&ping, &info_beta);
 
       // Eventually, beta knows of alpha.
-      let mut found = beta.table.specific_node(&alpha.id);
+      let mut found = beta.resources.table.specific_node(&alpha.resources.id);
       for _ in 0..TRIES {
          if found.is_some() {
             break;
          }
-         found = beta.table.specific_node(&alpha.id);
+         found = beta.resources.table.specific_node(&alpha.resources.id);
          thread::sleep(time::Duration::from_millis(POLL_FREQUENCY_MS));
       }
 
