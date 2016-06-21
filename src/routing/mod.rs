@@ -114,7 +114,7 @@ impl Table {
    }
 
    /// Returns a table entry for the specific node with a given hash.
-   fn specific_node(&self, node_id: &Hash) -> Option<NodeInfo> {
+   pub fn specific_node(&self, node_id: &Hash) -> Option<NodeInfo> {
       if let Some(index) = self.bucket_for_node(node_id) {
          let entries = &self.buckets[index].entries.lock().unwrap();
          return entries.iter().find(|ref info| *node_id == info.node_id).cloned();

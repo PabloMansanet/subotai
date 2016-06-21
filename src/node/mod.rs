@@ -1,4 +1,5 @@
 use hash::Hash;
+use bincode::serde;
 use routing;
 use rpc;
 use std::net;
@@ -33,6 +34,8 @@ impl Node {
       Ok(Node {id: id, table: table, outbound: outbound})
    }
 
+   /// Sends an RPC to a destination node. If the node address is known, the RPC will
+   /// be sent directly. Otherwise, a node lookup will be performed first.
    pub fn send_rpc(&self, rpc: &rpc::Rpc, destination: &routing::NodeInfo) {
       if let Some(address) = destination.address {
          let payload = rpc.serialize();
@@ -52,7 +55,7 @@ impl Node {
       loop {
          if let Ok((bytes, source)) = socket.recv_from(&mut buffer) {
             if let Some(table) = table_weak.upgrade() {
-               table.process_incoming_rpc(&buffer, bytes, source);
+               table.process_incoming_rpc(&buffer, source);
             }
          }
 
@@ -64,7 +67,18 @@ impl Node {
 }
 
 impl routing::Table {
-   fn process_incoming_rpc(&self, buffer: &[u8], bytes: usize, source: net::SocketAddr) {
+   fn process_incoming_rpc(&self, buffer: &[u8], source: net::SocketAddr) -> serde::DeserializeResult<()> {
+      let rpc = try!(rpc::Rpc::deserialize(buffer));
+      let sender_node = routing::NodeInfo {
+         node_id : rpc.sender_id,
+         address : Some(source),
+      };
+
+      match rpc.kind {
+         rpc::Kind::Ping => self.insert_node(sender_node),
+         _ => (),
+      }
+      Ok(())
    }
 }
 
@@ -72,9 +86,13 @@ impl routing::Table {
 mod tests {
    use node;
    use rpc;
+   use std::thread;
+   use std::time;
    use routing;
    use std::net;
    use std::str::FromStr;
+   pub const POLL_FREQUENCY_MS: u64 = 50;
+   pub const TRIES: u8 = 5;
 
    #[test]
    fn node_ping() {
@@ -88,8 +106,24 @@ mod tests {
          node_id : beta.id,
          address : Some(address_beta),
       };
-      let ping = rpc::Rpc::ping();
+      let ping = rpc::Rpc::ping(alpha.id.clone());
 
+      // Before sending the ping, beta does not know about alpha.
+      assert!(beta.table.specific_node(&alpha.id).is_none());
+
+      // Alpha pings beta.
       alpha.send_rpc(&ping, &info_beta);
+
+      // Eventually, beta knows of alpha.
+      let mut found = beta.table.specific_node(&alpha.id);
+      for _ in 0..TRIES {
+         if found.is_some() {
+            break;
+         }
+         found = beta.table.specific_node(&alpha.id);
+         thread::sleep(time::Duration::from_millis(POLL_FREQUENCY_MS));
+      }
+
+      assert!(found.is_some());
    }
 }

@@ -5,12 +5,13 @@ use hash;
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug)]
 pub struct Rpc {
-   kind: Kind,
+   pub kind      : Kind,
+   pub sender_id : hash::Hash,
 }
 
 impl Rpc {
-   pub fn ping() -> Rpc {
-      Rpc { kind: Kind::Ping }
+   pub fn ping(sender_id: hash::Hash) -> Rpc {
+      Rpc { kind: Kind::Ping, sender_id: sender_id }
    }
 
    pub fn serialize(&self) -> Vec<u8> {
@@ -23,7 +24,7 @@ impl Rpc {
 }
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug)]
-enum Kind {
+pub enum Kind {
    Ping,
    PingResponse,
    Store(StorePayload),
@@ -55,7 +56,7 @@ mod tests {
 
     #[test]
     fn serdes_for_ping() {
-       let ping = Rpc::ping();
+       let ping = Rpc::ping(Hash::random());
        let serialized_ping = ping.serialize();
        let deserialized_ping = Rpc::deserialize(&serialized_ping).unwrap();
        assert_eq!(ping, deserialized_ping);
