@@ -1,4 +1,6 @@
 use super::*;
+use std::net;
+use std::str::FromStr;
 use hash::Hash;
 use hash::HASH_SIZE;
 use rand::{thread_rng, Rng};
@@ -6,7 +8,7 @@ use rand::{thread_rng, Rng};
 fn node_info_no_net(node_id : Hash) -> NodeInfo {
    NodeInfo {
       node_id : node_id,
-      address : None,
+      address : net::SocketAddr::from_str("0.0.0.0:0").unwrap(),
    }
 }
 

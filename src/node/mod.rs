@@ -18,21 +18,6 @@ pub struct Node {
    resources: Arc<Resources>,
 }
 
-struct Resources {
-   pub id   : Hash,
-   table    : routing::Table,
-   outbound : net::UdpSocket,
-   inbound  : net::UdpSocket,
-   state    : sync::Mutex<State>,
-}
-
-#[derive(Eq, PartialEq)]
-enum State {
-   Alive,
-   Error,
-   ShuttingDown,
-}
-
 impl Node {
    pub fn new(inbound_port: u16, outbound_port: u16) -> io::Result<Node> {
       let id = Hash::random();
@@ -82,32 +67,57 @@ impl Drop for Node {
    }
 }
 
+struct Resources {
+   pub id   : Hash,
+   table    : routing::Table,
+   outbound : net::UdpSocket,
+   inbound  : net::UdpSocket,
+   state    : sync::Mutex<State>,
+}
+
+#[derive(Eq, PartialEq)]
+enum State {
+   Alive,
+   Error,
+   ShuttingDown,
+}
+
+
 impl Resources {
    pub fn ping(&self, destination: routing::NodeInfo) {
-      if let Some(address) = destination.address {
-         let ping = rpc::Rpc::ping(self.id.clone(), self.inbound.local_addr().unwrap().port());
-         let payload = ping.serialize();
-         self.outbound.send_to(&payload, address);
-      }
+      let ping = rpc::Rpc::ping(self.id.clone(), self.inbound.local_addr().unwrap().port());
+      let payload = ping.serialize();
+      self.outbound.send_to(&payload, destination.address);
+   }
+
+   pub fn ping_response(&self, destination: routing::NodeInfo) {
+      let ping_response = rpc::Rpc::ping_response(self.id.clone(), self.inbound.local_addr().unwrap().port());
+      let payload = ping_response.serialize();
+      self.outbound.send_to(&payload, destination.address);
    }
 
    fn process_incoming_rpc(&self, rpc: rpc::Rpc, mut source: net::SocketAddr) -> serde::DeserializeResult<()> {
       source.set_port(rpc.reply_port);
       let sender = routing::NodeInfo {
          node_id : rpc.sender_id.clone(),
-         address : Some(source),
+         address : source,
       };
 
       match rpc.kind {
-         rpc::Kind::Ping => self.handle_ping(rpc, sender),
+         rpc::Kind::Ping         => self.handle_ping(rpc, sender),
+         rpc::Kind::PingResponse => self.handle_ping_response(rpc, sender),
          _ => (),
       }
       Ok(())
    }
 
-   fn handle_ping(&self, ping: rpc::Rpc, sender: routing::NodeInfo){
+   fn handle_ping(&self, ping: rpc::Rpc, sender: routing::NodeInfo) {
+      self.table.insert_node(sender.clone());
+      self.ping_response(sender);
+   }
+
+   fn handle_ping_response(&self, ping: rpc::Rpc, sender: routing::NodeInfo) {
       self.table.insert_node(sender);
-      // TODO send ping response
    }
 }
 
@@ -133,7 +143,7 @@ mod tests {
 
       let info_beta = routing::NodeInfo { 
          node_id : beta.resources.id.clone(),
-         address : Some(address_beta),
+         address : address_beta,
       };
 
       // Before sending the ping, beta does not know about alpha.

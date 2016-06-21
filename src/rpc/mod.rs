@@ -15,6 +15,10 @@ impl Rpc {
       Rpc { kind: Kind::Ping, sender_id: sender_id, reply_port: reply_port }
    }
 
+   pub fn ping_response(sender_id: hash::Hash, reply_port: u16) -> Rpc {
+      Rpc { kind: Kind::PingResponse, sender_id: sender_id, reply_port: reply_port }
+   }
+
    pub fn serialize(&self) -> Vec<u8> {
        serde::serialize(&self, bincode::SizeLimit::Bounded(node::SOCKET_BUFFER_SIZE_BYTES as u64)).unwrap()
    }
