@@ -55,32 +55,39 @@ impl Node {
 
    /// Receives and processes data as long as the table is alive. Will gracefully exit, at most,
    /// `SOCKET_TIMEOUT_S` seconds after the table is dropped.
-   fn reception_loop(node: Weak<Node>) {
+   fn reception_loop(weak: Weak<Node>) {
       let mut buffer = [0u8; SOCKET_BUFFER_SIZE_BYTES];
 
-      while let Some(node) = node.upgrade() {
-         if let Ok((_, source)) = node.inbound.recv_from(&mut buffer) {
-            node.table.process_incoming_rpc(&buffer, source);
+      while let Some(strong) = weak.upgrade() {
+         if let Ok((_, source)) = strong.inbound.recv_from(&mut buffer) {
+            Node::process_incoming_rpc(weak.clone(), &buffer, source);
          }
       }
    }
-}
 
-impl routing::Table {
-   fn process_incoming_rpc(&self, buffer: &[u8], mut source: net::SocketAddr) -> serde::DeserializeResult<()> {
+   fn process_incoming_rpc(weak: Weak<Node>, buffer: &[u8], mut source: net::SocketAddr) -> serde::DeserializeResult<()> {
       let rpc = try!(rpc::Rpc::deserialize(buffer));
 
       source.set_port(rpc.reply_port);
-      let sender_node = routing::NodeInfo {
-         node_id : rpc.sender_id,
+      let sender = routing::NodeInfo {
+         node_id : rpc.sender_id.clone(),
          address : Some(source),
       };
 
-      match rpc.kind {
-         rpc::Kind::Ping => self.insert_node(sender_node),
-         _ => (),
+      if let Some(strong) = weak.upgrade() {
+         match rpc.kind {
+            rpc::Kind::Ping => Node::handle_ping(weak, rpc, sender),
+            _ => (),
+         }
       }
       Ok(())
+   }
+
+   fn handle_ping(weak: Weak<Node>, ping: rpc::Rpc, sender: routing::NodeInfo){
+      if let Some(strong) = weak.upgrade() {
+         strong.table.insert_node(sender);
+         // TODO send ping response
+      }
    }
 }
 
