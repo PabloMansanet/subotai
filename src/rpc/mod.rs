@@ -2,19 +2,19 @@ use std::boxed::Box;
 use hash;
 use rpc;
 
-#[derive(RustcDecodable, RustcEncodable)]
+#[derive(Serialize, Deserialize, Eq, PartialEq, Debug)]
 pub struct Rpc {
    destination : Destination,
    payload     : Payload,
 }
 
-#[derive(RustcDecodable, RustcEncodable)]
+#[derive(Serialize, Deserialize, Eq, PartialEq, Debug)]
 pub enum Destination {
    Address(String),
    Id(hash::Hash),
 }
 
-#[derive(RustcDecodable, RustcEncodable)]
+#[derive(Serialize, Deserialize, Eq, PartialEq, Debug)]
 pub enum Payload {
    Ping,
    PingResponse,
@@ -34,17 +34,36 @@ impl Rpc {
    }
 }
 
-#[derive(RustcDecodable, RustcEncodable)]
+#[derive(Serialize, Deserialize, Eq, PartialEq, Debug)]
 pub struct StorePayload;
 
-#[derive(RustcDecodable, RustcEncodable)]
+#[derive(Serialize, Deserialize, Eq, PartialEq, Debug)]
 pub struct FindNodePayload;
 
-#[derive(RustcDecodable, RustcEncodable)]
+#[derive(Serialize, Deserialize, Eq, PartialEq, Debug)]
 pub struct FindValuePayload;
 
-#[derive(RustcDecodable, RustcEncodable)]
+#[derive(Serialize, Deserialize, Eq, PartialEq, Debug)]
 pub struct FindNodeResponsePayload;
 
-#[derive(RustcDecodable, RustcEncodable)]
+#[derive(Serialize, Deserialize, Eq, PartialEq, Debug)]
 pub struct FindValueResponsePayload;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hash::Hash;
+    use bincode::serde::{serialize, deserialize};
+    use bincode::SizeLimit;
+    use node::SOCKET_BUFFER_SIZE_BYTES;
+
+    #[test]
+    fn serdes_for_ping() {
+       let destination = Destination::Id(Hash::random());
+       let ping = Rpc::ping(destination);
+       let serialized_ping = serialize(&ping, SizeLimit::Bounded(SOCKET_BUFFER_SIZE_BYTES as u64)).unwrap();
+       let deserialized_ping: Rpc = deserialize(&serialized_ping).unwrap();
+
+       assert_eq!(ping, deserialized_ping);
+    }
+}
