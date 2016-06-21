@@ -34,7 +34,7 @@ impl Hash {
    /// of each of its "0" bits.
    pub fn zeroes(&self) -> Zeroes {
       Zeroes {
-         hash  : &self,
+         hash  : self,
          index : 0,
          rev   : HASH_SIZE
       }
@@ -44,7 +44,7 @@ impl Hash {
    /// of each of its "1" bits.
    pub fn ones(&self) -> Ones {
       Ones {
-         hash  : &self,
+         hash  : self,
          index : 0,
          rev   : HASH_SIZE
       }

@@ -3,15 +3,18 @@ use bincode;
 use node;
 use hash;
 
+pub mod operations;
+
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug)]
 pub struct Rpc {
-   pub kind      : Kind,
-   pub sender_id : hash::Hash,
+   pub kind        : Kind,
+   pub sender_id   : hash::Hash,
+   pub reply_port  : u16,
 }
 
 impl Rpc {
-   pub fn ping(sender_id: hash::Hash) -> Rpc {
-      Rpc { kind: Kind::Ping, sender_id: sender_id }
+   pub fn ping(sender_id: hash::Hash, reply_port: u16) -> Rpc {
+      Rpc { kind: Kind::Ping, sender_id: sender_id, reply_port: reply_port }
    }
 
    pub fn serialize(&self) -> Vec<u8> {
@@ -56,7 +59,7 @@ mod tests {
 
     #[test]
     fn serdes_for_ping() {
-       let ping = Rpc::ping(Hash::random());
+       let ping = Rpc::ping(Hash::random(), 50000);
        let serialized_ping = ping.serialize();
        let deserialized_ping = Rpc::deserialize(&serialized_ping).unwrap();
        assert_eq!(ping, deserialized_ping);
