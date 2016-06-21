@@ -1,8 +1,11 @@
 use std::boxed::Box;
+use bincode::serde;
+use bincode;
+use node;
 use hash;
 use rpc;
 
-#[derive(Serialize, Deserialize, Eq, PartialEq, Debug)]
+#[derive(Eq, PartialEq, Debug)]
 pub struct Rpc {
    destination : Destination,
    payload     : Payload,
@@ -12,6 +15,7 @@ pub struct Rpc {
 pub enum Destination {
    Address(String),
    Id(hash::Hash),
+   Unknown,
 }
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug)]
@@ -31,6 +35,18 @@ impl Rpc {
          destination : destination,
          payload     : Payload::Ping,
       }
+   }
+
+   pub fn serialized_payload(&self) -> Vec<u8> {
+       serde::serialize(&self.payload, bincode::SizeLimit::Bounded(node::SOCKET_BUFFER_SIZE_BYTES as u64)).unwrap()
+   }
+
+   pub fn from_payload(serialized_payload: &[u8]) -> serde::DeserializeResult<Rpc> {
+       let payload: Payload = try!(serde::deserialize(serialized_payload));
+       Ok(Rpc { 
+          destination : Destination::Unknown,
+          payload : payload,
+       })
    }
 }
 
@@ -54,16 +70,15 @@ mod tests {
     use super::*;
     use hash::Hash;
     use bincode::serde::{serialize, deserialize};
-    use bincode::SizeLimit;
-    use node::SOCKET_BUFFER_SIZE_BYTES;
 
     #[test]
     fn serdes_for_ping() {
        let destination = Destination::Id(Hash::random());
        let ping = Rpc::ping(destination);
-       let serialized_ping = serialize(&ping, SizeLimit::Bounded(SOCKET_BUFFER_SIZE_BYTES as u64)).unwrap();
-       let deserialized_ping: Rpc = deserialize(&serialized_ping).unwrap();
+       let serialized_payload = ping.serialized_payload();
+       let deserialized_ping = Rpc::from_payload(&serialized_payload).unwrap();
 
-       assert_eq!(ping, deserialized_ping);
+       assert_eq!(ping.payload, deserialized_ping.payload);
+       assert_eq!(Destination::Unknown, deserialized_ping.destination);
     }
 }
