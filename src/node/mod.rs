@@ -55,15 +55,8 @@ impl Node {
 
    pub fn ping(&self, destination: routing::NodeInfo) {
       let resources = self.resources.clone();
-      thread::spawn(move || {
-         if let Some(address) = destination.address {
-            let ping = rpc::Rpc::ping(resources.id.clone(), resources.inbound.local_addr().unwrap().port());
-            let payload = ping.serialize();
-            resources.outbound.send_to(&payload, address);
-         }
-      });
+      thread::spawn(move || { resources.ping(destination) });
    }
-
 
    /// Receives and processes data as long as the table is alive.
    fn reception_loop(weak: Weak<Resources>) {
@@ -75,7 +68,9 @@ impl Node {
          }
 
          if let Ok((_, source)) = strong.inbound.recv_from(&mut buffer) {
-            strong.process_incoming_rpc(&buffer, source);
+            if let Ok(rpc) = rpc::Rpc::deserialize(&buffer) {
+               thread::spawn(move || { strong.process_incoming_rpc(rpc, source) } );
+            }
          }
       }
    }
@@ -88,9 +83,15 @@ impl Drop for Node {
 }
 
 impl Resources {
-   fn process_incoming_rpc(&self, buffer: &[u8], mut source: net::SocketAddr) -> serde::DeserializeResult<()> {
-      let rpc = try!(rpc::Rpc::deserialize(buffer));
+   pub fn ping(&self, destination: routing::NodeInfo) {
+      if let Some(address) = destination.address {
+         let ping = rpc::Rpc::ping(self.id.clone(), self.inbound.local_addr().unwrap().port());
+         let payload = ping.serialize();
+         self.outbound.send_to(&payload, address);
+      }
+   }
 
+   fn process_incoming_rpc(&self, rpc: rpc::Rpc, mut source: net::SocketAddr) -> serde::DeserializeResult<()> {
       source.set_port(rpc.reply_port);
       let sender = routing::NodeInfo {
          node_id : rpc.sender_id.clone(),
