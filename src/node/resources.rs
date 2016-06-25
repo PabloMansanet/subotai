@@ -1,6 +1,7 @@
 use routing;
 use rpc;
 use bus;
+use node;
 
 use hash::Hash;
 use bincode::serde;
@@ -8,6 +9,7 @@ use std::net;
 use std::sync;
 use node::*;
 
+/// Node resources for synchronous operations.
 pub struct Resources {
    pub id       : Hash,
    pub table    : routing::Table,
@@ -22,8 +24,8 @@ impl Resources {
       if let Some(destination) = self.table.specific_node(&id)
       {
          let ping = rpc::Rpc::ping(self.id.clone(), self.inbound.local_addr().unwrap().port());
-         let payload = ping.serialize();
-         self.outbound.send_to(&payload, destination.address);
+         let packet = ping.serialize();
+         self.outbound.send_to(&packet, destination.address);
       }
    }
 
@@ -31,6 +33,12 @@ impl Resources {
       let ping_response = rpc::Rpc::ping_response(self.id.clone(), self.inbound.local_addr().unwrap().port());
       let payload = ping_response.serialize();
       self.outbound.send_to(&payload, destination.address);
+   }
+
+   pub fn receptions(&self) -> node::Receptions {
+      node::Receptions {
+         iter: self.received.lock().unwrap().add_rx().into_iter()
+      }
    }
 
    pub fn process_incoming_rpc(&self, rpc: rpc::Rpc, mut source: net::SocketAddr) -> serde::DeserializeResult<()> {

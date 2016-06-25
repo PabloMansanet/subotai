@@ -1,6 +1,5 @@
 use node;
 use rpc;
-use routing;
 
 use std::thread;
 use std::time;
@@ -46,9 +45,6 @@ fn ping_response() {
 
    // Bootstrapping alpha:
    alpha.bootstrap(beta_seed);
-
-   let ip = net::IpAddr::from_str("127.0.0.1").unwrap();
-   let address_beta = net::SocketAddr::new(ip, 50006);
 
    alpha.ping(beta.resources.id.clone());
    for reply in alpha.receptions().take(1) { 

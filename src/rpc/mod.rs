@@ -1,22 +1,28 @@
 use bincode::serde;
 use bincode;
 use node;
-use hash;
+use hash::Hash;
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
 pub struct Rpc {
    pub kind        : Kind,
-   pub sender_id   : hash::Hash,
+   pub sender_id   : Hash,
    pub reply_port  : u16,
 }
 
 impl Rpc {
-   pub fn ping(sender_id: hash::Hash, reply_port: u16) -> Rpc {
+   pub fn ping(sender_id: Hash, reply_port: u16) -> Rpc {
       Rpc { kind: Kind::Ping, sender_id: sender_id, reply_port: reply_port }
    }
 
-   pub fn ping_response(sender_id: hash::Hash, reply_port: u16) -> Rpc {
+   pub fn ping_response(sender_id: Hash, reply_port: u16) -> Rpc {
       Rpc { kind: Kind::PingResponse, sender_id: sender_id, reply_port: reply_port }
+   }
+
+   // Asks for a the results of a table node lookup.
+   pub fn find_node(sender_id: Hash, reply_port: u16, id_to_find: Hash, closest_nodes: u32) -> Rpc {
+      let payload = Box::new(FindNodePayload { id_to_find: id_to_find, closest_nodes: closest_nodes });
+      Rpc { kind: Kind::FindNode(payload), sender_id: sender_id, reply_port: reply_port }
    }
 
    pub fn serialize(&self) -> Vec<u8> {
@@ -32,24 +38,29 @@ impl Rpc {
 pub enum Kind {
    Ping,
    PingResponse,
-   Store(StorePayload),
-   FindNode(FindNodePayload),
-   FindNodeResponse(FindNodeResponsePayload),
-   FindValue(FindValuePayload),
-   FindValueResponse(FindValueResponsePayload),
+   Store(Box<StorePayload>),
+   FindNode(Box<FindNodePayload>),
+   FindNodeResponse(Box<FindNodeResponsePayload>),
+   FindValue(Box<FindValuePayload>),
+   FindValueResponse(Box<FindValueResponsePayload>),
 }
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
 pub struct StorePayload;
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
-pub struct FindNodePayload;
+pub struct FindNodePayload {
+   id_to_find    : Hash,
+   closest_nodes : u32,
+}
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
 pub struct FindValuePayload;
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
-pub struct FindNodeResponsePayload;
+pub struct FindNodeResponsePayload {
+   id_to_find    : Hash,
+}
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
 pub struct FindValueResponsePayload;

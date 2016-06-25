@@ -8,7 +8,8 @@ use std::sync::Mutex;
 #[cfg(test)]
 mod tests;
 
-const K : usize = 20;
+pub const ALPHA    : usize = 3;
+pub const K        : usize = 20;
 const BUCKET_DEPTH : usize = K;
 
 /// Kademlia routing table, with 160 buckets of `BUCKET_DEPTH` (k) node
@@ -37,7 +38,6 @@ pub enum LookupResult {
 }
 
 impl Table {
-
    /// Constructs a routing table based on a parent node id. Other nodes
    /// will be stored in this table based on their distance to the node id provided.
    pub fn new(parent_node_id: Hash) -> Table {

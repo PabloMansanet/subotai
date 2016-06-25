@@ -12,8 +12,8 @@ use std::sync;
 use std::sync::{Weak, Arc};
 
 pub const SOCKET_BUFFER_SIZE_BYTES : usize = 65536;
-pub const SOCKET_TIMEOUT_S         : u64   = 5;
-pub const UPDATE_BUS_SIZE_BYTES    : usize = 50;
+const SOCKET_TIMEOUT_S         : u64   = 1;
+const UPDATE_BUS_SIZE_BYTES    : usize = 50;
 
 /// Subotai node. 
 ///
@@ -79,7 +79,7 @@ impl Node {
    /// Produces an iterator over RPCs received by this node. The iterator will block
    /// indefinitely.
    pub fn receptions(&self) -> Receptions {
-      Receptions { iter: self.resources.received.lock().unwrap().add_rx().into_iter() }
+      self.resources.receptions()
    }
 
    /// Sends a ping RPC to a destination node. If the ID is unknown, this request is 
@@ -89,6 +89,7 @@ impl Node {
       thread::spawn(move || { resources.ping(id) });
    }
 
+   /// Produces an ID-Address pair, with the node's local inbound UDPv4 address.
    pub fn local_info(&self) -> routing::NodeInfo {
       routing::NodeInfo {
          node_id: self.resources.id.clone(),
@@ -98,6 +99,11 @@ impl Node {
 
    pub fn bootstrap(&self, seed: routing::NodeInfo) {
        self.resources.table.insert_node(seed); 
+   }
+
+   /// Recursive node lookup through the network.
+   pub fn find_node(&self, id: Hash) {
+      unimplemented!();
    }
 
    /// Receives and processes data as long as the table is alive.
