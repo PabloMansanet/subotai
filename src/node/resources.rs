@@ -1,7 +1,6 @@
 use routing;
 use rpc;
 use bus;
-use node;
 
 use hash::Hash;
 use bincode::serde;
@@ -43,6 +42,10 @@ impl Resources {
 
    pub fn receptions(&self) -> receptions::Receptions {
       receptions::Receptions::new(self)
+   }
+
+   pub fn node_lookup(&self) {
+      
    }
 
    pub fn process_incoming_rpc(&self, rpc: rpc::Rpc, mut source: net::SocketAddr) -> serde::DeserializeResult<()> {

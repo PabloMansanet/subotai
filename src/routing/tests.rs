@@ -74,14 +74,14 @@ fn lookup_for_a_stored_node() {
    let node = node_info_no_net(Hash::random());
    table.insert_node(node.clone());
 
-   assert_eq!(table.lookup(&node.node_id, 20), LookupResult::Found(node));
+   assert_eq!(table.lookup(&node.node_id, 20, None), LookupResult::Found(node));
 }
 
 #[test]
 fn lookup_for_self() {
    let parent_node_id = Hash::random();
    let table = Table::new(parent_node_id.clone());
-   assert_eq!(table.lookup(&parent_node_id, 20), LookupResult::Myself);
+   assert_eq!(table.lookup(&parent_node_id, 20, None), LookupResult::Myself);
 }
 
 #[test]
@@ -93,7 +93,7 @@ fn ascending_lookup_on_a_sparse_table() {
    }
    let mut node_id = parent_node_id;
    node_id.flip_bit(8); // Bucket 8
-   if let LookupResult::ClosestNodes(nodes) = table.lookup(&node_id,5) {
+   if let LookupResult::ClosestNodes(nodes) = table.lookup(&node_id, 5, None) {
       assert_eq!(nodes.len(), 5);
 
       // Ensure they are ordered by ascending distance
@@ -116,7 +116,7 @@ fn descending_lookup_on_a_sparse_table() {
    let mut node_id = parent_node_id;
    node_id.flip_bit(51); // Bucket 51
    node_id.raw[0] = 0xFF;
-   if let LookupResult::ClosestNodes(nodes) = table.lookup(&node_id,5) {
+   if let LookupResult::ClosestNodes(nodes) = table.lookup(&node_id, 5, None) {
       assert_eq!(nodes.len(), 5);
 
       // Ensure they are ordered by ascending distance
@@ -139,7 +139,7 @@ fn lookup_on_a_sparse_table() {
    let mut node_id = parent_node_id;
    node_id.flip_bit(25); // Bucket 25
    node_id.raw[0] = 0xFF;
-   if let LookupResult::ClosestNodes(nodes) = table.lookup(&node_id,5) {
+   if let LookupResult::ClosestNodes(nodes) = table.lookup(&node_id, 5, None) {
       assert_eq!(nodes.len(), 5);
 
       // Ensure they are ordered by ascending distance
@@ -166,7 +166,7 @@ fn efficient_bounce_lookup_on_a_randomized_table() {
    // We construct an origin node from which to calculate distances for the lookup.
    let mut node_id = parent_node_id.clone();
    node_id.mutate_random_bits(20);
-   if let LookupResult::ClosestNodes(nodes) = table.lookup(&node_id, 20) {
+   if let LookupResult::ClosestNodes(nodes) = table.lookup(&node_id, 20, None) {
       assert_eq!(nodes.len(), 20);
 
       // Ensure they are ordered by ascending distance by comparing to a brute force

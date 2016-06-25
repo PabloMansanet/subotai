@@ -24,13 +24,13 @@ pub struct Table {
    parent_node_id : Hash,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
 pub struct NodeInfo {
    pub node_id : Hash,
    pub address : net::SocketAddr,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
 pub enum LookupResult {
    Myself,
    Found(NodeInfo), 
@@ -91,14 +91,14 @@ impl Table {
    ///
    /// * "Bounce" back up, checking the buckets indexed by the position of
    ///   every "0" in that distance hash, in ascending order.
-   pub fn lookup(&self, node_id: &Hash, n: usize) -> LookupResult {
+   pub fn lookup(&self, node_id: &Hash, n: usize, blacklist: Option<&Vec<Hash>>) -> LookupResult {
       if node_id == &self.parent_node_id {
          return LookupResult::Myself;
       }
 
       match self.specific_node(node_id) {
          Some(info) => LookupResult::Found(info),
-         None => LookupResult::ClosestNodes(self.closest_n_nodes_to(node_id, n)),
+         None => LookupResult::ClosestNodes(self.closest_n_nodes_to(node_id, n, blacklist)),
       }
    }
 
@@ -110,7 +110,7 @@ impl Table {
    /// and unvisited buckets may accrue new nodes.
    pub fn all_nodes(&self) -> AllNodes {
       AllNodes {
-         table          : &self,
+         table          : self,
          current_bucket : Vec::with_capacity(BUCKET_DEPTH),
          bucket_index   : 0,
       }
@@ -126,7 +126,7 @@ impl Table {
    }
 
    /// Bounce lookup algorithm.
-   fn closest_n_nodes_to(&self, node_id: &Hash, n: usize) -> Vec<NodeInfo> {
+   fn closest_n_nodes_to(&self, node_id: &Hash, n: usize, blacklist: Option<&Vec<Hash>>) -> Vec<NodeInfo> {
       let mut closest = Vec::with_capacity(n);
       let distance = &self.parent_node_id ^ node_id;
       let descent  = distance.ones().rev();
@@ -140,6 +140,10 @@ impl Table {
          }
          
          let mut nodes_from_bucket = entries.clone().into_iter().collect::<Vec<NodeInfo>>();
+         if let Some(blacklist) = blacklist {
+            nodes_from_bucket.retain(|node: &NodeInfo| !blacklist.contains(&node.node_id));
+         }
+
          nodes_from_bucket.sort_by_key(|ref info| &info.node_id ^ node_id);
          let space_left = closest.capacity() - closest.len();
          nodes_from_bucket.truncate(space_left);

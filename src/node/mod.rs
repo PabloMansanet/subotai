@@ -12,7 +12,6 @@ use hash::Hash;
 use std::{net, io, thread};
 use std::sync;
 use std::time::Duration as StdDuration;
-use time;
 use std::sync::{Weak, Arc};
 
 pub const SOCKET_BUFFER_SIZE_BYTES : usize = 65536;
@@ -29,14 +28,14 @@ pub struct Node {
 
 /// State of a Subotai node. 
 ///
-/// * OffGrid: The node is initialized but disconnected from the 
+/// * `OffGrid`: The node is initialized but disconnected from the 
 ///   network. Needs to go through succesful bootstrapping.
 ///
-/// * Alive: The node is online and connected to the network.
+/// * `Alive`: The node is online and connected to the network.
 ///
-/// * Error: The node is in an error state.
+/// * `Error`: The node is in an error state.
 ///
-/// * ShuttingDown: The node is in a process of shutting down;
+/// * `ShuttingDown`: The node is in a process of shutting down;
 ///   all of it's resources will be deallocated after completion
 ///   of any pending async operations.
 #[derive(Eq, PartialEq)]
@@ -92,7 +91,7 @@ impl Node {
    pub fn local_info(&self) -> routing::NodeInfo {
       routing::NodeInfo {
          node_id: self.resources.id.clone(),
-         address: self.resources.inbound.local_addr().unwrap().clone(),
+         address: self.resources.inbound.local_addr().unwrap(),
       }
    }
 

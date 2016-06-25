@@ -28,7 +28,8 @@ fn node_ping() {
    // Beta responds
    for reply in alpha.receptions()
                      .during(time::Duration::seconds(1))
-                     .take(1) { 
+                     .take(1) 
+   { 
       assert_eq!(rpc::Kind::PingResponse, reply.kind);
    }
 
