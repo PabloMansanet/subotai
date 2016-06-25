@@ -80,14 +80,17 @@ impl Table {
    ///
    /// This employs an algorithm I have named "bounce lookup", which obtains
    /// the closest nodes to a given origin walking through the minimum 
-   /// amount of buckets. Please let me know if it exists already, haven't 
+   /// amount of buckets. It may exist already, but I haven't 
    /// found it any other implementation. It consists of:
+   ///
    /// * Calculating the XOR distance between the parent node ID and the 
-   /// lookup node ID.
+   ///   lookup node ID.
+   ///
    /// * Checking the buckets indexed by the position of every "1" in said
-   /// distance hash, in descending order.
+   ///   distance hash, in descending order.
+   ///
    /// * "Bounce" back up, checking the buckets indexed by the position of
-   /// every "0" in that distance hash, in ascending order.
+   ///   every "0" in that distance hash, in ascending order.
    pub fn lookup(&self, node_id: &Hash, n: usize) -> LookupResult {
       if node_id == &self.parent_node_id {
          return LookupResult::Myself;

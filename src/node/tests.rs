@@ -1,31 +1,29 @@
 use node;
 use rpc;
+use routing;
+
 use std::thread;
 use std::time;
-use routing;
 use std::net;
 use std::str::FromStr;
+
 pub const POLL_FREQUENCY_MS: u64 = 50;
 pub const TRIES: u8 = 5;
 
 #[test]
 fn node_ping() {
-   let alpha = node::Node::new(50000, 50001).unwrap();
-   let beta  = node::Node::new(50002, 50003).unwrap();
+   let alpha = node::Node::new();
+   let beta  = node::Node::new();
+   let beta_seed = beta.local_info();
 
-   let ip = net::IpAddr::from_str("127.0.0.1").unwrap();
-   let address_beta = net::SocketAddr::new(ip, 50002);
-
-   let info_beta = routing::NodeInfo { 
-      node_id : beta.resources.id.clone(),
-      address : address_beta,
-   };
+   // Bootstrapping alpha:
+   alpha.bootstrap(beta_seed);
 
    // Before sending the ping, beta does not know about alpha.
    assert!(beta.resources.table.specific_node(&alpha.resources.id).is_none());
 
    // Alpha pings beta.
-   alpha.ping(info_beta);
+   alpha.ping(beta.resources.id.clone());
 
    // Eventually, beta knows of alpha.
    let mut found = beta.resources.table.specific_node(&alpha.resources.id);
@@ -42,18 +40,17 @@ fn node_ping() {
 
 #[test]
 fn ping_response() {
-   let alpha = node::Node::new(50004, 50005).unwrap();
-   let beta  = node::Node::new(50006, 50007).unwrap();
+   let alpha = node::Node::new();
+   let beta  = node::Node::new();
+   let beta_seed = beta.local_info();
+
+   // Bootstrapping alpha:
+   alpha.bootstrap(beta_seed);
 
    let ip = net::IpAddr::from_str("127.0.0.1").unwrap();
    let address_beta = net::SocketAddr::new(ip, 50006);
 
-   let info_beta = routing::NodeInfo { 
-      node_id : beta.resources.id.clone(),
-      address : address_beta,
-   };
-
-   alpha.ping(info_beta);
+   alpha.ping(beta.resources.id.clone());
    for reply in alpha.receptions().take(1) { 
       assert_eq!(rpc::Kind::PingResponse, reply.kind);
    }

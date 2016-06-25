@@ -7,7 +7,6 @@ use rpc;
 use bus;
 
 use hash::Hash;
-use bincode::serde;
 use std::{net, io, thread, time};
 use std::sync;
 use std::sync::{Weak, Arc};
@@ -24,8 +23,21 @@ pub struct Node {
    resources: Arc<resources::Resources>,
 }
 
+/// State of a Subotai node. 
+///
+/// * OffGrid: The node is initialized but disconnected from the 
+///   network. Needs to go through succesful bootstrapping.
+///
+/// * Alive: The node is online and connected to the network.
+///
+/// * Error: The node is in an error state.
+///
+/// * ShuttingDown: The node is in a process of shutting down;
+///   all of it's resources will be deallocated after completion
+///   of any pending async operations.
 #[derive(Eq, PartialEq)]
 pub enum State {
+   OffGrid,
    Alive,
    Error,
    ShuttingDown,
@@ -37,7 +49,13 @@ pub struct Receptions {
 }
 
 impl Node {
-   pub fn new(inbound_port: u16, outbound_port: u16) -> io::Result<Node> {
+   /// Constructs a node with OS randomly allocated ports
+   pub fn new() -> Node {
+      Node::with_ports(0,0).unwrap()
+   }
+
+   /// Constructs a node with a given inbound/outbound UDP port pair.
+   pub fn with_ports(inbound_port: u16, outbound_port: u16) -> io::Result<Node> {
       let id = Hash::random();
 
       let resources = Arc::new(resources::Resources {
@@ -57,16 +75,29 @@ impl Node {
       Ok( Node{ resources: resources } )
    }
 
+
    /// Produces an iterator over RPCs received by this node. The iterator will block
    /// indefinitely.
    pub fn receptions(&self) -> Receptions {
       Receptions { iter: self.resources.received.lock().unwrap().add_rx().into_iter() }
    }
 
-   /// Sends a ping RPC to a destination node.
-   pub fn ping(&self, destination: routing::NodeInfo) {
+   /// Sends a ping RPC to a destination node. If the ID is unknown, this request is 
+   /// promoted into a find_node RPC followed by a ping to the node.
+   pub fn ping(&self, id: Hash) {
       let resources = self.resources.clone();
-      thread::spawn(move || { resources.ping(destination) });
+      thread::spawn(move || { resources.ping(id) });
+   }
+
+   pub fn local_info(&self) -> routing::NodeInfo {
+      routing::NodeInfo {
+         node_id: self.resources.id.clone(),
+         address: self.resources.inbound.local_addr().unwrap().clone(),
+      }
+   }
+
+   pub fn bootstrap(&self, seed: routing::NodeInfo) {
+       self.resources.table.insert_node(seed); 
    }
 
    /// Receives and processes data as long as the table is alive.
