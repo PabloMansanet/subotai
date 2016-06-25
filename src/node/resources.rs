@@ -16,7 +16,13 @@ pub struct Resources {
    pub outbound : net::UdpSocket,
    pub inbound  : net::UdpSocket,
    pub state    : sync::Mutex<State>,
-   pub received : sync::Mutex<bus::Bus<rpc::Rpc>>,
+   pub updates  : sync::Mutex<bus::Bus<Update>>,
+}
+
+#[derive(Clone)]
+pub enum Update {
+   RpcReceived(rpc::Rpc),
+   Tick,
 }
 
 impl Resources {
@@ -35,10 +41,8 @@ impl Resources {
       self.outbound.send_to(&payload, destination.address);
    }
 
-   pub fn receptions(&self) -> node::Receptions {
-      node::Receptions {
-         iter: self.received.lock().unwrap().add_rx().into_iter()
-      }
+   pub fn receptions(&self) -> receptions::Receptions {
+      receptions::Receptions::new(self)
    }
 
    pub fn process_incoming_rpc(&self, rpc: rpc::Rpc, mut source: net::SocketAddr) -> serde::DeserializeResult<()> {
@@ -54,7 +58,7 @@ impl Resources {
          _ => (),
       }
 
-      self.received.lock().unwrap().broadcast(rpc);
+      self.updates.lock().unwrap().broadcast(Update::RpcReceived(rpc));
       Ok(())
    }
 

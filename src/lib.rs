@@ -6,6 +6,7 @@ extern crate itertools;
 extern crate rand;
 extern crate bincode;
 extern crate bus;
+extern crate time;
 
 pub mod node;
 pub mod hash;

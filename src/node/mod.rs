@@ -1,3 +1,5 @@
+pub mod receptions;
+
 #[cfg(test)]
 mod tests;
 mod resources;
@@ -43,13 +45,8 @@ pub enum State {
    ShuttingDown,
 }
 
-/// A blocking iterator over the RPCs this node receives. 
-pub struct Receptions {
-   iter: bus::BusIntoIter<rpc::Rpc>,
-}
-
 impl Node {
-   /// Constructs a node with OS randomly allocated ports
+   /// Constructs a node with OS allocated random ports
    pub fn new() -> Node {
       Node::with_ports(0,0).unwrap()
    }
@@ -64,7 +61,7 @@ impl Node {
          inbound    : try!(net::UdpSocket::bind(("0.0.0.0", inbound_port))),
          outbound   : try!(net::UdpSocket::bind(("0.0.0.0", outbound_port))),
          state      : sync::Mutex::new(State::Alive),
-         received   : sync::Mutex::new(bus::Bus::new(UPDATE_BUS_SIZE_BYTES))
+         updates    : sync::Mutex::new(bus::Bus::new(UPDATE_BUS_SIZE_BYTES))
       });
 
       try!(resources.inbound.set_read_timeout(Some(time::Duration::new(SOCKET_TIMEOUT_S,0))));
@@ -78,7 +75,7 @@ impl Node {
 
    /// Produces an iterator over RPCs received by this node. The iterator will block
    /// indefinitely.
-   pub fn receptions(&self) -> Receptions {
+   pub fn receptions(&self) -> receptions::Receptions {
       self.resources.receptions()
    }
 
@@ -120,6 +117,10 @@ impl Node {
                thread::spawn(move || { strong.process_incoming_rpc(rpc, source) } );
             }
          }
+
+         if let Some(strong) = weak.upgrade() {
+            strong.updates.lock().unwrap().broadcast(resources::Update::Tick);
+         }
       }
    }
 }
@@ -127,14 +128,6 @@ impl Node {
 impl Drop for Node {
    fn drop(&mut self) {
       *self.resources.state.lock().unwrap() = State::ShuttingDown;
-   }
-}
-
-impl Iterator for Receptions {
-   type Item = rpc::Rpc;
-
-   fn next(&mut self) -> Option<rpc::Rpc> {
-      self.iter.next()
    }
 }
 
