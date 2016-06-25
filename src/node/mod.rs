@@ -1,5 +1,6 @@
 use routing;
 use rpc;
+use bus;
 
 use hash::Hash;
 use bincode::serde;
@@ -9,6 +10,7 @@ use std::sync::{Weak, Arc};
 
 pub const SOCKET_BUFFER_SIZE_BYTES : usize = 65536;
 pub const SOCKET_TIMEOUT_S         : u64   = 5;
+pub const UPDATE_BUS_SIZE_BYTES    : usize = 50;
 
 /// Subotai node. 
 ///
@@ -16,6 +18,11 @@ pub const SOCKET_TIMEOUT_S         : u64   = 5;
 /// launched.
 pub struct Node {
    resources: Arc<Resources>,
+}
+
+/// A blocking iterator over the RPCs this node receives. 
+pub struct Receptions {
+   iter: bus::BusIntoIter<rpc::Rpc>,
 }
 
 impl Node {
@@ -28,6 +35,7 @@ impl Node {
          inbound    : try!(net::UdpSocket::bind(("0.0.0.0", inbound_port))),
          outbound   : try!(net::UdpSocket::bind(("0.0.0.0", outbound_port))),
          state      : sync::Mutex::new(State::Alive),
+         received   : sync::Mutex::new(bus::Bus::new(UPDATE_BUS_SIZE_BYTES))
       });
 
       try!(resources.inbound.set_read_timeout(Some(time::Duration::new(SOCKET_TIMEOUT_S,0))));
@@ -36,6 +44,12 @@ impl Node {
       thread::spawn(move || { Node::reception_loop(weak_resources) });
 
       Ok( Node{ resources: resources } )
+   }
+
+   /// Produces an iterator over RPCs received by this node. The iterator will block
+   /// indefinitely.
+   pub fn receptions(&self) -> Receptions {
+      Receptions { iter: self.resources.received.lock().unwrap().add_rx().into_iter() }
    }
 
    pub fn ping(&self, destination: routing::NodeInfo) {
@@ -67,12 +81,21 @@ impl Drop for Node {
    }
 }
 
+impl Iterator for Receptions {
+   type Item = rpc::Rpc;
+
+   fn next(&mut self) -> Option<rpc::Rpc> {
+      self.iter.next()
+   }
+}
+
 struct Resources {
    pub id   : Hash,
    table    : routing::Table,
    outbound : net::UdpSocket,
    inbound  : net::UdpSocket,
    state    : sync::Mutex<State>,
+   received : sync::Mutex<bus::Bus<rpc::Rpc>>,
 }
 
 #[derive(Eq, PartialEq)]
@@ -81,7 +104,6 @@ enum State {
    Error,
    ShuttingDown,
 }
-
 
 impl Resources {
    pub fn ping(&self, destination: routing::NodeInfo) {
