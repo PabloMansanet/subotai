@@ -126,10 +126,12 @@ impl Resources {
       };
 
       match rpc.kind {
-         rpc::Kind::Ping         => self.handle_ping(rpc, sender),
-         rpc::Kind::PingResponse => self.handle_ping_response(rpc, sender),
+         rpc::Kind::Ping         => self.handle_ping(rpc.clone(), sender),
+         rpc::Kind::PingResponse => self.handle_ping_response(rpc.clone(), sender),
          _ => (),
       }
+
+      self.received.lock().unwrap().broadcast(rpc);
       Ok(())
    }
 
@@ -185,5 +187,24 @@ mod tests {
       }
 
       assert!(found.is_some());
+   }
+
+   #[test]
+   fn ping_response() {
+      let alpha = node::Node::new(50004, 50005).unwrap();
+      let beta  = node::Node::new(50006, 50007).unwrap();
+
+      let ip = net::IpAddr::from_str("127.0.0.1").unwrap();
+      let address_beta = net::SocketAddr::new(ip, 50006);
+
+      let info_beta = routing::NodeInfo { 
+         node_id : beta.resources.id.clone(),
+         address : address_beta,
+      };
+
+      alpha.ping(info_beta);
+      for reply in alpha.receptions().take(1) { 
+         assert_eq!(rpc::Kind::PingResponse, reply.kind);
+      }
    }
 }
