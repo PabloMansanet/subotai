@@ -9,8 +9,10 @@ use rpc;
 use bus;
 
 use hash::Hash;
-use std::{net, io, thread, time};
+use std::{net, io, thread};
 use std::sync;
+use std::time::Duration as StdDuration;
+use time;
 use std::sync::{Weak, Arc};
 
 pub const SOCKET_BUFFER_SIZE_BYTES : usize = 65536;
@@ -64,7 +66,7 @@ impl Node {
          updates    : sync::Mutex::new(bus::Bus::new(UPDATE_BUS_SIZE_BYTES))
       });
 
-      try!(resources.inbound.set_read_timeout(Some(time::Duration::new(SOCKET_TIMEOUT_S,0))));
+      try!(resources.inbound.set_read_timeout(Some(StdDuration::new(SOCKET_TIMEOUT_S,0))));
 
       let weak_resources = Arc::downgrade(&resources);
       thread::spawn(move || { Node::reception_loop(weak_resources) });
