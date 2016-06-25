@@ -153,6 +153,28 @@ fn lookup_on_a_sparse_table() {
 }
 
 #[test]
+fn lookup_with_blacklist() {
+   let table = Table::new(Hash::random());
+   let blacklist = vec![node_info_no_net(Hash::random()); 5];
+   let normal_node = node_info_no_net(Hash::random());
+
+   for node in &blacklist {
+      table.insert_node(node.clone());
+   }
+  
+   let blacklist = blacklist.iter().map(|info: &NodeInfo| info.node_id.clone()).collect::<Vec<Hash>>();
+
+   table.insert_node(normal_node.clone());
+   
+   if let LookupResult::ClosestNodes(mut nodes) = table.lookup(&Hash::random(), 5, Some(&blacklist)) {
+      assert_eq!(nodes.len(), 1);
+      assert_eq!(nodes.pop().unwrap().node_id, normal_node.node_id);
+   } else {
+      panic!("We shouldn't have found the node!");
+   }
+}
+
+#[test]
 fn efficient_bounce_lookup_on_a_randomized_table() {
    let parent_node_id = Hash::random();
    let table = Table::new(parent_node_id.clone());
