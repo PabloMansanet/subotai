@@ -9,6 +9,7 @@ use time;
 use hash::Hash;
 use bincode::serde;
 use std::net;
+use std::sync::Arc;
 use std::sync;
 use node::*;
 
@@ -75,6 +76,12 @@ impl Resources {
       self.outbound.send_to(&packet, destination.address);
    }
 
+   pub fn find_node_response(&self, destination: routing::NodeInfo, id_to_find: &Hash, result: routing::LookupResult) {
+      let rpc = Rpc::find_node_response(self.id.clone(), self.inbound.local_addr().unwrap().port(), id_to_find.clone(), result);
+      let packet = rpc.serialize();
+      self.outbound.send_to(&packet, destination.address);
+   }
+
    pub fn receptions(&self) -> receptions::Receptions {
       receptions::Receptions::new(self)
    }
@@ -114,8 +121,16 @@ impl Resources {
                 rpc::Kind::FindNodeResponse( ref payload ) => &payload.id_to_find == id_to_find,
                 _ => false,
              }
-         })
-         .take(routing::ALPHA){}
+         }).take(routing::ALPHA)
+      { 
+         if let rpc::Kind::FindNodeResponse(ref payload) = reception.kind {
+            match payload.result {
+               routing::LookupResult::Found(_) => return,
+               routing::LookupResult::Myself   => return,
+               _ => (),
+            }
+         }
+      }
    }
 
    pub fn process_incoming_rpc(&self, rpc: Rpc, mut source: net::SocketAddr) -> serde::DeserializeResult<()> {
@@ -126,9 +141,10 @@ impl Resources {
       };
 
       match rpc.kind {
-         rpc::Kind::Ping                => self.handle_ping(rpc.clone(), sender),
-         rpc::Kind::PingResponse        => self.handle_ping_response(rpc.clone(), sender),
-         rpc::Kind::FindNodeResponse(_) => self.handle_ping_response(rpc.clone(), sender),
+         rpc::Kind::Ping                          => self.handle_ping(sender),
+         rpc::Kind::PingResponse                  => self.handle_ping_response(sender),
+         rpc::Kind::FindNode(ref payload)         => self.handle_find_node(payload.clone(), sender),
+         rpc::Kind::FindNodeResponse(ref payload) => self.handle_find_node_response(payload.clone(), sender),
          _ => (),
       }
 
@@ -136,13 +152,28 @@ impl Resources {
       Ok(())
    }
 
-   pub fn handle_ping(&self, ping: Rpc, sender: routing::NodeInfo) {
+   pub fn handle_ping(&self, sender: routing::NodeInfo) {
       self.table.insert_node(sender.clone());
       self.ping_response(sender);
    }
 
-   fn handle_ping_response(&self, ping: Rpc, sender: routing::NodeInfo) {
+   fn handle_ping_response(&self, sender: routing::NodeInfo) {
       self.table.insert_node(sender);
+   }
+
+   fn handle_find_node(&self, payload: Arc<rpc::FindNodePayload>, sender: routing::NodeInfo) {
+      self.table.insert_node(sender.clone());
+      let lookup_results = self.table.lookup(&payload.id_to_find, payload.nodes_wanted, None);
+      self.find_node_response(sender, &payload.id_to_find, lookup_results);
+   }
+
+   fn handle_find_node_response(&self, payload: Arc<rpc::FindNodeResponsePayload>, sender: routing::NodeInfo) {
+      self.table.insert_node(sender);
+      match payload.result {
+         routing::LookupResult::ClosestNodes(ref nodes) => for node in nodes { self.table.insert_node(node.clone()) },
+         routing::LookupResult::Found(ref node) => self.table.insert_node(node.clone()),
+         _ => (),
+      }
    }
 }
 
