@@ -35,6 +35,7 @@ pub enum LookupResult {
    Myself,
    Found(NodeInfo), 
    ClosestNodes(Vec<NodeInfo>),
+   Nothing,
 }
 
 impl Table {
@@ -98,7 +99,14 @@ impl Table {
 
       match self.specific_node(node_id) {
          Some(info) => LookupResult::Found(info),
-         None => LookupResult::ClosestNodes(self.closest_n_nodes_to(node_id, n, blacklist)),
+         None =>  {
+            let closest = self.closest_n_nodes_to(node_id, n, blacklist);
+            if closest.is_empty() {
+               LookupResult::Nothing
+            } else {
+               LookupResult::ClosestNodes(closest)
+            }
+         }
       }
    }
 

@@ -58,20 +58,16 @@ impl Resources {
 
       while queried_nodes.len() < routing::K {
          match self.table.lookup(&id_to_find, routing::ALPHA, Some(&queried_nodes)) {
-            routing::LookupResult::ClosestNodes(nodes) => {
-               if nodes.is_empty() {
-                  break;
-               }
-               self.lookup_wave(&id_to_find, &nodes, &mut queried_nodes);
-            },
-            routing::LookupResult::Myself => break,
             routing::LookupResult::Found(node) => return Some(node),
+            routing::LookupResult::ClosestNodes(nodes) => self.lookup_wave(&id_to_find, &nodes, &mut queried_nodes),
+            routing::LookupResult::Myself => break,
+            routing::LookupResult::Nothing => break,
          }
       }
       None
    }
 
-   fn lookup_wave(&self, id_to_find: &Hash, nodes_to_query: &Vec<routing::NodeInfo>, queried: &mut Vec<Hash>) -> u32 {
+   fn lookup_wave(&self, id_to_find: &Hash, nodes_to_query: &Vec<routing::NodeInfo>, queried: &mut Vec<Hash>) {
       for node in nodes_to_query {
          let rpc = Rpc::find_node(
             self.id.clone(), 
@@ -84,7 +80,6 @@ impl Resources {
          queried.push(node.node_id.clone());
       }
 
-      let mut responses = 0u32;
       for reception in self.receptions()
          .during(time::Duration::seconds(NETWORK_TIMEOUT_S))
          .filter(|rpc: &Rpc| {
@@ -94,10 +89,7 @@ impl Resources {
              }
          })
          .take(routing::ALPHA) 
-      {
-         responses += 1;
-      }
-      responses
+      {}
    }
 
    pub fn process_incoming_rpc(&self, rpc: Rpc, mut source: net::SocketAddr) -> serde::DeserializeResult<()> {
