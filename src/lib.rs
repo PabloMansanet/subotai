@@ -10,5 +10,5 @@ extern crate time;
 
 pub mod node;
 pub mod hash;
-pub mod routing;
-pub mod rpc;
+mod routing;
+mod rpc;

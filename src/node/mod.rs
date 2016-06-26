@@ -12,7 +12,7 @@ use hash::Hash;
 use std::{net, io, thread};
 use std::sync;
 use std::time::Duration as StdDuration;
-use std::sync::{Weak, Arc};
+use std::sync::Arc;
 
 pub const SOCKET_BUFFER_SIZE_BYTES : usize = 65536;
 const SOCKET_TIMEOUT_S         : u64   = 1;
@@ -67,8 +67,8 @@ impl Node {
 
       try!(resources.inbound.set_read_timeout(Some(StdDuration::new(SOCKET_TIMEOUT_S,0))));
 
-      let weak_resources = Arc::downgrade(&resources);
-      thread::spawn(move || { Node::reception_loop(weak_resources) });
+      let resources_clone = resources.clone();
+      thread::spawn(move || { Node::reception_loop(resources_clone) });
 
       Ok( Node{ resources: resources } )
    }
@@ -105,23 +105,22 @@ impl Node {
    }
 
    /// Receives and processes data as long as the table is alive.
-   fn reception_loop(weak: Weak<resources::Resources>) {
+   fn reception_loop(resources: Arc<resources::Resources>) {
       let mut buffer = [0u8; SOCKET_BUFFER_SIZE_BYTES];
 
-      while let Some(strong) = weak.upgrade() {
-         if let State::ShuttingDown = *strong.state.lock().unwrap() {
+      loop {
+         if let State::ShuttingDown = *resources.state.lock().unwrap() {
             break;
          }
 
-         if let Ok((_, source)) = strong.inbound.recv_from(&mut buffer) {
+         if let Ok((_, source)) = resources.inbound.recv_from(&mut buffer) {
             if let Ok(rpc) = rpc::Rpc::deserialize(&buffer) {
-               thread::spawn(move || { strong.process_incoming_rpc(rpc, source) } );
+               let resources_clone = resources.clone();
+               thread::spawn(move || { resources_clone.process_incoming_rpc(rpc, source) } );
             }
          }
 
-         if let Some(strong) = weak.upgrade() {
-            strong.updates.lock().unwrap().broadcast(resources::Update::Tick);
-         }
+         resources.updates.lock().unwrap().broadcast(resources::Update::Tick);
       }
    }
 }
