@@ -3,7 +3,7 @@ use hash::Hash;
 use std::net;
 use std::collections::VecDeque;
 use std::mem;
-use std::sync::Mutex;
+use std::sync::{Mutex, RwLock};
 
 #[cfg(test)]
 mod tests;
@@ -59,7 +59,7 @@ impl Table {
    pub fn insert_node(&self, info: NodeInfo) {
       if let Some(index) = self.bucket_for_node(&info.node_id) {
          let bucket = &self.buckets[index];
-         let mut entries = bucket.entries.lock().unwrap();
+         let mut entries = bucket.entries.write().unwrap();
 
          entries.retain(|ref stored_info| info.node_id != stored_info.node_id);
          if entries.len() == BUCKET_DEPTH {
@@ -119,7 +119,7 @@ impl Table {
    /// Returns a table entry for the specific node with a given hash.
    pub fn specific_node(&self, node_id: &Hash) -> Option<NodeInfo> {
       if let Some(index) = self.bucket_for_node(node_id) {
-         let entries = &self.buckets[index].entries.lock().unwrap();
+         let entries = &self.buckets[index].entries.read().unwrap();
          return entries.iter().find(|ref info| *node_id == info.node_id).cloned();
       }
       None
@@ -134,7 +134,7 @@ impl Table {
       let lookup_order = descent.chain(ascent);
       
       for bucket_index in lookup_order {
-         let entries = self.buckets[bucket_index].entries.lock().unwrap();
+         let entries = self.buckets[bucket_index].entries.read().unwrap();
          if entries.is_empty() {
             continue;
          }
@@ -165,7 +165,7 @@ impl Table {
 
    fn revert_conflict(&self, conflict: EvictionConflict) {
       if let Some(index) = self.bucket_for_node(&conflict.inserted.node_id) {
-         let mut entries = self.buckets[index].entries.lock().unwrap();
+         let mut entries = self.buckets[index].entries.write().unwrap();
          let evictor = &mut entries.iter_mut().find(|ref info| conflict.inserted.node_id == info.node_id).unwrap();
          mem::replace::<NodeInfo>(evictor, conflict.evicted);
       }
@@ -196,7 +196,7 @@ struct EvictionConflict {
 /// concurrent access to the table.
 #[derive(Debug)]
 struct Bucket {
-   entries: Mutex<VecDeque<NodeInfo>>,
+   entries: RwLock<VecDeque<NodeInfo>>,
 }
 
 impl<'a> Iterator for AllNodes<'a> {
@@ -205,7 +205,7 @@ impl<'a> Iterator for AllNodes<'a> {
    fn next(&mut self) -> Option<NodeInfo> {
       while self.bucket_index < HASH_SIZE && self.current_bucket.is_empty() {
          let mut new_bucket = { // Lock scope
-            self.table.buckets[self.bucket_index].entries.lock().unwrap().clone()
+            self.table.buckets[self.bucket_index].entries.read().unwrap().clone()
          }.into_iter().collect::<Vec<NodeInfo>>();
 
          new_bucket.sort_by_key(|ref info| &info.node_id ^ &self.table.parent_node_id);
@@ -219,7 +219,7 @@ impl<'a> Iterator for AllNodes<'a> {
 impl Bucket {
    fn new() -> Bucket {
       Bucket{
-         entries: Mutex::new(VecDeque::with_capacity(BUCKET_DEPTH))
+         entries: RwLock::new(VecDeque::with_capacity(BUCKET_DEPTH))
       }
    }
 }
