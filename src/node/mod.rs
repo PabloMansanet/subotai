@@ -98,8 +98,8 @@ impl Node {
    /// Produces an ID-Address pair, with the node's local inbound UDPv4 address.
    pub fn local_info(&self) -> routing::NodeInfo {
       routing::NodeInfo {
-         node_id: self.resources.id.clone(),
-         address: self.resources.inbound.local_addr().unwrap(),
+         id      : self.resources.id.clone(),
+         address : self.resources.inbound.local_addr().unwrap(),
       }
    }
 

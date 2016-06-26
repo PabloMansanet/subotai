@@ -77,7 +77,7 @@ impl Resources {
          );
          let packet = rpc.serialize(); 
          self.outbound.send_to(&packet, node.address);
-         queried.push(node.node_id.clone());
+         queried.push(node.id.clone());
       }
 
       for reception in self.receptions()
@@ -88,14 +88,13 @@ impl Resources {
                 _ => false,
              }
          })
-         .take(routing::ALPHA) 
-      {}
+         .take(routing::ALPHA){}
    }
 
    pub fn process_incoming_rpc(&self, rpc: Rpc, mut source: net::SocketAddr) -> serde::DeserializeResult<()> {
       source.set_port(rpc.reply_port);
       let sender = routing::NodeInfo {
-         node_id : rpc.sender_id.clone(),
+         id      : rpc.sender_id.clone(),
          address : source,
       };
 
