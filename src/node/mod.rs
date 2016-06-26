@@ -14,6 +14,8 @@ use std::sync;
 use std::time::Duration as StdDuration;
 use std::sync::Arc;
 
+pub const NETWORK_TIMEOUT_S : i64 = 3;
+
 pub const SOCKET_BUFFER_SIZE_BYTES : usize = 65536;
 const SOCKET_TIMEOUT_S         : u64   = 1;
 const UPDATE_BUS_SIZE_BYTES    : usize = 50;
@@ -44,6 +46,12 @@ pub enum State {
    Alive,
    Error,
    ShuttingDown,
+}
+
+pub enum FindResult {
+   FoundNode,
+   FoundKey,
+   NetworkLookupStarted,
 }
 
 impl Node {
@@ -100,7 +108,7 @@ impl Node {
    }
 
    /// Recursive node lookup through the network.
-   pub fn find_node(&self, id: Hash) {
+   pub fn find_node(&self, id: Hash) -> FindResult {
       unimplemented!();
    }
 

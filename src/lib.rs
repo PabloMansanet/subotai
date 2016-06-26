@@ -1,5 +1,5 @@
 #![allow(dead_code)]
-#![feature(custom_derive, plugin)]
+#![feature(custom_derive, plugin, box_patterns)]
 #![plugin(serde_macros)]
 
 extern crate itertools;

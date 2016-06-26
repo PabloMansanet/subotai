@@ -21,7 +21,7 @@ impl Rpc {
    }
 
    /// Asks for a the results of a table node lookup.
-   pub fn find_node(sender_id: Hash, reply_port: u16, id_to_find: Hash, nodes_wanted: u32) -> Rpc {
+   pub fn find_node(sender_id: Hash, reply_port: u16, id_to_find: Hash, nodes_wanted: usize) -> Rpc {
       let payload = Box::new(FindNodePayload { id_to_find: id_to_find, nodes_wanted: nodes_wanted });
       Rpc { kind: Kind::FindNode(payload), sender_id: sender_id, reply_port: reply_port }
    }
@@ -58,7 +58,7 @@ pub struct StorePayload;
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
 pub struct FindNodePayload {
    id_to_find    : Hash,
-   nodes_wanted  : u32,
+   nodes_wanted  : usize,
 }
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
