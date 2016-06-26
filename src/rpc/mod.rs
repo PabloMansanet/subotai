@@ -2,6 +2,7 @@ use bincode::serde;
 use routing;
 use bincode;
 use node;
+use std::sync::Arc;
 use hash::Hash;
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
@@ -22,13 +23,13 @@ impl Rpc {
 
    /// Asks for a the results of a table node lookup.
    pub fn find_node(sender_id: Hash, reply_port: u16, id_to_find: Hash, nodes_wanted: usize) -> Rpc {
-      let payload = Box::new(FindNodePayload { id_to_find: id_to_find, nodes_wanted: nodes_wanted });
+      let payload = Arc::new(FindNodePayload { id_to_find: id_to_find, nodes_wanted: nodes_wanted });
       Rpc { kind: Kind::FindNode(payload), sender_id: sender_id, reply_port: reply_port }
    }
 
    /// Encapsulates the response to a previously requested find_node RPC.
    pub fn find_node_response(sender_id: Hash, reply_port: u16, id_to_find: Hash, result: routing::LookupResult) -> Rpc {
-      let payload = Box::new(FindNodeResponsePayload { id_to_find: id_to_find, result: result} );
+      let payload = Arc::new(FindNodeResponsePayload { id_to_find: id_to_find, result: result} );
       Rpc { kind: Kind::FindNodeResponse(payload), sender_id: sender_id, reply_port: reply_port }
    }
 
@@ -45,11 +46,11 @@ impl Rpc {
 pub enum Kind {
    Ping,
    PingResponse,
-   Store(Box<StorePayload>),
-   FindNode(Box<FindNodePayload>),
-   FindNodeResponse(Box<FindNodeResponsePayload>),
-   FindValue(Box<FindValuePayload>),
-   FindValueResponse(Box<FindValueResponsePayload>),
+   Store(Arc<StorePayload>),
+   FindNode(Arc<FindNodePayload>),
+   FindNodeResponse(Arc<FindNodeResponsePayload>),
+   FindValue(Arc<FindValuePayload>),
+   FindValueResponse(Arc<FindValueResponsePayload>),
 }
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]

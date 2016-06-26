@@ -1,6 +1,8 @@
 use routing;
 use rpc;
 use bus;
+use node;
+
 use rpc::Rpc;
 use time;
 
@@ -33,13 +35,38 @@ pub enum Update {
 }
 
 impl Resources {
-   pub fn ping(&self, id: Hash) {
-      if let Some(destination) = self.table.specific_node(&id)
-      {
+   pub fn local_info(&self) -> routing::NodeInfo {
+      routing::NodeInfo {
+         id      : self.id.clone(),
+         address : self.inbound.local_addr().unwrap(),
+      }
+   }
+
+   pub fn ping(&self, id: Hash) -> node::PingResult {
+      let node = match self.table.specific_node(&id) {
+         None => self.find_node(&id),
+         Some(node) => Some(node),
+      };
+
+      if let Some(node) = node {
          let rpc = Rpc::ping(self.id.clone(), self.inbound.local_addr().unwrap().port());
          let packet = rpc.serialize();
-         self.outbound.send_to(&packet, destination.address);
+         self.outbound.send_to(&packet, node.address);
+
+         for reception in self.receptions()
+            .during(time::Duration::seconds(NETWORK_TIMEOUT_S))
+            .filter(|rpc: &Rpc| {
+                match rpc {
+                   &Rpc{ kind: rpc::Kind::PingResponse, sender_id: ref sender, ..} 
+                     if *sender == id => true,
+                   _ => false,
+                }
+            }).take(1) 
+            {
+               return node::PingResult::Alive;
+            }
       }
+      node::PingResult::NoResponse
    }
 
    pub fn ping_response(&self, destination: routing::NodeInfo) {
@@ -53,7 +80,7 @@ impl Resources {
    }
 
    /// Attempts to find a node through the network.
-   pub fn find_node(&self, id_to_find: Hash) -> Option<routing::NodeInfo> {
+   pub fn find_node(&self, id_to_find: &Hash) -> Option<routing::NodeInfo> {
       let mut queried_nodes = Vec::<Hash>::with_capacity(routing::K);
 
       while queried_nodes.len() < routing::K {
@@ -83,9 +110,8 @@ impl Resources {
       for reception in self.receptions()
          .during(time::Duration::seconds(NETWORK_TIMEOUT_S))
          .filter(|rpc: &Rpc| {
-             match rpc {
-                &Rpc{ kind: rpc::Kind::FindNodeResponse(box rpc::FindNodeResponsePayload {id_to_find: ref id, .. }), ..} 
-                  if id == id_to_find => true,
+             match rpc.kind {
+                rpc::Kind::FindNodeResponse( ref payload ) => &payload.id_to_find == id_to_find,
                 _ => false,
              }
          })
@@ -100,8 +126,9 @@ impl Resources {
       };
 
       match rpc.kind {
-         rpc::Kind::Ping         => self.handle_ping(rpc.clone(), sender),
-         rpc::Kind::PingResponse => self.handle_ping_response(rpc.clone(), sender),
+         rpc::Kind::Ping                => self.handle_ping(rpc.clone(), sender),
+         rpc::Kind::PingResponse        => self.handle_ping_response(rpc.clone(), sender),
+         rpc::Kind::FindNodeResponse(_) => self.handle_ping_response(rpc.clone(), sender),
          _ => (),
       }
 
