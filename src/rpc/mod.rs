@@ -57,8 +57,8 @@ pub struct StorePayload;
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
 pub struct FindNodePayload {
-   id_to_find    : Hash,
-   nodes_wanted  : usize,
+   pub id_to_find    : Hash,
+   pub nodes_wanted  : usize,
 }
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
@@ -66,8 +66,8 @@ pub struct FindValuePayload;
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
 pub struct FindNodeResponsePayload {
-   id_to_find : Hash,
-   result     : routing::LookupResult,
+   pub id_to_find : Hash,
+   pub result     : routing::LookupResult,
 }
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]

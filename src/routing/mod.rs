@@ -42,13 +42,8 @@ impl Table {
    /// Constructs a routing table based on a parent node id. Other nodes
    /// will be stored in this table based on their distance to the node id provided.
    pub fn new(parent_id: Hash) -> Table {
-      let mut buckets = Vec::<Bucket>::with_capacity(HASH_SIZE);
-      for _ in 0..HASH_SIZE {
-         buckets.push(Bucket::new());
-      }
-
       Table { 
-         buckets   : buckets,
+         buckets   : (0..HASH_SIZE).map(|_| Bucket::new()).collect(),
          conflicts : Mutex::new(Vec::new()),
          parent_id : parent_id,
       }

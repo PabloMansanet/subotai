@@ -84,7 +84,8 @@ impl Resources {
          .during(time::Duration::seconds(NETWORK_TIMEOUT_S))
          .filter(|rpc: &Rpc| {
              match rpc {
-                &Rpc{ kind: rpc::Kind::FindNodeResponse(box ref id_to_find), ..} => true,
+                &Rpc{ kind: rpc::Kind::FindNodeResponse(box rpc::FindNodeResponsePayload {id_to_find: ref id, .. }), ..} 
+                  if id == id_to_find => true,
                 _ => false,
              }
          })
