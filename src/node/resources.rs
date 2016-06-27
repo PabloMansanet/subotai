@@ -49,23 +49,24 @@ impl Resources {
          Some(node) => Some(node),
       };
 
+      let responses = self.receptions()
+         .during(time::Duration::seconds(NETWORK_TIMEOUT_S))
+         .filter(|rpc: &Rpc| {
+             match rpc {
+                &Rpc{ kind: rpc::Kind::PingResponse, sender_id: ref sender, ..} 
+                  if *sender == id => true,
+                _ => false,
+             }
+         }).take(1);
+
       if let Some(node) = node {
          let rpc = Rpc::ping(self.id.clone(), self.inbound.local_addr().unwrap().port());
          let packet = rpc.serialize();
          self.outbound.send_to(&packet, node.address);
 
-         for reception in self.receptions()
-            .during(time::Duration::seconds(NETWORK_TIMEOUT_S))
-            .filter(|rpc: &Rpc| {
-                match rpc {
-                   &Rpc{ kind: rpc::Kind::PingResponse, sender_id: ref sender, ..} 
-                     if *sender == id => true,
-                   _ => false,
-                }
-            }).take(1) 
-            {
-               return node::PingResult::Alive;
-            }
+         for response in responses {
+            return node::PingResult::Alive;
+         }
       }
       node::PingResult::NoResponse
    }
@@ -98,10 +99,20 @@ impl Resources {
             routing::LookupResult::Nothing => break,
          }
       }
-      None
+      
+      self.table.specific_node(&id_to_find)
    }
 
    fn lookup_wave(&self, id_to_find: &Hash, nodes_to_query: &Vec<routing::NodeInfo>, queried: &mut Vec<Hash>) {
+      let responses = self.receptions()
+         .during(time::Duration::seconds(NETWORK_TIMEOUT_S))
+         .filter(|rpc: &Rpc| {
+             match rpc.kind {
+                rpc::Kind::FindNodeResponse( ref payload ) => &payload.id_to_find == id_to_find,
+                _ => false,
+             }
+         }).take(nodes_to_query.len());
+
       for node in nodes_to_query {
          let rpc = Rpc::find_node(
             self.id.clone(), 
@@ -114,16 +125,8 @@ impl Resources {
          queried.push(node.id.clone());
       }
 
-      for reception in self.receptions()
-         .during(time::Duration::seconds(NETWORK_TIMEOUT_S))
-         .filter(|rpc: &Rpc| {
-             match rpc.kind {
-                rpc::Kind::FindNodeResponse( ref payload ) => &payload.id_to_find == id_to_find,
-                _ => false,
-             }
-         }).take(routing::ALPHA)
-      { 
-         if let rpc::Kind::FindNodeResponse(ref payload) = reception.kind {
+      for response in responses { 
+         if let rpc::Kind::FindNodeResponse(ref payload) = response.kind {
             match payload.result {
                routing::LookupResult::Found(_) => return,
                routing::LookupResult::Myself   => return,
