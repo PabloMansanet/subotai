@@ -8,11 +8,17 @@ use std::sync::{Mutex, RwLock};
 #[cfg(test)]
 mod tests;
 
+/// System-wide concurrency factor. It's used, for example, to decide the
+/// number of remote nodes to interrogate concurrently when performing a 
+/// network-wide lookup.
 pub const ALPHA    : usize = 3;
+
+/// Data structure factor. It's used, among other places, to dictate the 
+/// size of a K-bucket.
 pub const K        : usize = 20;
 const BUCKET_DEPTH : usize = K;
 
-/// Kademlia routing table, with 160 buckets of `BUCKET_DEPTH` (k) node
+/// Routing table with 160 buckets of `BUCKET_DEPTH` (k) node
 /// identifiers each, constructed around a parent node ID.
 ///
 /// The structure employs least-recently seen eviction. Conflicts generated
@@ -24,12 +30,23 @@ pub struct Table {
    parent_id : Hash,
 }
 
+/// ID - Address pair that identifies a unique Subotai node in the network.
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
 pub struct NodeInfo {
    pub id      : Hash,
    pub address : net::SocketAddr,
 }
 
+/// Result of a table lookup. 
+/// * Myself: The requested ID is precisely the parent node.
+///
+/// * Found: The requested ID was found on the table.
+///
+/// * ClosestNodes: The requested ID was not found, but here are the next
+///   closest nodes to consult.
+/// 
+/// * Nothing: The table is empty or the blacklist provided doesn't allow 
+///   returning any close nodes.
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
 pub enum LookupResult {
    Myself,
