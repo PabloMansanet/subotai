@@ -1,6 +1,8 @@
 use rand::{thread_rng, Rng};
 use itertools::Zip;
 use std::ops::BitXor;
+use std::fmt;
+use std::fmt::Write;
 use std::cmp::{PartialOrd, Ordering};
 
 
@@ -68,6 +70,25 @@ impl Hash {
       if position >= HASH_SIZE { return; }
       let byte = &mut self.raw[position / 8];
       *byte ^= 1 << (position % 8);
+   }
+}
+
+impl fmt::Display for Hash {
+   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+      let mut leftpad_over = false;
+      let mut hex = String::new();
+      hex.push_str("0x[");
+      for byte in self.raw.iter().rev() {
+         if *byte > 0u8 {
+            leftpad_over = true;
+         }
+
+         if leftpad_over {
+            write!(&mut hex, "{:01$X}", byte, 2).unwrap();
+         }
+      }
+      hex.push_str("]");
+      write!(f, "{}", hex)
    }
 }
 
@@ -231,8 +252,6 @@ mod tests {
        for bit in &bits {
           test_hash.flip_bit(*bit);
        }
-
-       println!("{:?}",test_hash);
 
        for (actual, expected) in test_hash.ones().zip(bits) {
           assert_eq!(actual, expected);
