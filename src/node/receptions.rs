@@ -5,11 +5,11 @@ use time;
 use node::resources;
 
 /// A blocking iterator over the RPCs received by a node.
-pub struct Receptions {
+pub struct Receptions<'a> {
    iter          : bus::BusIntoIter<resources::Update>,
    timeout       : Option<time::SteadyTime>,
    rpc_filter    : Option<RpcFilter>,
-   sender_filter : Option<Vec<Hash>>,
+   sender_filter : Option<&'a Vec<Hash>>,
 }
 
 #[derive(Eq, PartialEq, Debug)]
@@ -23,8 +23,8 @@ pub enum RpcFilter {
    FindValueResponse,
 }
 
-impl Receptions {
-   pub fn new(resources: &resources::Resources) -> Receptions {
+impl<'a> Receptions<'a> {
+   pub fn new(resources: &resources::Resources) -> Receptions<'a> {
       Receptions {
          iter          : resources.updates.lock().unwrap().add_rx().into_iter(),
          timeout       : None,
@@ -34,25 +34,25 @@ impl Receptions {
    }
 
    /// Restricts the iterator to a particular span of time.
-   pub fn during(mut self, lifespan: time::Duration) -> Receptions {
+   pub fn during(mut self, lifespan: time::Duration) -> Receptions<'a> {
       self.timeout = Some(time::SteadyTime::now() + lifespan);
       self
    }
 
    /// Only produces a particular rpc
-   pub fn rpc(mut self, filter: RpcFilter) -> Receptions {
+   pub fn rpc(mut self, filter: RpcFilter) -> Receptions<'a> {
       self.rpc_filter = Some(filter);
       self
    }
 
    /// Only from a set of senders
-   pub fn from(mut self, senders: Vec<Hash>) -> Receptions {
+   pub fn from(mut self, senders: &'a Vec<Hash>) -> Receptions<'a> {
       self.sender_filter = Some(senders);
       self
    }
 }
 
-impl Iterator for Receptions {
+impl<'a> Iterator for Receptions<'a> {
    type Item = rpc::Rpc;
 
    fn next(&mut self) -> Option<rpc::Rpc> {
@@ -87,6 +87,49 @@ impl Iterator for Receptions {
       }
       None
    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use node;
+    use time;
+
+    #[test]
+    fn produces_rpcs_but_not_ticks() {
+       let alpha = node::Node::new();
+       let beta = node::Node::new();
+       let beta_receptions = beta.receptions().during(time::Duration::seconds(1));
+
+       alpha.bootstrap(beta.local_info());
+       alpha.ping(beta.local_info().id);
+       alpha.ping(beta.local_info().id);
+      
+       assert_eq!(beta_receptions.count(),2);
+    }
+
+    #[test]
+    fn sender_filtering() {
+       let receiver = node::Node::new();
+       let alpha = node::Node::new();
+       let beta  = node::Node::new();
+       
+       let mut allowed = Vec::new();
+       allowed.push(beta.local_info().id);
+      
+       let receptions = 
+         receiver.receptions()
+                 .during(time::Duration::seconds(1))
+                 .from(&allowed);
+
+       alpha.bootstrap(receiver.local_info());
+       beta.bootstrap(receiver.local_info());
+
+       alpha.ping(receiver.local_info().id);
+       beta.ping(receiver.local_info().id);
+
+       assert_eq!(receptions.count(),1);
+    }
 }
 
 
