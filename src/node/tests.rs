@@ -46,14 +46,10 @@ fn chained_node_find() {
    let mut nodes: VecDeque<node::Node> = (0..10).map(|_| { node::Node::new() }).collect();
 
    // We inform each node of the existance of the next three.
-   for (((alpha, beta),gamma), delta) in nodes.iter()
-                                              .zip(nodes.iter().skip(1))
-                                              .zip(nodes.iter().skip(3))
-                                              .zip(nodes.iter().skip(5))
-   {
-      alpha.resources.table.insert_node(beta.local_info());    
-      alpha.resources.table.insert_node(gamma.local_info());    
-      alpha.resources.table.insert_node(delta.local_info());    
+   for i in 1..4 {
+      for (alpha, beta) in nodes.iter().zip(nodes.iter().skip(i)) {
+         alpha.resources.table.insert_node(beta.local_info());    
+      }
    }
 
    // Head finds tail
