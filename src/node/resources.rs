@@ -1,12 +1,15 @@
 use routing;
 use rpc;
 use bus;
+use node;
+
 use rpc::Rpc;
 use time;
 
 use hash::Hash;
 use bincode::serde;
 use std::net;
+use std::sync::Arc;
 use std::sync;
 use node::*;
 
@@ -33,17 +36,49 @@ pub enum Update {
 }
 
 impl Resources {
-   pub fn ping(&self, id: Hash) {
-      if let Some(destination) = self.table.specific_node(&id)
-      {
+   pub fn local_info(&self) -> routing::NodeInfo {
+      routing::NodeInfo {
+         id      : self.id.clone(),
+         address : self.inbound.local_addr().unwrap(),
+      }
+   }
+
+   pub fn ping(&self, id: Hash) -> node::PingResult {
+      let node = match self.table.specific_node(&id) {
+         None => self.find_node(&id),
+         Some(node) => Some(node),
+      };
+
+      let responses = self.receptions()
+         .during(time::Duration::seconds(NETWORK_TIMEOUT_S))
+         .filter(|rpc: &Rpc| {
+             match rpc {
+                &Rpc{ kind: rpc::Kind::PingResponse, sender_id: ref sender, ..} 
+                  if *sender == id => true,
+                _ => false,
+             }
+         }).take(1);
+
+      if let Some(node) = node {
          let rpc = Rpc::ping(self.id.clone(), self.inbound.local_addr().unwrap().port());
          let packet = rpc.serialize();
-         self.outbound.send_to(&packet, destination.address);
+         self.outbound.send_to(&packet, node.address);
+
+         for response in responses {
+            return node::PingResult::Alive;
+         }
       }
+      node::PingResult::NoResponse
    }
 
    pub fn ping_response(&self, destination: routing::NodeInfo) {
       let rpc = Rpc::ping_response(self.id.clone(), self.inbound.local_addr().unwrap().port());
+      let packet = rpc.serialize();
+      self.outbound.send_to(&packet, destination.address);
+   }
+
+   pub fn find_node_response(&self, destination: routing::NodeInfo, id_to_find: &Hash, result: routing::LookupResult) {
+      let rpc = Rpc::find_node_response(self.id.clone(), self.inbound.local_addr().unwrap().port(), id_to_find.clone(), result);
       let packet = rpc.serialize();
       self.outbound.send_to(&packet, destination.address);
    }
@@ -53,7 +88,7 @@ impl Resources {
    }
 
    /// Attempts to find a node through the network.
-   pub fn find_node(&self, id_to_find: Hash) -> Option<routing::NodeInfo> {
+   pub fn find_node(&self, id_to_find: &Hash) -> Option<routing::NodeInfo> {
       let mut queried_nodes = Vec::<Hash>::with_capacity(routing::K);
 
       while queried_nodes.len() < routing::K {
@@ -64,10 +99,20 @@ impl Resources {
             routing::LookupResult::Nothing => break,
          }
       }
-      None
+      
+      self.table.specific_node(&id_to_find)
    }
 
    fn lookup_wave(&self, id_to_find: &Hash, nodes_to_query: &Vec<routing::NodeInfo>, queried: &mut Vec<Hash>) {
+      let responses = self.receptions()
+         .during(time::Duration::seconds(NETWORK_TIMEOUT_S))
+         .filter(|rpc: &Rpc| {
+             match rpc.kind {
+                rpc::Kind::FindNodeResponse( ref payload ) => &payload.id_to_find == id_to_find,
+                _ => false,
+             }
+         }).take(nodes_to_query.len());
+
       for node in nodes_to_query {
          let rpc = Rpc::find_node(
             self.id.clone(), 
@@ -80,16 +125,15 @@ impl Resources {
          queried.push(node.id.clone());
       }
 
-      for reception in self.receptions()
-         .during(time::Duration::seconds(NETWORK_TIMEOUT_S))
-         .filter(|rpc: &Rpc| {
-             match rpc {
-                &Rpc{ kind: rpc::Kind::FindNodeResponse(box rpc::FindNodeResponsePayload {id_to_find: ref id, .. }), ..} 
-                  if id == id_to_find => true,
-                _ => false,
-             }
-         })
-         .take(routing::ALPHA){}
+      for response in responses { 
+         if let rpc::Kind::FindNodeResponse(ref payload) = response.kind {
+            match payload.result {
+               routing::LookupResult::Found(_) => return,
+               routing::LookupResult::Myself   => return,
+               _ => (),
+            }
+         }
+      }
    }
 
    pub fn process_incoming_rpc(&self, rpc: Rpc, mut source: net::SocketAddr) -> serde::DeserializeResult<()> {
@@ -100,8 +144,10 @@ impl Resources {
       };
 
       match rpc.kind {
-         rpc::Kind::Ping         => self.handle_ping(rpc.clone(), sender),
-         rpc::Kind::PingResponse => self.handle_ping_response(rpc.clone(), sender),
+         rpc::Kind::Ping                          => self.handle_ping(sender),
+         rpc::Kind::PingResponse                  => self.handle_ping_response(sender),
+         rpc::Kind::FindNode(ref payload)         => self.handle_find_node(payload.clone(), sender),
+         rpc::Kind::FindNodeResponse(ref payload) => self.handle_find_node_response(payload.clone(), sender),
          _ => (),
       }
 
@@ -109,13 +155,28 @@ impl Resources {
       Ok(())
    }
 
-   pub fn handle_ping(&self, ping: Rpc, sender: routing::NodeInfo) {
+   pub fn handle_ping(&self, sender: routing::NodeInfo) {
       self.table.insert_node(sender.clone());
       self.ping_response(sender);
    }
 
-   fn handle_ping_response(&self, ping: Rpc, sender: routing::NodeInfo) {
+   fn handle_ping_response(&self, sender: routing::NodeInfo) {
       self.table.insert_node(sender);
+   }
+
+   fn handle_find_node(&self, payload: Arc<rpc::FindNodePayload>, sender: routing::NodeInfo) {
+      self.table.insert_node(sender.clone());
+      let lookup_results = self.table.lookup(&payload.id_to_find, payload.nodes_wanted, None);
+      self.find_node_response(sender, &payload.id_to_find, lookup_results);
+   }
+
+   fn handle_find_node_response(&self, payload: Arc<rpc::FindNodeResponsePayload>, sender: routing::NodeInfo) {
+      self.table.insert_node(sender);
+      match payload.result {
+         routing::LookupResult::ClosestNodes(ref nodes) => for node in nodes { self.table.insert_node(node.clone()) },
+         routing::LookupResult::Found(ref node) => self.table.insert_node(node.clone()),
+         _ => (),
+      }
    }
 }
 

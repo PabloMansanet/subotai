@@ -8,6 +8,8 @@ use routing;
 use rpc;
 use bus;
 
+pub use routing::NodeInfo as NodeInfo;
+
 use hash::Hash;
 use std::{net, io, thread};
 use std::sync;
@@ -40,7 +42,7 @@ pub struct Node {
 /// * `ShuttingDown`: The node is in a process of shutting down;
 ///   all of it's resources will be deallocated after completion
 ///   of any pending async operations.
-#[derive(Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum State {
    OffGrid,
    Alive,
@@ -48,16 +50,20 @@ pub enum State {
    ShuttingDown,
 }
 
-pub enum FindResult {
-   FoundNode,
-   FoundKey,
-   NetworkLookupStarted,
+#[derive(Debug, Eq, PartialEq)]
+pub enum PingResult {
+   Alive,
+   NoResponse,
 }
 
 impl Node {
    /// Constructs a node with OS allocated random ports
    pub fn new() -> Node {
       Node::with_ports(0,0).unwrap()
+   }
+
+   pub fn id<'a>(&'a self) -> &Hash {
+      &self.resources.id
    }
 
    /// Constructs a node with a given inbound/outbound UDP port pair.
@@ -75,8 +81,8 @@ impl Node {
 
       try!(resources.inbound.set_read_timeout(Some(StdDuration::new(SOCKET_TIMEOUT_S,0))));
 
-      let resources_clone = resources.clone();
-      thread::spawn(move || { Node::reception_loop(resources_clone) });
+      let reception_resources = resources.clone();
+      thread::spawn(move || { Node::reception_loop(reception_resources) });
 
       Ok( Node{ resources: resources } )
    }
@@ -89,27 +95,25 @@ impl Node {
    }
 
    /// Sends a ping RPC to a destination node. If the ID is unknown, this request is 
-   /// promoted into a find_node RPC followed by a ping to the node.
-   pub fn ping(&self, id: Hash) {
-      let resources = self.resources.clone();
-      thread::spawn(move || { resources.ping(id) });
+   /// promoted into a find_node RPC followed by a ping to the node. Returns the
+   /// node information if the node responded, and None in case of timeout.
+   pub fn ping(&self, id: Hash) -> PingResult {
+      self.resources.ping(id)
    }
 
    /// Produces an ID-Address pair, with the node's local inbound UDPv4 address.
-   pub fn local_info(&self) -> routing::NodeInfo {
-      routing::NodeInfo {
-         id      : self.resources.id.clone(),
-         address : self.resources.inbound.local_addr().unwrap(),
-      }
+   pub fn local_info(&self) -> NodeInfo {
+      self.resources.local_info()
    }
 
-   pub fn bootstrap(&self, seed: routing::NodeInfo) {
+   pub fn bootstrap(&self, seed: NodeInfo) {
        self.resources.table.insert_node(seed); 
    }
 
-   /// Recursive node lookup through the network.
-   pub fn find_node(&self, id: Hash) -> FindResult {
-      unimplemented!();
+   /// Recursive node lookup through the network. Will block until
+   /// finished and return the node information if succeful.
+   pub fn find_node(&self, id: &Hash) -> Option<NodeInfo> {
+      self.resources.find_node(id)
    }
 
    /// Receives and processes data as long as the table is alive.
