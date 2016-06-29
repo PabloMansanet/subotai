@@ -16,9 +16,12 @@ use std::sync;
 use std::time::Duration as StdDuration;
 use std::sync::Arc;
 
-pub const NETWORK_TIMEOUT_S : i64 = 3;
+/// Timeout period in seconds to stop waiting for a remote node response. 
+pub const NETWORK_TIMEOUT_S : i64 = 5;
 
+/// Size of a typical UDP socket buffer.
 pub const SOCKET_BUFFER_SIZE_BYTES : usize = 65536;
+
 const SOCKET_TIMEOUT_S         : u64   = 1;
 const UPDATE_BUS_SIZE_BYTES    : usize = 50;
 
@@ -50,6 +53,8 @@ pub enum State {
    ShuttingDown,
 }
 
+/// Result of a ping operation
+/// * `Alive`:
 #[derive(Debug, Eq, PartialEq)]
 pub enum PingResult {
    Alive,
@@ -57,11 +62,12 @@ pub enum PingResult {
 }
 
 impl Node {
-   /// Constructs a node with OS allocated random ports
+   /// Constructs a node with OS allocated random ports.
    pub fn new() -> Node {
       Node::with_ports(0,0).unwrap()
    }
 
+   /// Returns the randomly generated hash used to identify this node in the network.
    pub fn id<'a>(&'a self) -> &Hash {
       &self.resources.id
    }
@@ -75,7 +81,7 @@ impl Node {
          table      : routing::Table::new(id),
          inbound    : try!(net::UdpSocket::bind(("0.0.0.0", inbound_port))),
          outbound   : try!(net::UdpSocket::bind(("0.0.0.0", outbound_port))),
-         state      : sync::Mutex::new(State::Alive),
+         state      : sync::Mutex::new(State::OffGrid),
          updates    : sync::Mutex::new(bus::Bus::new(UPDATE_BUS_SIZE_BYTES))
       });
 
@@ -107,7 +113,8 @@ impl Node {
    }
 
    pub fn bootstrap(&self, seed: NodeInfo) {
-       self.resources.table.insert_node(seed); 
+       self.resources.table.insert_node(seed);
+       *self.resources.state.lock().unwrap() = State::Alive;
    }
 
    /// Recursive node lookup through the network. Will block until
