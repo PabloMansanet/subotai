@@ -49,19 +49,12 @@ impl Resources {
          Some(node) => Some(node),
       };
 
-      let responses = self.receptions()
-         .during(time::Duration::seconds(NETWORK_TIMEOUT_S))
-         .filter(|rpc: &Rpc| {
-             match rpc {
-                &Rpc{ kind: rpc::Kind::PingResponse, sender_id: ref sender, ..} 
-                  if *sender == id => true,
-                _ => false,
-             }
-         }).take(1);
-
       if let Some(node) = node {
          let rpc = Rpc::ping(self.id.clone(), self.inbound.local_addr().unwrap().port());
          let packet = rpc.serialize();
+         let responses = self.receptions().during(time::Duration::seconds(NETWORK_TIMEOUT_S))
+            .rpc(receptions::RpcFilter::PingResponse).from(id.clone()).take(1);
+         
          self.outbound.send_to(&packet, node.address);
 
          for response in responses {
@@ -69,18 +62,6 @@ impl Resources {
          }
       }
       node::PingResult::NoResponse
-   }
-
-   pub fn ping_response(&self, destination: routing::NodeInfo) {
-      let rpc = Rpc::ping_response(self.id.clone(), self.inbound.local_addr().unwrap().port());
-      let packet = rpc.serialize();
-      self.outbound.send_to(&packet, destination.address);
-   }
-
-   pub fn find_node_response(&self, destination: routing::NodeInfo, id_to_find: &Hash, result: routing::LookupResult) {
-      let rpc = Rpc::find_node_response(self.id.clone(), self.inbound.local_addr().unwrap().port(), id_to_find.clone(), result);
-      let packet = rpc.serialize();
-      self.outbound.send_to(&packet, destination.address);
    }
 
    pub fn receptions(&self) -> receptions::Receptions {
@@ -155,9 +136,11 @@ impl Resources {
       Ok(())
    }
 
-   pub fn handle_ping(&self, sender: routing::NodeInfo) {
+   fn handle_ping(&self, sender: routing::NodeInfo) {
       self.table.insert_node(sender.clone());
-      self.ping_response(sender);
+      let rpc = Rpc::ping_response(self.id.clone(), self.inbound.local_addr().unwrap().port());
+      let packet = rpc.serialize();
+      self.outbound.send_to(&packet, sender.address);
    }
 
    fn handle_ping_response(&self, sender: routing::NodeInfo) {
@@ -167,7 +150,12 @@ impl Resources {
    fn handle_find_node(&self, payload: Arc<rpc::FindNodePayload>, sender: routing::NodeInfo) {
       self.table.insert_node(sender.clone());
       let lookup_results = self.table.lookup(&payload.id_to_find, payload.nodes_wanted, None);
-      self.find_node_response(sender, &payload.id_to_find, lookup_results);
+      let rpc = Rpc::find_node_response(self.id.clone(), 
+                                        self.inbound.local_addr().unwrap().port(),
+                                        payload.id_to_find.clone(),
+                                        lookup_results);
+      let packet = rpc.serialize();
+      self.outbound.send_to(&packet, sender.address);
    }
 
    fn handle_find_node_response(&self, payload: Arc<rpc::FindNodeResponsePayload>, sender: routing::NodeInfo) {

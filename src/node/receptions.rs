@@ -5,11 +5,11 @@ use time;
 use node::resources;
 
 /// A blocking iterator over the RPCs received by a node.
-pub struct Receptions<'a> {
+pub struct Receptions {
    iter          : bus::BusIntoIter<resources::Update>,
    timeout       : Option<time::SteadyTime>,
    rpc_filter    : Option<RpcFilter>,
-   sender_filter : Option<&'a Vec<Hash>>,
+   sender_filter : Option<Vec<Hash>>,
 }
 
 #[derive(Eq, PartialEq, Debug)]
@@ -23,8 +23,8 @@ pub enum RpcFilter {
    FindValueResponse,
 }
 
-impl<'a> Receptions<'a> {
-   pub fn new(resources: &resources::Resources) -> Receptions<'a> {
+impl Receptions {
+   pub fn new(resources: &resources::Resources) -> Receptions {
       Receptions {
          iter          : resources.updates.lock().unwrap().add_rx().into_iter(),
          timeout       : None,
@@ -34,25 +34,31 @@ impl<'a> Receptions<'a> {
    }
 
    /// Restricts the iterator to a particular span of time.
-   pub fn during(mut self, lifespan: time::Duration) -> Receptions<'a> {
+   pub fn during(mut self, lifespan: time::Duration) -> Receptions {
       self.timeout = Some(time::SteadyTime::now() + lifespan);
       self
    }
 
    /// Only produces a particular rpc
-   pub fn rpc(mut self, filter: RpcFilter) -> Receptions<'a> {
+   pub fn rpc(mut self, filter: RpcFilter) -> Receptions {
       self.rpc_filter = Some(filter);
       self
    }
 
+   /// Only from a sender
+   pub fn from(mut self, sender: Hash) -> Receptions {
+      self.sender_filter = Some(vec![sender]);
+      self
+   }
+
    /// Only from a set of senders
-   pub fn from(mut self, senders: &'a Vec<Hash>) -> Receptions<'a> {
+   pub fn from_senders(mut self, senders: Vec<Hash>) -> Receptions {
       self.sender_filter = Some(senders);
       self
    }
 }
 
-impl<'a> Iterator for Receptions<'a> {
+impl Iterator for Receptions {
    type Item = rpc::Rpc;
 
    fn next(&mut self) -> Option<rpc::Rpc> {
@@ -120,7 +126,7 @@ mod tests {
        let receptions = 
          receiver.receptions()
                  .during(time::Duration::seconds(1))
-                 .from(&allowed);
+                 .from_senders(allowed);
 
        alpha.bootstrap(receiver.local_info());
        beta.bootstrap(receiver.local_info());
