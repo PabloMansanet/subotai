@@ -21,6 +21,16 @@ fn inserting_and_retrieving_specific_node() {
 }
 
 #[test]
+fn measuring_table_length() {
+   let table = Table::new(Hash::random());
+   for _ in 0..50 {
+      table.insert_node(node_info_no_net(Hash::random()));
+   }
+
+   assert_eq!(50, table.len() + table.conflicts.lock().unwrap().len());
+}
+
+#[test]
 fn inserting_in_a_full_bucket_causes_eviction_conflict() {
    let mut parent_id = Hash::blank();
    parent_id.raw[1] = 1; // This will guarantee all nodes will fall on the same bucket.

@@ -66,6 +66,11 @@ impl Table {
       }
    }
 
+   /// Returns the number of nodes currently on the table.
+   pub fn len(&self) -> usize {
+      self.buckets.iter().map(|bucket| bucket.entries.read().unwrap().len()).sum()
+   }
+
    /// Inserts a node in the routing table. Employs least-recently-seen eviction
    /// by kicking out the oldest node in case the bucket is full, and registering
    /// an eviction conflict that can be revised later.
