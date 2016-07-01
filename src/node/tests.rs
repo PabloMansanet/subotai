@@ -1,6 +1,7 @@
 use node;
 use time;
 use std::collections::VecDeque;
+use node::receptions;
 
 pub const POLL_FREQUENCY_MS: u64 = 50;
 pub const TRIES: u8 = 5;
@@ -56,4 +57,28 @@ fn chained_node_find() {
    let head = nodes.pop_front().unwrap();
    let tail = nodes.pop_back().unwrap();
    assert_eq!(head.find_node(tail.id()).unwrap(), tail.local_info());
+}
+
+#[test]
+fn bootstrapping_and_finding_on_simulated_network() {
+   let origin = node::Node::new();
+
+   let mut nodes: VecDeque<node::Node> = (0..100).map(|_| { node::Node::new() }).collect();
+
+   for node in nodes.iter() {
+      node.bootstrap(origin.local_info());
+   }
+   
+   // Head finds tail in a few steps.
+   let head = nodes.pop_front().unwrap();
+   let tail = nodes.pop_back().unwrap();
+
+   let receptions = 
+      head.receptions()
+          .during(time::Duration::seconds(3))
+          .rpc(receptions::RpcFilter::FindNodeResponse);
+
+   assert_eq!(head.find_node(tail.id()).unwrap(), tail.local_info());
+   let maximum_steps = 10;
+   assert!(receptions.count() < maximum_steps);
 }
