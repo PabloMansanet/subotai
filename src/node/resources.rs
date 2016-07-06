@@ -57,7 +57,7 @@ impl Resources {
          
          self.outbound.send_to(&packet, node.address);
 
-         for response in responses {
+         for _ in responses {
             return node::PingResult::Alive;
          }
       }
@@ -73,11 +73,10 @@ impl Resources {
       let mut queried_nodes = Vec::<Hash>::with_capacity(routing::K);
 
       while queried_nodes.len() < routing::K {
-         match self.table.lookup(&id_to_find, routing::ALPHA, Some(&queried_nodes)) {
+         match self.table.lookup(id_to_find, routing::ALPHA, Some(&queried_nodes)) {
             routing::LookupResult::Found(node) => return Some(node),
-            routing::LookupResult::ClosestNodes(nodes) => self.lookup_wave(&id_to_find, &nodes, &mut queried_nodes),
-            routing::LookupResult::Myself => break,
-            routing::LookupResult::Nothing => break,
+            routing::LookupResult::ClosestNodes(nodes) => self.lookup_wave(id_to_find, &nodes, &mut queried_nodes),
+            _ => break,
          }
       }
       

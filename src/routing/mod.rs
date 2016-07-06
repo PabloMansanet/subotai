@@ -1,9 +1,11 @@
 use hash::HASH_SIZE;
+use hash;
 use hash::Hash;
 use std::net;
 use std::collections::VecDeque;
 use std::mem;
 use std::sync::{Mutex, RwLock};
+use std::iter::{Chain, Rev};
 
 #[cfg(test)]
 mod tests;
@@ -38,14 +40,14 @@ pub struct NodeInfo {
 }
 
 /// Result of a table lookup. 
-/// * Myself: The requested ID is precisely the parent node.
+/// * `Myself`: The requested ID is precisely the parent node.
 ///
-/// * Found: The requested ID was found on the table.
+/// * `Found`: The requested ID was found on the table.
 ///
-/// * ClosestNodes: The requested ID was not found, but here are the next
+/// * `ClosestNodes`: The requested ID was not found, but here are the next
 ///   closest nodes to consult.
 /// 
-/// * Nothing: The table is empty or the blacklist provided doesn't allow 
+/// * `Nothing`: The table is empty or the blacklist provided doesn't allow 
 ///   returning any close nodes.
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
 pub enum LookupResult {
@@ -141,6 +143,22 @@ impl Table {
       }
    }
 
+   /// Returns an iterator over all stored nodes, ordered by ascending
+   /// distance to a given reference ID.
+   pub fn closest_nodes_to<'a,'b>(&'a self, id: &'b Hash) -> ClosestNodesTo<'a,'b> {
+      let distance = &self.parent_id ^ id;
+      let descent  = distance.clone().into_ones().rev();
+      let ascent   = distance.into_zeroes();
+      let lookup_order = descent.chain(ascent);
+
+      ClosestNodesTo {
+         table          : self,
+         reference      : id,
+         lookup_order   : lookup_order,
+         current_bucket : Vec::with_capacity(BUCKET_DEPTH),
+      }
+   }
+
    /// Returns a table entry for the specific node with a given hash.
    pub fn specific_node(&self, id: &Hash) -> Option<NodeInfo> {
       if let Some(index) = self.bucket_for_node(id) {
@@ -206,6 +224,15 @@ pub struct AllNodes<'a> {
    bucket_index   : usize,
 }
 
+/// Produces copies of all known nodes, ordered in ascending
+/// distance from a reference ID.
+pub struct ClosestNodesTo<'a, 'b> {
+   table          : &'a Table,
+   reference      : &'b hash::Hash,     
+   lookup_order   : Chain<Rev<hash::IntoOnes>, hash::IntoZeroes>,
+   current_bucket : Vec<NodeInfo>,
+}
+
 /// Represents a conflict derived from attempting to insert a node in a full
 /// bucket. 
 #[derive(Debug,Clone)]
@@ -222,6 +249,31 @@ struct EvictionConflict {
 #[derive(Debug)]
 struct Bucket {
    entries: RwLock<VecDeque<NodeInfo>>,
+}
+
+impl<'a, 'b> Iterator for ClosestNodesTo<'a, 'b> {
+   type Item = NodeInfo;
+
+   fn next(&mut self) -> Option<NodeInfo> {
+      if !self.current_bucket.is_empty() {
+         return self.current_bucket.pop();
+      }
+
+      while let Some(index) = self.lookup_order.next() {
+         let mut new_bucket = { // Lock scope
+            let bucket = self.table.buckets[index].entries.read().unwrap();
+            if bucket.is_empty() {
+               continue;
+            }
+            bucket.clone()
+         }.into_iter().collect::<Vec<NodeInfo>>();
+
+         new_bucket.sort_by(|ref info_a, ref info_b| (&info_b.id ^ &self.reference).cmp(&(&info_a.id ^ &self.reference)));
+         self.current_bucket.append(&mut new_bucket);
+         return self.current_bucket.pop();
+      }
+      None
+   }
 }
 
 impl<'a> Iterator for AllNodes<'a> {

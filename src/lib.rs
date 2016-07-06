@@ -36,7 +36,7 @@
 //!
 //! ```
 #![allow(dead_code)]
-#![feature(custom_derive, plugin, box_patterns, iter_arith)]
+#![feature(custom_derive, plugin)]
 #![plugin(serde_macros)]
 
 extern crate itertools;

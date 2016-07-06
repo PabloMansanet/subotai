@@ -52,6 +52,22 @@ impl Hash {
       }
    }
 
+   pub fn into_zeroes(self) -> IntoZeroes {
+      IntoZeroes {
+         hash  : self,
+         index : 0,
+         rev   : HASH_SIZE
+      }
+   }
+
+   pub fn into_ones(self) -> IntoOnes {
+      IntoOnes {
+         hash  : self,
+         index : 0,
+         rev   : HASH_SIZE
+      }
+   }
+
    /// Computes the bit index of the highest "1". Returns None for a blank hash.
    pub fn height(&self) -> Option<usize> {
       let last_nonzero_byte = self.raw.iter().enumerate().rev().find(|&pair| *pair.1 != 0);
@@ -106,6 +122,18 @@ pub struct Ones<'a> {
    rev   : usize,
 }
 
+pub struct IntoZeroes { 
+   hash  : Hash,
+   index : usize,
+   rev   : usize
+}
+
+pub struct IntoOnes { 
+   hash  : Hash,
+   index : usize,
+   rev   : usize,
+}
+
 impl<'a> Iterator for Zeroes<'a> {
    type Item = usize;
 
@@ -150,6 +178,62 @@ impl<'a> DoubleEndedIterator for Zeroes<'a> {
 }
 
 impl<'a> DoubleEndedIterator for Ones<'a> {
+   fn next_back(&mut self) -> Option<usize> {
+      while self.index < self.rev {
+         let value_at_rev = self.hash.raw[(self.rev-1) / 8] & (1 << ((self.rev-1) % 8));
+         self.rev -= 1;
+         if value_at_rev != 0 {
+            return Some(self.rev);
+         }
+      }
+      None
+   }
+}
+
+impl Iterator for IntoZeroes {
+   type Item = usize;
+
+   fn next(&mut self) -> Option<usize> {
+      while self.index < self.rev {
+         let value_at_index = self.hash.raw[self.index / 8] & (1 << (self.index % 8));
+         self.index += 1;
+         if value_at_index == 0 {
+            return Some(self.index - 1);
+         }
+      }
+      None
+   }
+}
+
+impl Iterator for IntoOnes {
+   type Item = usize;
+
+   fn next(&mut self) -> Option<usize> {
+      while self.index < self.rev {
+         let value_at_index = self.hash.raw[self.index / 8] & (1 << (self.index % 8));
+         self.index += 1;
+         if value_at_index != 0 {
+            return Some(self.index - 1);
+         }
+      }
+      None
+   }
+}
+
+impl DoubleEndedIterator for IntoZeroes {
+   fn next_back(&mut self) -> Option<usize> {
+      while self.index < self.rev {
+         let value_at_rev = self.hash.raw[(self.rev-1) / 8] & (1 << ((self.rev-1) % 8));
+         self.rev -= 1;
+         if value_at_rev == 0 {
+            return Some(self.rev);
+         }
+      }
+      None
+   }
+}
+
+impl DoubleEndedIterator for IntoOnes {
    fn next_back(&mut self) -> Option<usize> {
       while self.index < self.rev {
          let value_at_rev = self.hash.raw[(self.rev-1) / 8] & (1 << ((self.rev-1) % 8));

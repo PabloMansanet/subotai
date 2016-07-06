@@ -212,6 +212,12 @@ fn efficient_bounce_lookup_on_a_randomized_table() {
       for (a, b) in nodes.iter().zip(ordered_nodes.iter()) {
          assert_eq!(a, b);
       }
+
+      // Different way to locate nodes
+      let nodes_iterator = table.closest_nodes_to(&id);
+      for (a, b) in nodes.into_iter().zip(nodes_iterator) {
+         assert_eq!(a,b);
+      }
    }
    else {
       panic!("We shouldn't have found the node!");
