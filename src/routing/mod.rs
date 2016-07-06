@@ -119,13 +119,25 @@ impl Table {
       match self.specific_node(id) {
          Some(info) => LookupResult::Found(info),
          None =>  {
-            let closest = self.closest_n_nodes_to(id, n, blacklist);
+            let closest: Vec<NodeInfo> = self.closest_nodes_to(id)
+               .take(n)
+               .filter(|ref info| Self::is_allowed(&info.id, blacklist))
+               .collect();
+
             if closest.is_empty() {
                LookupResult::Nothing
             } else {
                LookupResult::ClosestNodes(closest)
             }
          }
+      }
+   }
+
+   fn is_allowed(id: &Hash, blacklist: Option<&Vec<Hash>>) -> bool {
+      if let Some(blacklist) = blacklist {
+         !blacklist.contains(id)
+      } else {
+         true
       }
    }
 
@@ -144,7 +156,11 @@ impl Table {
    }
 
    /// Returns an iterator over all stored nodes, ordered by ascending
-   /// distance to a given reference ID.
+   /// distance to a given reference ID. This iterator is designed for concurrent
+   /// access to the data structure, and as such it isn't guaranteed that it
+   /// will return a "snapshot" of all nodes for a specific moment in time. 
+   /// Buckets already visited may be modified elsewhere through iteraton, 
+   /// and unvisited buckets may accrue new nodes.
    pub fn closest_nodes_to<'a,'b>(&'a self, id: &'b Hash) -> ClosestNodesTo<'a,'b> {
       let distance = &self.parent_id ^ id;
       let descent  = distance.clone().into_ones().rev();
@@ -168,37 +184,6 @@ impl Table {
       None
    }
 
-   /// Bounce lookup algorithm.
-   fn closest_n_nodes_to(&self, id: &Hash, n: usize, blacklist: Option<&Vec<Hash>>) -> Vec<NodeInfo> {
-      let mut closest = Vec::with_capacity(n);
-      let distance = &self.parent_id ^ id;
-      let descent  = distance.ones().rev();
-      let ascent   = distance.zeroes();
-      let lookup_order = descent.chain(ascent);
-      
-      for bucket_index in lookup_order {
-         let entries = self.buckets[bucket_index].entries.read().unwrap();
-         if entries.is_empty() {
-            continue;
-         }
-         
-         let mut nodes_from_bucket = entries.clone().into_iter().collect::<Vec<NodeInfo>>();
-         if let Some(blacklist) = blacklist {
-            nodes_from_bucket.retain(|node: &NodeInfo| !blacklist.contains(&node.id));
-         }
-
-         nodes_from_bucket.sort_by_key(|ref info| &info.id ^ id);
-         let space_left = closest.capacity() - closest.len();
-         nodes_from_bucket.truncate(space_left);
-         closest.append(&mut nodes_from_bucket);
-
-         if closest.len() == closest.capacity() {
-            break;
-         }
-      }
-      closest
-   }
-
    /// Returns the appropriate position for a node, by computing
    /// the index where their prefix starts differing. If we are requesting
    /// the bucket for this table's own parent node, it can't be stored.
@@ -216,8 +201,7 @@ impl Table {
 }
 
 /// Produces copies of all known nodes, ordered in ascending
-/// distance from self. It's a weak invariant, i.e. the table
-/// may be modified through iteration.
+/// distance from self. The table may be modified through iteration.
 pub struct AllNodes<'a> {
    table          : &'a Table,
    current_bucket : Vec<NodeInfo>,
