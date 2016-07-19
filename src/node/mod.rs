@@ -75,6 +75,7 @@ impl Node {
    /// Constructs a node with a given inbound/outbound UDP port pair.
    pub fn with_ports(inbound_port: u16, outbound_port: u16) -> io::Result<Node> {
       let id = Hash::random();
+      info!("Building a node with id: {}", id);
 
       let resources = Arc::new(resources::Resources {
          id         : id.clone(),

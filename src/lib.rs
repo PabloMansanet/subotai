@@ -45,6 +45,9 @@ extern crate bincode;
 extern crate bus;
 extern crate time;
 
+#[macro_use]
+extern crate log;
+
 pub mod node;
 pub mod hash;
 pub mod routing;
