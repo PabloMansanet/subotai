@@ -120,8 +120,8 @@ impl Table {
          Some(info) => LookupResult::Found(info),
          None =>  {
             let closest: Vec<NodeInfo> = self.closest_nodes_to(id)
-               .take(n)
                .filter(|ref info| Self::is_allowed(&info.id, blacklist))
+               .take(n)
                .collect();
 
             if closest.is_empty() {
