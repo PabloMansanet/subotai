@@ -73,10 +73,10 @@ fn bootstrapping_and_finding_on_simulated_network() {
 
    let receptions = 
       head.receptions()
-          .during(time::Duration::seconds(3))
+          .during(time::Duration::seconds(1))
           .rpc(receptions::RpcFilter::FindNodeResponse);
 
    assert_eq!(head.find_node(tail.id()).unwrap().id, tail.local_info().id);
-   let maximum_steps = 10;
+   let maximum_steps = 5;
    assert!(receptions.count() < maximum_steps);
 }
