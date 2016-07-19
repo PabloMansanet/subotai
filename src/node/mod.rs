@@ -113,7 +113,7 @@ impl Node {
    }
 
    pub fn bootstrap(&self, seed: NodeInfo) {
-       self.resources.table.insert_node(seed);
+       self.resources.bootstrap(seed);
        *self.resources.state.lock().unwrap() = State::Alive;
    }
 

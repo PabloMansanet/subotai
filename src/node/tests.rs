@@ -11,18 +11,16 @@ fn node_ping() {
    let alpha = node::Node::new();
    let beta  = node::Node::new();
    let beta_seed = beta.local_info();
+   let span = time::Duration::seconds(1);
 
    // Bootstrapping alpha:
    alpha.bootstrap(beta_seed);
 
-   // Before sending the ping, beta does not know about alpha.
-   assert!(beta.resources.table.specific_node(&alpha.resources.id).is_none());
+   let beta_receptions = alpha.receptions().during(span).from(beta.id().clone());
 
    // Alpha pings beta.
    assert_eq!(alpha.ping(beta.resources.id.clone()), node::PingResult::Alive);
-
-   // And beta now knows of alpha
-   assert!(beta.resources.table.specific_node(&alpha.resources.id).is_some());
+   assert_eq!(1, beta_receptions.count());
 }
 
 #[test]
@@ -33,10 +31,10 @@ fn reception_iterator_times_out_correctly() {
    let receptions = alpha.receptions().during(span);
 
    let before = time::SteadyTime::now(); 
-   for rpc in receptions {
-      // nothing is happening, so this should time out in around a second (not necessarily precise)
-      panic!();
-   }
+
+   // nothing is happening, so this should time out in around a second (not necessarily precise)
+   assert_eq!(0, receptions.count());
+
    let after = time::SteadyTime::now();
 
    assert!(after - before < maximum);

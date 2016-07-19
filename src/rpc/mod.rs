@@ -33,6 +33,15 @@ impl Rpc {
       Rpc { kind: Kind::FindNodeResponse(payload), sender_id: sender_id, reply_port: reply_port }
    }
 
+   pub fn bootstrap(sender_id: Hash, reply_port: u16) -> Rpc {
+      Rpc { kind: Kind::Bootstrap, sender_id: sender_id, reply_port: reply_port }
+   }
+
+   pub fn bootstrap_response(sender_id: Hash, reply_port: u16, nodes: Vec<routing::NodeInfo>) -> Rpc {
+      let payload = Arc::new(BootstrapResponsePayload { nodes: nodes } );
+      Rpc { kind: Kind::BootstrapResponse(payload), sender_id: sender_id, reply_port: reply_port }
+   }
+
    pub fn serialize(&self) -> Vec<u8> {
        serde::serialize(&self, bincode::SizeLimit::Bounded(node::SOCKET_BUFFER_SIZE_BYTES as u64)).unwrap()
    }
@@ -51,6 +60,8 @@ pub enum Kind {
    FindNodeResponse(Arc<FindNodeResponsePayload>),
    FindValue(Arc<FindValuePayload>),
    FindValueResponse(Arc<FindValueResponsePayload>),
+   Bootstrap,
+   BootstrapResponse(Arc<BootstrapResponsePayload>)
 }
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
@@ -69,6 +80,11 @@ pub struct FindValuePayload;
 pub struct FindNodeResponsePayload {
    pub id_to_find : Hash,
    pub result     : routing::LookupResult,
+}
+
+#[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
+pub struct BootstrapResponsePayload {
+   pub nodes: Vec<routing::NodeInfo>,
 }
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]

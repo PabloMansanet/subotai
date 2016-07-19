@@ -21,6 +21,8 @@ pub enum RpcFilter {
    FindNodeResponse,
    FindValue,
    FindValueResponse,
+   Bootstrap,
+   BootstrapResponse,
 }
 
 impl Receptions {
@@ -79,6 +81,8 @@ impl Iterator for Receptions {
                   rpc::Kind::FindNodeResponse(_)  => if *rpc_filter != RpcFilter::FindNodeResponse { continue; },
                   rpc::Kind::FindValue(_)         => if *rpc_filter != RpcFilter::FindValue { continue; },
                   rpc::Kind::FindValueResponse(_) => if *rpc_filter != RpcFilter::FindValueResponse { continue; },
+                  rpc::Kind::Bootstrap            => if *rpc_filter != RpcFilter::Bootstrap { continue; },
+                  rpc::Kind::BootstrapResponse(_) => if *rpc_filter != RpcFilter::BootstrapResponse { continue; },
                }
             }
 
@@ -97,15 +101,18 @@ impl Iterator for Receptions {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use node;
     use time;
+    use super::RpcFilter;
 
     #[test]
     fn produces_rpcs_but_not_ticks() {
        let alpha = node::Node::new();
        let beta = node::Node::new();
-       let beta_receptions = beta.receptions().during(time::Duration::seconds(1));
+       let beta_receptions = 
+          beta.receptions()
+              .during(time::Duration::seconds(1))
+              .rpc(RpcFilter::Ping);
 
        alpha.bootstrap(beta.local_info());
        alpha.ping(beta.local_info().id);
@@ -124,9 +131,10 @@ mod tests {
        allowed.push(beta.local_info().id);
       
        let receptions = 
-         receiver.receptions()
-                 .during(time::Duration::seconds(1))
-                 .from_senders(allowed);
+          receiver.receptions()
+                  .during(time::Duration::seconds(1))
+                  .from_senders(allowed)
+                  .rpc(RpcFilter::Ping);
 
        alpha.bootstrap(receiver.local_info());
        beta.bootstrap(receiver.local_info());

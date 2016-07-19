@@ -83,6 +83,44 @@ impl Resources {
       self.table.specific_node(&id_to_find)
    }
 
+   pub fn bootstrap(&self, seed: routing::NodeInfo) -> Result<(),()>  {
+      self.table.insert_node(seed);
+      let mut queried_ids = Vec::<Hash>::with_capacity(routing::K);
+
+      while queried_ids.len() < routing::K {
+         let unqueried_nodes: Vec<routing::NodeInfo> = self.table.all_nodes()
+            .filter(|ref node_info| !queried_ids.contains(&node_info.id))
+            .collect();
+
+         if unqueried_nodes.len() == 0 {
+            break;
+         }
+
+         self.bootstrap_wave(&unqueried_nodes, &mut queried_ids);
+      }
+      Ok(())
+   }
+
+   fn bootstrap_wave(&self, nodes_to_query: &Vec<routing::NodeInfo>, queried: &mut Vec<Hash>) -> Result<(),()> {
+      let responses = self.receptions()
+         .during(time::Duration::seconds(NETWORK_TIMEOUT_S))
+         .rpc(receptions::RpcFilter::BootstrapResponse)
+         .take(nodes_to_query.len());
+
+      for node in nodes_to_query {
+         let rpc = Rpc::bootstrap(self.id.clone(), self.inbound.local_addr().unwrap().port());
+         let packet = rpc.serialize(); 
+         self.outbound.send_to(&packet, node.address);
+         queried.push(node.id.clone());
+      }
+
+      if responses.count() == nodes_to_query.len() {
+         Ok(())
+      } else {
+         Err(())
+      }
+   }
+
    fn lookup_wave(&self, id_to_find: &Hash, nodes_to_query: &Vec<routing::NodeInfo>, queried: &mut Vec<Hash>) {
       let responses = self.receptions()
          .during(time::Duration::seconds(NETWORK_TIMEOUT_S))
@@ -124,10 +162,12 @@ impl Resources {
       };
 
       match rpc.kind {
-         rpc::Kind::Ping                          => self.handle_ping(sender),
-         rpc::Kind::PingResponse                  => self.handle_ping_response(sender),
-         rpc::Kind::FindNode(ref payload)         => self.handle_find_node(payload.clone(), sender),
-         rpc::Kind::FindNodeResponse(ref payload) => self.handle_find_node_response(payload.clone(), sender),
+         rpc::Kind::Ping                           => self.handle_ping(sender),
+         rpc::Kind::PingResponse                   => self.handle_ping_response(sender),
+         rpc::Kind::FindNode(ref payload)          => self.handle_find_node(payload.clone(), sender),
+         rpc::Kind::FindNodeResponse(ref payload)  => self.handle_find_node_response(payload.clone(), sender),
+         rpc::Kind::Bootstrap                      => self.handle_bootstrap(sender),
+         rpc::Kind::BootstrapResponse(ref payload) => self.handle_bootstrap_response(payload.clone(),sender),
          _ => (),
       }
 
@@ -140,6 +180,25 @@ impl Resources {
       let rpc = Rpc::ping_response(self.id.clone(), self.inbound.local_addr().unwrap().port());
       let packet = rpc.serialize();
       self.outbound.send_to(&packet, sender.address);
+   }
+
+   fn handle_bootstrap(&self, sender: routing::NodeInfo) {
+      self.table.insert_node(sender.clone());
+      let closest_to_sender: Vec<_> = self.table.closest_nodes_to(&sender.id)
+         .filter(|ref info| &info.id != &sender.id) // We don't want to reply with the sender itself
+         .take(routing::ALPHA)
+         .collect();
+
+      let rpc = Rpc::bootstrap_response(self.id.clone(), self.inbound.local_addr().unwrap().port(), closest_to_sender);
+      let packet = rpc.serialize();
+      self.outbound.send_to(&packet, sender.address);
+   }
+
+   fn handle_bootstrap_response(&self, payload: Arc<rpc::BootstrapResponsePayload>, sender: routing::NodeInfo) {
+      self.table.insert_node(sender.clone());
+      for node in &payload.nodes {
+         self.table.insert_node(node.clone());
+      }
    }
 
    fn handle_ping_response(&self, sender: routing::NodeInfo) {
