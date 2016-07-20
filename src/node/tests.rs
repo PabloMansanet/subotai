@@ -14,7 +14,7 @@ fn node_ping() {
    let span = time::Duration::seconds(1);
 
    // Bootstrapping alpha:
-   alpha.bootstrap(beta_seed);
+   assert!(alpha.bootstrap(beta_seed).is_ok());
 
    let beta_receptions = alpha.receptions().during(span).from(beta.id().clone());
 
@@ -64,7 +64,7 @@ fn bootstrapping_and_finding_on_simulated_network() {
    let mut nodes: VecDeque<node::Node> = (0..100).map(|_| { node::Node::new().unwrap() }).collect();
 
    for node in nodes.iter() {
-      node.bootstrap(origin.local_info());
+      assert!(node.bootstrap(origin.local_info()).is_ok());
    }
    
    // Head finds tail in a few steps.

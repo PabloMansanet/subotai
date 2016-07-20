@@ -102,12 +102,7 @@ impl Resources {
 
          try!(self.bootstrap_wave(&unqueried_nodes, &mut queried_ids));
       }
-
-      if self.table.len() <= 1 {
-         Err(SubotaiError::NoResponse)
-      } else {
-         Ok(())
-      }
+      Ok(())
    }
 
    fn bootstrap_wave(&self, nodes_to_query: &[routing::NodeInfo], queried: &mut Vec<Hash>) -> SubotaiResult<()> {

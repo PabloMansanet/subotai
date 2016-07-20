@@ -114,9 +114,10 @@ mod tests {
               .during(time::Duration::seconds(1))
               .rpc(RpcFilter::Ping);
 
-       alpha.bootstrap(beta.local_info());
-       alpha.ping(beta.local_info().id);
-       alpha.ping(beta.local_info().id);
+       let table_size = alpha.bootstrap(beta.local_info()).unwrap();
+       assert_eq!(table_size, 1);
+       assert!(alpha.ping(beta.local_info().id).is_ok());
+       assert!(alpha.ping(beta.local_info().id).is_ok());
       
        assert_eq!(beta_receptions.count(),2);
     }
@@ -136,11 +137,11 @@ mod tests {
                   .from_senders(allowed)
                   .rpc(RpcFilter::Ping);
 
-       alpha.bootstrap(receiver.local_info());
-       beta.bootstrap(receiver.local_info());
+       assert!(alpha.bootstrap(receiver.local_info()).is_ok());
+       assert!(beta.bootstrap(receiver.local_info()).is_ok());
 
-       alpha.ping(receiver.local_info().id);
-       beta.ping(receiver.local_info().id);
+       assert!(alpha.ping(receiver.local_info().id).is_ok());
+       assert!(beta.ping(receiver.local_info().id).is_ok());
 
        assert_eq!(receptions.count(),1);
     }

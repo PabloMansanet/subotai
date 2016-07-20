@@ -59,7 +59,7 @@ impl Node {
       Node::with_ports(0, 0)
    }
 
-   /// Returns the randomly generated hash used to identify this node in the network.
+   /// Returns the hash used to identify this node in the network.
    pub fn id<'a>(&'a self) -> &Hash {
       &self.resources.id
    }
@@ -103,10 +103,11 @@ impl Node {
       self.resources.local_info()
    }
 
-   pub fn bootstrap(&self, seed: NodeInfo) -> SubotaiResult<()> {
+   /// Bootstraps the node from a seed, and returns the amount of nodes in the final table.
+   pub fn bootstrap(&self, seed: NodeInfo) -> SubotaiResult<usize> {
        try!(self.resources.bootstrap(seed));
        *self.resources.state.lock().unwrap() = State::Alive;
-       Ok(())
+       Ok(self.resources.table.len())
    }
 
    /// Recursive node lookup through the network. Will block until
