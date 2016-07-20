@@ -111,7 +111,7 @@ impl Node {
 
    /// Recursive node lookup through the network. Will block until
    /// finished and return the node information if succeful.
-   pub fn find_node(&self, id: &Hash) -> Option<NodeInfo> {
+   pub fn find_node(&self, id: &Hash) -> SubotaiResult<NodeInfo> {
       self.resources.find_node(id)
    }
 

@@ -45,7 +45,7 @@ impl Resources {
 
    pub fn ping(&self, id: Hash) -> SubotaiResult<()> {
       let node = match self.table.specific_node(&id) {
-         None => self.find_node(&id),
+         None => Some(try!(self.find_node(&id))),
          Some(node) => Some(node),
       };
 
@@ -69,18 +69,21 @@ impl Resources {
    }
 
    /// Attempts to find a node through the network.
-   pub fn find_node(&self, id_to_find: &Hash) -> Option<routing::NodeInfo> {
+   pub fn find_node(&self, id_to_find: &Hash) -> SubotaiResult<routing::NodeInfo> {
       let mut queried_nodes = Vec::<Hash>::with_capacity(routing::K);
 
       while queried_nodes.len() < routing::K {
          match self.table.lookup(id_to_find, routing::ALPHA, Some(&queried_nodes)) {
-            routing::LookupResult::Found(node) => return Some(node),
-            routing::LookupResult::ClosestNodes(nodes) => self.lookup_wave(id_to_find, &nodes, &mut queried_nodes),
+            routing::LookupResult::Found(node) => return Ok(node),
+            routing::LookupResult::ClosestNodes(nodes) => {self.lookup_wave(id_to_find, &nodes, &mut queried_nodes);},
             _ => break,
          }
       }
       
-      self.table.specific_node(&id_to_find)
+      match self.table.specific_node(&id_to_find) {
+         Some(node) => Ok(node),
+         None => Err(SubotaiError::NodeNotFound),
+      }
    }
 
    pub fn bootstrap(&self, seed: routing::NodeInfo) -> Result<(),()>  {
@@ -121,7 +124,7 @@ impl Resources {
       }
    }
 
-   fn lookup_wave(&self, id_to_find: &Hash, nodes_to_query: &Vec<routing::NodeInfo>, queried: &mut Vec<Hash>) {
+   fn lookup_wave(&self, id_to_find: &Hash, nodes_to_query: &Vec<routing::NodeInfo>, queried: &mut Vec<Hash>) -> SubotaiResult<()> {
       let responses = self.receptions()
          .during(time::Duration::seconds(NETWORK_TIMEOUT_S))
          .filter(|rpc: &Rpc| {
@@ -139,19 +142,21 @@ impl Resources {
             routing::ALPHA,
          );
          let packet = rpc.serialize(); 
-         self.outbound.send_to(&packet, node.address);
+         try!(self.outbound.send_to(&packet, node.address));
          queried.push(node.id.clone());
       }
 
       for response in responses { 
          if let rpc::Kind::FindNodeResponse(ref payload) = response.kind {
             match payload.result {
-               routing::LookupResult::Found(_) => return,
-               routing::LookupResult::Myself   => return,
+               routing::LookupResult::Found(_) => return Ok(()),
+               routing::LookupResult::Myself   => return Ok(()),
                _ => (),
             }
          }
       }
+
+      Ok(())
    }
 
    pub fn process_incoming_rpc(&self, rpc: Rpc, mut source: net::SocketAddr) -> serde::DeserializeResult<()> {
