@@ -35,7 +35,7 @@
 //! # }
 //!
 //! ```
-#![allow(dead_code)]
+#![allow(dead_code, unknown_lints, wrong_self_convention)]
 #![feature(custom_derive, plugin)]
 #![plugin(serde_macros)]
 

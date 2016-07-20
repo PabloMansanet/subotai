@@ -37,10 +37,9 @@ impl Error for SubotaiError {
 
    fn cause(&self) -> Option<&Error> {
       match *self {
-         SubotaiError::NoResponse => None,
-         SubotaiError::NodeNotFound => None,
          SubotaiError::Io(ref err) => Some(err),
          SubotaiError::Deserialize(ref err) => Some(err),
+         _ => None,
       }
    }
 }

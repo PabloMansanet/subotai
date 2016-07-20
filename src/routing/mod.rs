@@ -73,6 +73,10 @@ impl Table {
       self.buckets.iter().map(|bucket| bucket.entries.read().unwrap().len()).sum()
    }
 
+   pub fn is_empty(&self) -> bool {
+      self.len() == 0
+   }
+
    /// Inserts a node in the routing table. Employs least-recently-seen eviction
    /// by kicking out the oldest node in case the bucket is full, and registering
    /// an eviction conflict that can be revised later.
@@ -252,7 +256,7 @@ impl<'a, 'b> Iterator for ClosestNodesTo<'a, 'b> {
             bucket.clone()
          }.into_iter().collect::<Vec<NodeInfo>>();
 
-         new_bucket.sort_by(|ref info_a, ref info_b| (&info_b.id ^ &self.reference).cmp(&(&info_a.id ^ &self.reference)));
+         new_bucket.sort_by(|ref info_a, ref info_b| (&info_b.id ^ self.reference).cmp(&(&info_a.id ^ self.reference)));
          self.current_bucket.append(&mut new_bucket);
          return self.current_bucket.pop();
       }

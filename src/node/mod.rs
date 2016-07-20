@@ -60,7 +60,7 @@ impl Node {
    }
 
    /// Returns the hash used to identify this node in the network.
-   pub fn id<'a>(&'a self) -> &Hash {
+   pub fn id(&self) -> &Hash {
       &self.resources.id
    }
 

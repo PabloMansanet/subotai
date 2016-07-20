@@ -122,7 +122,7 @@ impl Resources {
       Ok(())
    }
 
-   fn lookup_wave(&self, id_to_find: &Hash, nodes_to_query: &Vec<routing::NodeInfo>, queried: &mut Vec<Hash>) -> SubotaiResult<()> {
+   fn lookup_wave(&self, id_to_find: &Hash, nodes_to_query: &[routing::NodeInfo], queried: &mut Vec<Hash>) -> SubotaiResult<()> {
       let responses = self.receptions()
          .during(time::Duration::seconds(NETWORK_TIMEOUT_S))
          .filter(|rpc: &Rpc| {
@@ -147,8 +147,7 @@ impl Resources {
       for response in responses { 
          if let rpc::Kind::FindNodeResponse(ref payload) = response.kind {
             match payload.result {
-               routing::LookupResult::Found(_) => return Ok(()),
-               routing::LookupResult::Myself   => return Ok(()),
+               routing::LookupResult::Myself | routing::LookupResult::Found(_) => return Ok(()),
                _ => (),
             }
          }
