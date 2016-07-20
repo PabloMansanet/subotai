@@ -7,7 +7,6 @@ use time;
 use {SubotaiError, SubotaiResult};
 
 use hash::Hash;
-use bincode::serde;
 use std::net;
 use std::sync::Arc;
 use std::sync;
@@ -97,7 +96,7 @@ impl Resources {
             .filter(|ref node_info| !queried_ids.contains(&node_info.id))
             .collect();
 
-         if unqueried_nodes.len() == 0 {
+         if unqueried_nodes.is_empty() {
             break;
          }
 
@@ -111,7 +110,7 @@ impl Resources {
       }
    }
 
-   fn bootstrap_wave(&self, nodes_to_query: &Vec<routing::NodeInfo>, queried: &mut Vec<Hash>) -> SubotaiResult<()> {
+   fn bootstrap_wave(&self, nodes_to_query: &[routing::NodeInfo], queried: &mut Vec<Hash>) -> SubotaiResult<()> {
       let responses = self.receptions()
          .during(time::Duration::seconds(NETWORK_TIMEOUT_S))
          .rpc(receptions::RpcFilter::BootstrapResponse)
@@ -163,35 +162,36 @@ impl Resources {
       Ok(())
    }
 
-   pub fn process_incoming_rpc(&self, rpc: Rpc, mut source: net::SocketAddr) -> serde::DeserializeResult<()> {
+   pub fn process_incoming_rpc(&self, rpc: Rpc, mut source: net::SocketAddr) -> SubotaiResult<()>{
       source.set_port(rpc.reply_port);
       let sender = routing::NodeInfo {
          id      : rpc.sender_id.clone(),
          address : source,
       };
 
-      match rpc.kind {
+      let result = match rpc.kind {
          rpc::Kind::Ping                           => self.handle_ping(sender),
          rpc::Kind::PingResponse                   => self.handle_ping_response(sender),
          rpc::Kind::FindNode(ref payload)          => self.handle_find_node(payload.clone(), sender),
          rpc::Kind::FindNodeResponse(ref payload)  => self.handle_find_node_response(payload.clone(), sender),
          rpc::Kind::Bootstrap                      => self.handle_bootstrap(sender),
          rpc::Kind::BootstrapResponse(ref payload) => self.handle_bootstrap_response(payload.clone(),sender),
-         _ => (),
-      }
+         _ => unimplemented!(),
+      };
 
       self.updates.lock().unwrap().broadcast(Update::RpcReceived(rpc));
-      Ok(())
+      result
    }
 
-   fn handle_ping(&self, sender: routing::NodeInfo) {
+   fn handle_ping(&self, sender: routing::NodeInfo) -> SubotaiResult<()> {
       self.table.insert_node(sender.clone());
       let rpc = Rpc::ping_response(self.id.clone(), self.inbound.local_addr().unwrap().port());
       let packet = rpc.serialize();
-      self.outbound.send_to(&packet, sender.address);
+      try!(self.outbound.send_to(&packet, sender.address));
+      Ok(())
    }
 
-   fn handle_bootstrap(&self, sender: routing::NodeInfo) {
+   fn handle_bootstrap(&self, sender: routing::NodeInfo) -> SubotaiResult<()> {
       self.table.insert_node(sender.clone());
       let closest_to_sender: Vec<_> = self.table.closest_nodes_to(&sender.id)
          .filter(|ref info| &info.id != &sender.id) // We don't want to reply with the sender itself
@@ -200,21 +200,24 @@ impl Resources {
 
       let rpc = Rpc::bootstrap_response(self.id.clone(), self.inbound.local_addr().unwrap().port(), closest_to_sender);
       let packet = rpc.serialize();
-      self.outbound.send_to(&packet, sender.address);
+      try!(self.outbound.send_to(&packet, sender.address));
+      Ok(())
    }
 
-   fn handle_bootstrap_response(&self, payload: Arc<rpc::BootstrapResponsePayload>, sender: routing::NodeInfo) {
+   fn handle_bootstrap_response(&self, payload: Arc<rpc::BootstrapResponsePayload>, sender: routing::NodeInfo) -> SubotaiResult<()> {
       self.table.insert_node(sender.clone());
       for node in &payload.nodes {
          self.table.insert_node(node.clone());
       }
+      Ok(())
    }
 
-   fn handle_ping_response(&self, sender: routing::NodeInfo) {
+   fn handle_ping_response(&self, sender: routing::NodeInfo) -> SubotaiResult<()> {
       self.table.insert_node(sender);
+      Ok(())
    }
 
-   fn handle_find_node(&self, payload: Arc<rpc::FindNodePayload>, sender: routing::NodeInfo) {
+   fn handle_find_node(&self, payload: Arc<rpc::FindNodePayload>, sender: routing::NodeInfo) -> SubotaiResult<()> {
       self.table.insert_node(sender.clone());
       let lookup_results = self.table.lookup(&payload.id_to_find, payload.nodes_wanted, None);
       let rpc = Rpc::find_node_response(self.id.clone(), 
@@ -222,16 +225,18 @@ impl Resources {
                                         payload.id_to_find.clone(),
                                         lookup_results);
       let packet = rpc.serialize();
-      self.outbound.send_to(&packet, sender.address);
+      try!(self.outbound.send_to(&packet, sender.address));
+      Ok(())
    }
 
-   fn handle_find_node_response(&self, payload: Arc<rpc::FindNodeResponsePayload>, sender: routing::NodeInfo) {
+   fn handle_find_node_response(&self, payload: Arc<rpc::FindNodeResponsePayload>, sender: routing::NodeInfo) -> SubotaiResult<()> {
       self.table.insert_node(sender);
       match payload.result {
          routing::LookupResult::ClosestNodes(ref nodes) => for node in nodes { self.table.insert_node(node.clone()) },
          routing::LookupResult::Found(ref node) => self.table.insert_node(node.clone()),
          _ => (),
       }
+      Ok(())
    }
 }
 

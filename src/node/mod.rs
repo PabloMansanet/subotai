@@ -12,7 +12,7 @@ use SubotaiResult;
 pub use routing::NodeInfo as NodeInfo;
 
 use hash::Hash;
-use std::{net, io, thread};
+use std::{net, thread};
 use std::sync;
 use std::time::Duration as StdDuration;
 use std::sync::Arc;
@@ -28,8 +28,7 @@ const UPDATE_BUS_SIZE_BYTES    : usize = 50;
 
 /// Subotai node. 
 ///
-/// On construction, a detached thread for packet reception is
-/// launched. 
+/// On construction, it launches a detached thread for packet reception.
 pub struct Node {
    resources: Arc<resources::Resources>,
 }
@@ -56,8 +55,8 @@ pub enum State {
 
 impl Node {
    /// Constructs a node with OS allocated random ports.
-   pub fn new() -> Node {
-      Node::with_ports(0, 0).unwrap()
+   pub fn new() -> SubotaiResult<Node> {
+      Node::with_ports(0, 0)
    }
 
    /// Returns the randomly generated hash used to identify this node in the network.
@@ -66,7 +65,7 @@ impl Node {
    }
 
    /// Constructs a node with a given inbound/outbound UDP port pair.
-   pub fn with_ports(inbound_port: u16, outbound_port: u16) -> io::Result<Node> {
+   pub fn with_ports(inbound_port: u16, outbound_port: u16) -> SubotaiResult<Node> {
       let id = Hash::random();
 
       let resources = Arc::new(resources::Resources {
@@ -104,9 +103,10 @@ impl Node {
       self.resources.local_info()
    }
 
-   pub fn bootstrap(&self, seed: NodeInfo) {
-       self.resources.bootstrap(seed);
+   pub fn bootstrap(&self, seed: NodeInfo) -> SubotaiResult<()> {
+       try!(self.resources.bootstrap(seed));
        *self.resources.state.lock().unwrap() = State::Alive;
+       Ok(())
    }
 
    /// Recursive node lookup through the network. Will block until

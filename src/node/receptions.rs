@@ -107,8 +107,8 @@ mod tests {
 
     #[test]
     fn produces_rpcs_but_not_ticks() {
-       let alpha = node::Node::new();
-       let beta = node::Node::new();
+       let alpha = node::Node::new().unwrap();
+       let beta = node::Node::new().unwrap();
        let beta_receptions = 
           beta.receptions()
               .during(time::Duration::seconds(1))
@@ -123,9 +123,9 @@ mod tests {
 
     #[test]
     fn sender_filtering() {
-       let receiver = node::Node::new();
-       let alpha = node::Node::new();
-       let beta  = node::Node::new();
+       let receiver = node::Node::new().unwrap();
+       let alpha = node::Node::new().unwrap();
+       let beta  = node::Node::new().unwrap();
        
        let mut allowed = Vec::new();
        allowed.push(beta.local_info().id);

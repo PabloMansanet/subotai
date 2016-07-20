@@ -8,8 +8,8 @@ pub const TRIES: u8 = 5;
 
 #[test]
 fn node_ping() {
-   let alpha = node::Node::new();
-   let beta  = node::Node::new();
+   let alpha = node::Node::new().unwrap();
+   let beta  = node::Node::new().unwrap();
    let beta_seed = beta.local_info();
    let span = time::Duration::seconds(1);
 
@@ -25,7 +25,7 @@ fn node_ping() {
 
 #[test]
 fn reception_iterator_times_out_correctly() {
-   let alpha = node::Node::new(); 
+   let alpha = node::Node::new().unwrap(); 
    let span = time::Duration::seconds(1);
    let maximum = time::Duration::seconds(3);
    let receptions = alpha.receptions().during(span);
@@ -42,7 +42,7 @@ fn reception_iterator_times_out_correctly() {
 
 #[test]
 fn chained_node_find() {
-   let mut nodes: VecDeque<node::Node> = (0..10).map(|_| { node::Node::new() }).collect();
+   let mut nodes: VecDeque<node::Node> = (0..10).map(|_| { node::Node::new().unwrap() }).collect();
 
    // We inform each node of the existance of the next three.
    for i in 1..4 {
@@ -59,9 +59,9 @@ fn chained_node_find() {
 
 #[test]
 fn bootstrapping_and_finding_on_simulated_network() {
-   let origin = node::Node::new();
+   let origin = node::Node::new().unwrap();
 
-   let mut nodes: VecDeque<node::Node> = (0..100).map(|_| { node::Node::new() }).collect();
+   let mut nodes: VecDeque<node::Node> = (0..100).map(|_| { node::Node::new().unwrap() }).collect();
 
    for node in nodes.iter() {
       node.bootstrap(origin.local_info());

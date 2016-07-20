@@ -22,8 +22,8 @@
 //! use subotai::node::Node;
 //! # fn main() {
 //!
-//! let alpha = Node::new();
-//! let beta = Node::new();
+//! let alpha = Node::new().unwrap();
+//! let beta = Node::new().unwrap();
 //!
 //! alpha.bootstrap(beta.local_info());
 //!
