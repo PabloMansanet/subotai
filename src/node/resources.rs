@@ -75,18 +75,20 @@ impl Resources {
       while queried_nodes.len() < routing::K {
          match self.table.lookup(id_to_find, routing::ALPHA, Some(&queried_nodes)) {
             routing::LookupResult::Found(node) => return Ok(node),
-            routing::LookupResult::ClosestNodes(nodes) => {self.lookup_wave(id_to_find, &nodes, &mut queried_nodes);},
+            routing::LookupResult::ClosestNodes(nodes) => {
+               try!(self.lookup_wave(id_to_find, &nodes, &mut queried_nodes));
+            },
             _ => break,
          }
       }
-      
-      match self.table.specific_node(&id_to_find) {
+     
+      match self.table.specific_node(id_to_find) {
          Some(node) => Ok(node),
          None => Err(SubotaiError::NodeNotFound),
       }
    }
 
-   pub fn bootstrap(&self, seed: routing::NodeInfo) -> Result<(),()>  {
+   pub fn bootstrap(&self, seed: routing::NodeInfo) -> SubotaiResult<()>  {
       self.table.insert_node(seed);
       let mut queried_ids = Vec::<Hash>::with_capacity(routing::K);
 
@@ -99,12 +101,17 @@ impl Resources {
             break;
          }
 
-         self.bootstrap_wave(&unqueried_nodes, &mut queried_ids);
+         try!(self.bootstrap_wave(&unqueried_nodes, &mut queried_ids));
       }
-      Ok(())
+
+      if self.table.len() <= 1 {
+         Err(SubotaiError::NoResponse)
+      } else {
+         Ok(())
+      }
    }
 
-   fn bootstrap_wave(&self, nodes_to_query: &Vec<routing::NodeInfo>, queried: &mut Vec<Hash>) -> Result<(),()> {
+   fn bootstrap_wave(&self, nodes_to_query: &Vec<routing::NodeInfo>, queried: &mut Vec<Hash>) -> SubotaiResult<()> {
       let responses = self.receptions()
          .during(time::Duration::seconds(NETWORK_TIMEOUT_S))
          .rpc(receptions::RpcFilter::BootstrapResponse)
@@ -113,15 +120,12 @@ impl Resources {
       for node in nodes_to_query {
          let rpc = Rpc::bootstrap(self.id.clone(), self.inbound.local_addr().unwrap().port());
          let packet = rpc.serialize(); 
-         self.outbound.send_to(&packet, node.address);
+         try!(self.outbound.send_to(&packet, node.address));
          queried.push(node.id.clone());
       }
 
-      if responses.count() == nodes_to_query.len() {
-         Ok(())
-      } else {
-         Err(())
-      }
+      responses.count();
+      Ok(())
    }
 
    fn lookup_wave(&self, id_to_find: &Hash, nodes_to_query: &Vec<routing::NodeInfo>, queried: &mut Vec<Hash>) -> SubotaiResult<()> {
