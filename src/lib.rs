@@ -50,11 +50,6 @@ pub mod hash;
 pub mod routing;
 pub mod rpc;
 
-#[derive(PartialEq, Debug)]
-pub enum SubotaiError {
-   NoResponse,
-   SocketError,
-}
-
-use std::result;
-pub type SubotaiResult<T> = result::Result<T, SubotaiError>;
+mod error;
+pub use error::SubotaiError as SubotaiError;
+pub use error::SubotaiResult as SubotaiResult;

@@ -55,9 +55,9 @@ impl Resources {
          let responses = self.receptions().during(time::Duration::seconds(NETWORK_TIMEOUT_S))
             .rpc(receptions::RpcFilter::PingResponse).from(id.clone()).take(1);
          
-         self.outbound.send_to(&packet, node.address);
+         try!(self.outbound.send_to(&packet, node.address));
 
-         for response in responses {
+         for _ in responses {
             return Ok(());
          }
       }
