@@ -7,7 +7,7 @@ mod resources;
 use routing;
 use rpc;
 use bus;
-use subotai;
+use SubotaiResult;
 
 pub use routing::NodeInfo as NodeInfo;
 
@@ -54,14 +54,6 @@ pub enum State {
    ShuttingDown,
 }
 
-/// Result of a ping operation
-/// * `Alive`:
-#[derive(Debug, Eq, PartialEq)]
-pub enum PingResult {
-   Alive,
-   NoResponse,
-}
-
 impl Node {
    /// Constructs a node with OS allocated random ports.
    pub fn new() -> Node {
@@ -103,7 +95,7 @@ impl Node {
 
    /// Sends a ping RPC to a destination node. If the ID is unknown, this request is 
    /// promoted into a find_node RPC followed by a ping to the node.
-   pub fn ping(&self, id: Hash) -> subotai::Result<()> {
+   pub fn ping(&self, id: Hash) -> SubotaiResult<()> {
       self.resources.ping(id)
    }
 

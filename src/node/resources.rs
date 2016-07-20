@@ -1,11 +1,10 @@
 use routing;
 use rpc;
 use bus;
-use node;
-use subotai;
 
 use rpc::Rpc;
 use time;
+use {SubotaiError, SubotaiResult};
 
 use hash::Hash;
 use bincode::serde;
@@ -44,7 +43,7 @@ impl Resources {
       }
    }
 
-   pub fn ping(&self, id: Hash) -> subotai::Result<()> {
+   pub fn ping(&self, id: Hash) -> SubotaiResult<()> {
       let node = match self.table.specific_node(&id) {
          None => self.find_node(&id),
          Some(node) => Some(node),
@@ -62,7 +61,7 @@ impl Resources {
             return Ok(());
          }
       }
-      Err(subotai::Error::NoResponse)
+      Err(SubotaiError::NoResponse)
    }
 
    pub fn receptions(&self) -> receptions::Receptions {
