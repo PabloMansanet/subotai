@@ -19,7 +19,7 @@ fn node_ping() {
    let beta_receptions = alpha.receptions().during(span).from(beta.id().clone());
 
    // Alpha pings beta.
-   assert_eq!(alpha.ping(beta.resources.id.clone()), node::PingResult::Alive);
+   assert!(alpha.ping(beta.resources.id.clone()).is_ok());
    assert_eq!(1, beta_receptions.count());
 }
 
@@ -77,6 +77,7 @@ fn bootstrapping_and_finding_on_simulated_network() {
           .rpc(receptions::RpcFilter::FindNodeResponse);
 
    assert_eq!(head.find_node(tail.id()).unwrap().id, tail.local_info().id);
-   let maximum_steps = 5;
-   assert!(receptions.count() < maximum_steps);
+   let maximum_responses = 10;
+   let responses = receptions.rpc(receptions::RpcFilter::FindNodeResponse).count();
+   assert!(responses < maximum_responses);
 }

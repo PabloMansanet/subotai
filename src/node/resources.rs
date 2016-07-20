@@ -2,6 +2,7 @@ use routing;
 use rpc;
 use bus;
 use node;
+use subotai;
 
 use rpc::Rpc;
 use time;
@@ -43,7 +44,7 @@ impl Resources {
       }
    }
 
-   pub fn ping(&self, id: Hash) -> node::PingResult {
+   pub fn ping(&self, id: Hash) -> subotai::Result<()> {
       let node = match self.table.specific_node(&id) {
          None => self.find_node(&id),
          Some(node) => Some(node),
@@ -57,11 +58,11 @@ impl Resources {
          
          self.outbound.send_to(&packet, node.address);
 
-         for _ in responses {
-            return node::PingResult::Alive;
+         for response in responses {
+            return Ok(());
          }
       }
-      node::PingResult::NoResponse
+      Err(subotai::Error::NoResponse)
    }
 
    pub fn receptions(&self) -> receptions::Receptions {

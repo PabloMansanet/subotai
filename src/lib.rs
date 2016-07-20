@@ -49,3 +49,14 @@ pub mod node;
 pub mod hash;
 pub mod routing;
 pub mod rpc;
+
+pub mod subotai {
+   #[derive(PartialEq, Debug)]
+   pub enum Error {
+      NoResponse,
+      SocketError,
+   }
+
+   use std::result;
+   pub type Result<T> = result::Result<T, Error>;
+}

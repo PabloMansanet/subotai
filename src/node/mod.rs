@@ -7,6 +7,7 @@ mod resources;
 use routing;
 use rpc;
 use bus;
+use subotai;
 
 pub use routing::NodeInfo as NodeInfo;
 
@@ -64,7 +65,7 @@ pub enum PingResult {
 impl Node {
    /// Constructs a node with OS allocated random ports.
    pub fn new() -> Node {
-      Node::with_ports(0,0).unwrap()
+      Node::with_ports(0, 0).unwrap()
    }
 
    /// Returns the randomly generated hash used to identify this node in the network.
@@ -101,9 +102,8 @@ impl Node {
    }
 
    /// Sends a ping RPC to a destination node. If the ID is unknown, this request is 
-   /// promoted into a find_node RPC followed by a ping to the node. Returns the
-   /// node information if the node responded, and None in case of timeout.
-   pub fn ping(&self, id: Hash) -> PingResult {
+   /// promoted into a find_node RPC followed by a ping to the node.
+   pub fn ping(&self, id: Hash) -> subotai::Result<()> {
       self.resources.ping(id)
    }
 
