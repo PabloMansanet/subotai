@@ -15,6 +15,14 @@ mod tests;
 /// network-wide lookup.
 pub const ALPHA    : usize = 3;
 
+/// Impatience factor, valid in the range [0..ALPHA). When performing "waves",
+/// the impatience factor denotes how many nodes we can give up waiting for, before
+/// starting the next wave. 
+///
+/// If we send a request to ALPHA nodes during a lookup wave, we will start
+/// the next wave after we receive 'ALPHA - IMPATIENCE' responses.
+pub const IMPATIENCE    : usize = 1;
+
 /// Data structure factor. It's used, among other places, to dictate the 
 /// size of a K-bucket.
 pub const K        : usize = 20;
@@ -198,8 +206,11 @@ impl Table {
    fn revert_conflict(&self, conflict: EvictionConflict) {
       if let Some(index) = self.bucket_for_node(&conflict.inserted.id) {
          let mut entries = self.buckets[index].entries.write().unwrap();
-         let evictor = &mut entries.iter_mut().find(|ref info| conflict.inserted.id == info.id).unwrap();
-         mem::replace::<NodeInfo>(evictor, conflict.evicted);
+         if let Some(ref mut evictor) = entries.iter_mut().find(|ref info| conflict.inserted.id == info.id) {
+            mem::replace::<NodeInfo>(evictor, conflict.evicted);
+         } else {
+            self.insert_node(conflict.evicted);
+         }
       }
    }
 }

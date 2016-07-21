@@ -63,6 +63,21 @@ impl Resources {
       Err(SubotaiError::NoResponse)
    }
 
+   /// Sends a ping and doesn't wait for a response. Used by the maintenance thread.
+   pub fn ping_and_forget(&self, id: Hash) -> SubotaiResult<()> {
+      let node = match self.table.specific_node(&id) {
+         None => Some(try!(self.find_node(&id))),
+         Some(node) => Some(node),
+      };
+
+      if let Some(node) = node {
+         let rpc = Rpc::ping(self.id.clone(), self.inbound.local_addr().unwrap().port());
+         let packet = rpc.serialize();
+         try!(self.outbound.send_to(&packet, node.address));
+      }
+      Ok(())
+   }
+
    pub fn receptions(&self) -> receptions::Receptions {
       receptions::Receptions::new(self)
    }
@@ -109,7 +124,7 @@ impl Resources {
       let responses = self.receptions()
          .during(time::Duration::seconds(NETWORK_TIMEOUT_S))
          .rpc(receptions::RpcFilter::BootstrapResponse)
-         .take(nodes_to_query.len());
+         .take(usize::saturating_sub(nodes_to_query.len(), routing::IMPATIENCE));
 
       for node in nodes_to_query {
          let rpc = Rpc::bootstrap(self.id.clone(), self.inbound.local_addr().unwrap().port());
@@ -130,7 +145,7 @@ impl Resources {
                 rpc::Kind::FindNodeResponse( ref payload ) => &payload.id_to_find == id_to_find,
                 _ => false,
              }
-         }).take(nodes_to_query.len());
+         }).take(usize::saturating_sub(nodes_to_query.len(), routing::IMPATIENCE));
 
       for node in nodes_to_query {
          let rpc = Rpc::find_node(

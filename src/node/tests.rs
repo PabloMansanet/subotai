@@ -81,3 +81,4 @@ fn bootstrapping_and_finding_on_simulated_network() {
    let responses = receptions.rpc(receptions::RpcFilter::FindNodeResponse).count();
    assert!(responses < maximum_responses);
 }
+
