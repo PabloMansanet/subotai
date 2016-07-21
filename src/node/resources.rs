@@ -95,6 +95,16 @@ impl Resources {
             _ => break,
          }
       }
+
+      // Extra wait due to impatience factor
+      for response in self.receptions().during(time::Duration::seconds(NETWORK_TIMEOUT_S)); { 
+         if let rpc::Kind::FindNodeResponse(ref payload) = response.kind {
+            match payload.result {
+               routing::LookupResult::Myself | routing::LookupResult::Found(_) => break,
+               _ => (),
+            }
+         }
+      }
      
       match self.table.specific_node(id_to_find) {
          Some(node) => Ok(node),
