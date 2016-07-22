@@ -164,7 +164,7 @@ impl Resources {
          self.id.clone(), 
          self.inbound.local_addr().unwrap().port(),
          id_to_find.clone(),
-         routing::ALPHA,
+         routing::K,
       );
       let packet = rpc.serialize(); 
       for node in nodes_to_query {
