@@ -8,6 +8,7 @@ use {SubotaiError, SubotaiResult};
 
 use hash::Hash;
 use std::net;
+use std::cmp;
 use std::sync::Arc;
 use std::sync;
 use node::*;
@@ -84,21 +85,19 @@ impl Resources {
 
    /// Attempts to find a node through the network.
    pub fn find_node(&self, id_to_find: &Hash) -> SubotaiResult<routing::NodeInfo> {
+      // If the node is already present in the table, we are done early.
       if let Some(node) = self.table.specific_node(id_to_find) {
          return Ok(node);
       }
 
       let mut queried_nodes = Vec::<Hash>::with_capacity(routing::K);
 
-      while queried_nodes.len() < routing::K {
+      while queried_nodes.len() < cmp::min(routing::K, self.table.len())  {
          let nodes_to_query: Vec<routing::NodeInfo> = self.table.closest_nodes_to(id_to_find)
             .filter(|ref info| !queried_nodes.contains(&info.id))
             .take(routing::ALPHA)
             .collect();
 
-         if nodes_to_query.is_empty() {
-            break;
-         }
          let responses = self.receptions()
             .during(time::Duration::seconds(NETWORK_TIMEOUT_S))
             .filter(|ref rpc| rpc.is_finding_node(id_to_find))
@@ -107,13 +106,15 @@ impl Resources {
          try!(self.lookup_wave(id_to_find, &nodes_to_query, &mut queried_nodes));
 
 			for response in responses { 
+            println!("<-- Response from {}", response.sender_id);
             if response.found_node(id_to_find) {
                return self.table.specific_node(id_to_find).ok_or(SubotaiError::NodeNotFound);
             }
 		   }
       }
+      println!("Left at queried node length {}", queried_nodes.len());
     
-      // We do one last wait until succes or timeout,  to compensate for impatience
+      // One last wait until success or timeout, to compensate for impatience
       self.receptions()
          .during(time::Duration::seconds(NETWORK_TIMEOUT_S))
          .filter(|ref rpc| rpc.found_node(id_to_find))
@@ -165,6 +166,7 @@ impl Resources {
             routing::ALPHA,
          );
          let packet = rpc.serialize(); 
+         println!("--> Sending to {}", node.id);
          try!(self.outbound.send_to(&packet, node.address));
          queried.push(node.id.clone());
       }

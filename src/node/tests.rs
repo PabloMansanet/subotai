@@ -54,7 +54,7 @@ fn chained_node_find() {
    // Head finds tail
    let head = nodes.pop_front().unwrap();
    let tail = nodes.pop_back().unwrap();
-   assert_eq!(head.find_node(tail.id()).unwrap(), tail.local_info());
+   assert_eq!(head.find_node(tail.id()).unwrap().id, tail.local_info().id);
 }
 
 #[test]
