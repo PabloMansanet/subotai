@@ -13,7 +13,7 @@ fn node_ping() {
    let span = time::Duration::seconds(1);
 
    // Bootstrapping alpha:
-   assert!(alpha.bootstrap(beta_seed).is_ok());
+   assert!(alpha.bootstrap_until(beta_seed, 1).is_ok());
 
    let beta_receptions = alpha.receptions().during(span).from(beta.id().clone());
 
@@ -45,6 +45,11 @@ fn bootstrapping_and_finding_on_simulated_network() {
    let mut nodes: VecDeque<node::Node> = (0..100).map(|_| { node::Node::new().unwrap() }).collect();
    {
       let origin = node::Node::new().unwrap();
+      // Initial handshake pass
+      for node in nodes.iter() {
+         assert!(node.bootstrap_until(origin.local_info(), 1).is_ok());
+      }
+      // Actual bootstrapping
       for node in nodes.iter() {
          assert!(node.bootstrap(origin.local_info()).is_ok());
       }
@@ -64,6 +69,14 @@ fn finding_on_simulated_unresponsive_network() {
 
    {
       let origin = node::Node::new().unwrap();
+
+      // Initial handshake pass
+      for node in nodes.iter() {
+         assert!(node.bootstrap_until(origin.local_info(), 1).is_ok());
+      }
+
+      println!("The origin node knows of {} nodes", origin.resources.table.len());
+      // Actual bootstrapping
       for node in nodes.iter() {
          assert!(node.bootstrap(origin.local_info()).is_ok());
       }

@@ -109,16 +109,17 @@ mod tests {
     fn produces_rpcs_but_not_ticks() {
        let alpha = node::Node::new().unwrap();
        let beta = node::Node::new().unwrap();
+       let table_size = alpha.bootstrap_until(beta.local_info(), 1).unwrap();
+
+       assert_eq!(table_size, 1);
        let beta_receptions = 
           beta.receptions()
               .during(time::Duration::seconds(1))
               .rpc(RpcFilter::Ping);
 
-       let table_size = alpha.bootstrap(beta.local_info()).unwrap();
-       assert_eq!(table_size, 1);
        assert!(alpha.ping(beta.local_info().id).is_ok());
        assert!(alpha.ping(beta.local_info().id).is_ok());
-      
+
        assert_eq!(beta_receptions.count(),2);
     }
 
@@ -137,8 +138,8 @@ mod tests {
                   .from_senders(allowed)
                   .rpc(RpcFilter::Ping);
 
-       assert!(alpha.bootstrap(receiver.local_info()).is_ok());
-       assert!(beta.bootstrap(receiver.local_info()).is_ok());
+       assert!(alpha.bootstrap_until(receiver.local_info(), 1).is_ok());
+       assert!(beta.bootstrap_until(receiver.local_info(), 1).is_ok());
 
        assert!(alpha.ping(receiver.local_info().id).is_ok());
        assert!(beta.ping(receiver.local_info().id).is_ok());

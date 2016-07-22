@@ -8,7 +8,6 @@ use {SubotaiError, SubotaiResult};
 
 use hash::Hash;
 use std::net;
-use std::cmp;
 use std::sync::Arc;
 use std::sync;
 use node::*;
@@ -90,13 +89,13 @@ impl Resources {
          return Ok(node);
       }
 
-      let mut queried_nodes = Vec::<Hash>::with_capacity(routing::K);
+      let mut queried_ids = Vec::<Hash>::with_capacity(routing::K);
       let all_receptions = self.receptions();
-
-      while queried_nodes.len() < cmp::min(routing::K, self.table.len())  {
+     
+      while queried_ids.len() < routing::K {
          // We query the 'ALPHA' nodes closest to the target we haven't yet queried.
          let nodes_to_query: Vec<routing::NodeInfo> = self.table.closest_nodes_to(id_to_find)
-            .filter(|ref info| !queried_nodes.contains(&info.id))
+            .filter(|ref info| !queried_ids.contains(&info.id))
             .take(routing::ALPHA)
             .collect();
 
@@ -106,17 +105,17 @@ impl Resources {
             .filter(|ref rpc| rpc.is_finding_node(id_to_find))
             .take(usize::saturating_sub(nodes_to_query.len(), routing::IMPATIENCE));
         
-         // Composes the RPCs and sends the UDP packets.
-         try!(self.lookup_wave(id_to_find, &nodes_to_query, &mut queried_nodes));
-
-			for response in responses { 
+         // We compose the RPCs and send the UDP packets.
+         try!(self.lookup_wave(id_to_find, &nodes_to_query, &mut queried_ids));
+   
+         for response in responses { 
             println!("<-- Response from {}", response.sender_id);
             if response.found_node(id_to_find) {
                return self.table.specific_node(id_to_find).ok_or(SubotaiError::NodeNotFound);
             }
-		   }
+         }
       }
-    
+       
       // One last wait until success or timeout, to compensate for impatience
       // (It could be that the nodes we ignored earlier come back with the response)
       all_receptions.during(time::Duration::seconds(NETWORK_TIMEOUT_S))
@@ -126,37 +125,44 @@ impl Resources {
       self.table.specific_node(id_to_find).ok_or(SubotaiError::NodeNotFound)
    }
 
-   pub fn bootstrap(&self, seed: routing::NodeInfo) -> SubotaiResult<()>  {
+   pub fn bootstrap(&self, seed: routing::NodeInfo, network_size: Option<usize>) -> SubotaiResult<()>  {
       self.table.insert_node(seed);
-      let mut queried_ids = Vec::<Hash>::with_capacity(routing::K);
 
-      while queried_ids.len() < routing::K {
-         let unqueried_nodes: Vec<routing::NodeInfo> = self.table.all_nodes()
+      // Timeout for the entire operation.
+      let total_timeout = time::Duration::seconds(2 * NETWORK_TIMEOUT_S);
+      let deadline = time::SteadyTime::now() + total_timeout;
+      let mut responses = self.receptions()
+         .rpc(receptions::RpcFilter::BootstrapResponse)
+         .during(total_timeout);
+         
+      let expected_length = match network_size {
+         Some(size) => size,
+         None => routing::K,
+      };
+
+      let mut queried_ids = Vec::<Hash>::with_capacity(routing::K);
+      while queried_ids.len() < expected_length {
+         let nodes_to_query: Vec<routing::NodeInfo> = self.table.all_nodes()
             .filter(|ref node_info| !queried_ids.contains(&node_info.id))
             .collect();
 
-         if unqueried_nodes.is_empty() {
-            break;
-         }
+         try!(self.bootstrap_wave(&nodes_to_query, &mut queried_ids));
+         responses.next();
 
-         try!(self.bootstrap_wave(&unqueried_nodes, &mut queried_ids));
+         if time::SteadyTime::now() >= deadline {
+            return Err(SubotaiError::UnresponsiveNetwork);
+         }
       }
       Ok(())
    }
 
    fn bootstrap_wave(&self, nodes_to_query: &[routing::NodeInfo], queried: &mut Vec<Hash>) -> SubotaiResult<()> {
-      let responses = self.receptions()
-         .rpc(receptions::RpcFilter::BootstrapResponse)
-         .take(nodes_to_query.len());
-
       for node in nodes_to_query {
          let rpc = Rpc::bootstrap(self.id.clone(), self.inbound.local_addr().unwrap().port());
          let packet = rpc.serialize(); 
          try!(self.outbound.send_to(&packet, node.address));
          queried.push(node.id.clone());
       }
-
-      responses.count();
       Ok(())
    }
 
@@ -210,7 +216,7 @@ impl Resources {
       self.table.insert_node(sender.clone());
       let closest_to_sender: Vec<_> = self.table.closest_nodes_to(&sender.id)
          .filter(|ref info| &info.id != &sender.id) // We don't want to reply with the sender itself
-         .take(routing::ALPHA)
+         .take(routing::K)
          .collect();
 
       let rpc = Rpc::bootstrap_response(self.id.clone(), self.inbound.local_addr().unwrap().port(), closest_to_sender);

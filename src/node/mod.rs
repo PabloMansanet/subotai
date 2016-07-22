@@ -105,7 +105,14 @@ impl Node {
 
    /// Bootstraps the node from a seed, and returns the amount of nodes in the final table.
    pub fn bootstrap(&self, seed: NodeInfo) -> SubotaiResult<usize> {
-       try!(self.resources.bootstrap(seed));
+       try!(self.resources.bootstrap(seed, None));
+       *self.resources.state.lock().unwrap() = State::Alive;
+       Ok(self.resources.table.len())
+   }
+
+   /// Bootstraps to a network with a limited number of nodes.
+   pub fn bootstrap_until(&self, seed: NodeInfo, network_size: usize) -> SubotaiResult<usize> {
+       try!(self.resources.bootstrap(seed, Some(network_size)));
        *self.resources.state.lock().unwrap() = State::Alive;
        Ok(self.resources.table.len())
    }
