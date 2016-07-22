@@ -209,7 +209,7 @@ impl Resources {
       self.table.insert_node(sender.clone());
       let closest_to_sender: Vec<_> = self.table.closest_nodes_to(&sender.id)
          .filter(|ref info| &info.id != &sender.id) // We don't want to reply with the sender itself
-         .take(routing::K)
+         .take(routing::ALPHA)
          .collect();
 
       let rpc = Rpc::bootstrap_response(self.id.clone(), self.inbound.local_addr().unwrap().port(), closest_to_sender);
