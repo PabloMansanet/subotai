@@ -84,33 +84,42 @@ impl Resources {
 
    /// Attempts to find a node through the network.
    pub fn find_node(&self, id_to_find: &Hash) -> SubotaiResult<routing::NodeInfo> {
-      let mut queried_nodes = Vec::<Hash>::with_capacity(routing::K);
       if let Some(node) = self.table.specific_node(id_to_find) {
          return Ok(node);
       }
+
+      let mut queried_nodes = Vec::<Hash>::with_capacity(routing::K);
 
       while queried_nodes.len() < routing::K {
          let nodes_to_query: Vec<routing::NodeInfo> = self.table.closest_nodes_to(id_to_find)
             .filter(|ref info| !queried_nodes.contains(&info.id))
             .take(routing::ALPHA)
             .collect();
+
          if nodes_to_query.is_empty() {
             break;
          }
-         let responses_to_expect = usize::saturating_sub(nodes_to_query.len(), routing::IMPATIENCE);
+         let responses = self.receptions()
+            .during(time::Duration::seconds(NETWORK_TIMEOUT_S))
+            .filter(|ref rpc| rpc.is_finding_node(id_to_find))
+            .take(usize::saturating_sub(nodes_to_query.len(), routing::IMPATIENCE));
+         
+         try!(self.lookup_wave(id_to_find, &nodes_to_query, &mut queried_nodes));
 
-         if let WaveResult::Done = try!(self.lookup_wave(id_to_find, &nodes_to_query, &mut queried_nodes, responses_to_expect)) {
-            return self.table.specific_node(id_to_find).ok_or(SubotaiError::NodeNotFound);
-         }
+			for response in responses { 
+            if response.found_node(id_to_find) {
+               return self.table.specific_node(id_to_find).ok_or(SubotaiError::NodeNotFound);
+            }
+		   }
       }
     
-      // One last waiting wave to compensate for impatience factor:
-      // It will wait until timeout or success, whichever happens first.
-      let empty_query = Vec::<routing::NodeInfo>::new();
-      match try!(self.lookup_wave(id_to_find, &empty_query, &mut queried_nodes, routing::K)) {
-         WaveResult::Done => self.table.specific_node(id_to_find).ok_or(SubotaiError::NodeNotFound),
-         WaveResult::Ongoing => Err(SubotaiError::NodeNotFound),
-      }
+      // We do one last wait until succes or timeout,  to compensate for impatience
+      self.receptions()
+         .during(time::Duration::seconds(NETWORK_TIMEOUT_S))
+         .filter(|ref rpc| rpc.found_node(id_to_find))
+         .take(1)
+         .count();
+      self.table.specific_node(id_to_find).ok_or(SubotaiError::NodeNotFound)
    }
 
    pub fn bootstrap(&self, seed: routing::NodeInfo) -> SubotaiResult<()>  {
@@ -133,7 +142,6 @@ impl Resources {
 
    fn bootstrap_wave(&self, nodes_to_query: &[routing::NodeInfo], queried: &mut Vec<Hash>) -> SubotaiResult<()> {
       let responses = self.receptions()
-         .during(time::Duration::seconds(NETWORK_TIMEOUT_S))
          .rpc(receptions::RpcFilter::BootstrapResponse)
          .take(nodes_to_query.len());
 
@@ -148,16 +156,7 @@ impl Resources {
       Ok(())
    }
 
-   fn lookup_wave(&self, id_to_find: &Hash, nodes_to_query: &[routing::NodeInfo], queried: &mut Vec<Hash>, expected_responses: usize) -> SubotaiResult<WaveResult> {
-      let responses = self.receptions()
-         .during(time::Duration::seconds(NETWORK_TIMEOUT_S))
-         .filter(|rpc: &Rpc| {
-             match rpc.kind {
-                rpc::Kind::FindNodeResponse( ref payload ) => &payload.id_to_find == id_to_find,
-                _ => false,
-             }
-         }).take(expected_responses);
-
+   fn lookup_wave(&self, id_to_find: &Hash, nodes_to_query: &[routing::NodeInfo], queried: &mut Vec<Hash>) -> SubotaiResult<()> {
       for node in nodes_to_query {
          let rpc = Rpc::find_node(
             self.id.clone(), 
@@ -170,16 +169,7 @@ impl Resources {
          queried.push(node.id.clone());
       }
 
-      for response in responses { 
-         if let rpc::Kind::FindNodeResponse(ref payload) = response.kind {
-            match payload.result {
-               routing::LookupResult::Myself | routing::LookupResult::Found(_) => return Ok(WaveResult::Done),
-               _ => (),
-            }
-         }
-      }
-
-      Ok(WaveResult::Ongoing)
+      Ok(())
    }
 
    pub fn process_incoming_rpc(&self, rpc: Rpc, mut source: net::SocketAddr) -> SubotaiResult<()>{
@@ -258,9 +248,4 @@ impl Resources {
       }
       Ok(())
    }
-}
-
-enum WaveResult {
-   Done,
-   Ongoing,
 }

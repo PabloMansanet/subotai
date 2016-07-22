@@ -49,6 +49,26 @@ impl Rpc {
    pub fn deserialize(serialized: &[u8]) -> serde::DeserializeResult<Rpc> {
        serde::deserialize(serialized)
    }
+
+   /// Reports whether the RPC is a FindNodeResponse looking
+   /// for a particular node
+   pub fn is_finding_node(&self, id: &Hash) -> bool {
+      match self.kind {
+         Kind::FindNodeResponse( ref payload ) => &payload.id_to_find == id,
+         _ => false,
+      }
+   }
+   /// Reports whether the RPC is a FindNodeResponse that found
+   /// a particular node
+   pub fn found_node(&self, id: &Hash) -> bool {
+      if let Kind::FindNodeResponse(ref payload) = self.kind {
+         match payload.result {
+            routing::LookupResult::Myself | routing::LookupResult::Found(_) => return &payload.id_to_find == id,
+            _ => return false,
+         }
+      }
+      false
+   }
 }
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
