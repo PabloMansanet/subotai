@@ -85,24 +85,28 @@ impl Resources {
 
    /// Attempts to find a node through the network.
    pub fn find_node(&self, id_to_find: &Hash) -> SubotaiResult<routing::NodeInfo> {
-      // If the node is already present in the table, we are done early.
+      // If the node is already present in our table, we are done early.
       if let Some(node) = self.table.specific_node(id_to_find) {
          return Ok(node);
       }
 
       let mut queried_nodes = Vec::<Hash>::with_capacity(routing::K);
+      let all_receptions = self.receptions();
 
       while queried_nodes.len() < cmp::min(routing::K, self.table.len())  {
+         // We query the 'ALPHA' nodes closest to the target we haven't yet queried.
          let nodes_to_query: Vec<routing::NodeInfo> = self.table.closest_nodes_to(id_to_find)
             .filter(|ref info| !queried_nodes.contains(&info.id))
             .take(routing::ALPHA)
             .collect();
 
+         // We wait for the response from the same number of nodes, minus the 'IMPATIENCE' factor.
          let responses = self.receptions()
             .during(time::Duration::seconds(NETWORK_TIMEOUT_S))
             .filter(|ref rpc| rpc.is_finding_node(id_to_find))
             .take(usize::saturating_sub(nodes_to_query.len(), routing::IMPATIENCE));
-         
+        
+         // Composes the RPCs and sends the UDP packets.
          try!(self.lookup_wave(id_to_find, &nodes_to_query, &mut queried_nodes));
 
 			for response in responses { 
@@ -112,11 +116,10 @@ impl Resources {
             }
 		   }
       }
-      println!("Left at queried node length {}", queried_nodes.len());
     
       // One last wait until success or timeout, to compensate for impatience
-      self.receptions()
-         .during(time::Duration::seconds(NETWORK_TIMEOUT_S))
+      // (It could be that the nodes we ignored earlier come back with the response)
+      all_receptions.during(time::Duration::seconds(NETWORK_TIMEOUT_S))
          .filter(|ref rpc| rpc.found_node(id_to_find))
          .take(1)
          .count();
