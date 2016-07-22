@@ -25,7 +25,7 @@
 //! let alpha = Node::new().unwrap();
 //! let beta = Node::new().unwrap();
 //!
-//! alpha.bootstrap(beta.local_info());
+//! alpha.bootstrap_until(beta.local_info(), 1);
 //!
 //! let receptions = beta.receptions().during(time::Duration::seconds(1));
 //!

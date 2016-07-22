@@ -157,9 +157,9 @@ impl Resources {
    }
 
    fn bootstrap_wave(&self, nodes_to_query: &[routing::NodeInfo], queried: &mut Vec<Hash>) -> SubotaiResult<()> {
+      let rpc = Rpc::bootstrap(self.id.clone(), self.inbound.local_addr().unwrap().port());
+      let packet = rpc.serialize(); 
       for node in nodes_to_query {
-         let rpc = Rpc::bootstrap(self.id.clone(), self.inbound.local_addr().unwrap().port());
-         let packet = rpc.serialize(); 
          try!(self.outbound.send_to(&packet, node.address));
          queried.push(node.id.clone());
       }
@@ -167,14 +167,14 @@ impl Resources {
    }
 
    fn lookup_wave(&self, id_to_find: &Hash, nodes_to_query: &[routing::NodeInfo], queried: &mut Vec<Hash>) -> SubotaiResult<()> {
+      let rpc = Rpc::find_node(
+         self.id.clone(), 
+         self.inbound.local_addr().unwrap().port(),
+         id_to_find.clone(),
+         routing::ALPHA,
+      );
+      let packet = rpc.serialize(); 
       for node in nodes_to_query {
-         let rpc = Rpc::find_node(
-            self.id.clone(), 
-            self.inbound.local_addr().unwrap().port(),
-            id_to_find.clone(),
-            routing::ALPHA,
-         );
-         let packet = rpc.serialize(); 
          println!("--> Sending to {}", node.id);
          try!(self.outbound.send_to(&packet, node.address));
          queried.push(node.id.clone());
