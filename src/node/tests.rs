@@ -75,7 +75,6 @@ fn finding_on_simulated_unresponsive_network() {
          assert!(node.bootstrap_until(origin.local_info(), 1).is_ok());
       }
 
-      println!("The origin node knows of {} nodes", origin.resources.table.len());
       // Actual bootstrapping
       for node in nodes.iter() {
          assert!(node.bootstrap(origin.local_info()).is_ok());
