@@ -42,6 +42,7 @@ impl Resources {
       }
    }
 
+   /// Pings a node, blocking until ping response.
    pub fn ping(&self, id: Hash) -> SubotaiResult<()> {
       let node = try!(self.find_node(&id));
       let rpc = Rpc::ping(self.id.clone(), self.inbound.local_addr().unwrap().port());
@@ -79,8 +80,10 @@ impl Resources {
 
       let mut queried_ids = Vec::<Hash>::with_capacity(routing::K);
       let all_receptions = self.receptions();
+      let loop_timeout = time::Duration::seconds(2 * NETWORK_TIMEOUT_S);
+      let deadline = time::SteadyTime::now() + loop_timeout;
      
-      while queried_ids.len() < routing::K {
+      while queried_ids.len() < routing::K && time::SteadyTime::now() < deadline {
          // We query the 'ALPHA' nodes closest to the target we haven't yet queried.
          let nodes_to_query: Vec<routing::NodeInfo> = self.table.closest_nodes_to(id_to_find)
             .filter(|ref info| !queried_ids.contains(&info.id))
@@ -95,7 +98,8 @@ impl Resources {
         
          // We compose the RPCs and send the UDP packets.
          try!(self.lookup_wave(id_to_find, &nodes_to_query, &mut queried_ids));
-   
+  
+         // We check the responses and return if the node was found.
          for response in responses { 
             println!("<-- Response from {}", response.sender_id);
             if response.found_node(id_to_find) {
@@ -122,7 +126,8 @@ impl Resources {
       let mut responses = self.receptions()
          .rpc(receptions::RpcFilter::BootstrapResponse)
          .during(total_timeout);
-         
+       
+      // We want our network to be as big as the K factor, or the user supplied limit.
       let expected_length = match network_size {
          Some(size) => size,
          None => routing::K,

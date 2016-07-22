@@ -1,5 +1,6 @@
 use node;
 use time;
+use hash;
 use std::collections::VecDeque;
 
 pub const POLL_FREQUENCY_MS: u64 = 50;
@@ -42,19 +43,8 @@ fn reception_iterator_times_out_correctly() {
 #[test]
 fn bootstrapping_and_finding_on_simulated_network() {
 
-   let mut nodes: VecDeque<node::Node> = (0..100).map(|_| { node::Node::new().unwrap() }).collect();
-   {
-      let origin = node::Node::new().unwrap();
-      // Initial handshake pass
-      for node in nodes.iter() {
-         assert!(node.bootstrap_until(origin.local_info(), 1).is_ok());
-      }
-      // Actual bootstrapping
-      for node in nodes.iter() {
-         assert!(node.bootstrap(origin.local_info()).is_ok());
-      }
-   }
-   
+   let mut nodes = simulated_network(100);
+
    // Head finds tail in a few steps.
    let head = nodes.pop_front().unwrap();
    let tail = nodes.pop_back().unwrap();
@@ -65,8 +55,32 @@ fn bootstrapping_and_finding_on_simulated_network() {
 #[test]
 fn finding_on_simulated_unresponsive_network() {
 
-   let mut nodes: VecDeque<node::Node> = (0..100).map(|_| { node::Node::new().unwrap() }).collect();
+   let mut nodes = simulated_network(100);
+   nodes.drain(30..70);
+   assert_eq!(nodes.len(), 60);
+   
+   // Head finds tail in a few steps.
+   let head = nodes.pop_front().unwrap();
+   let tail = nodes.pop_back().unwrap();
 
+   assert_eq!(head.find_node(tail.id()).unwrap().id, tail.local_info().id);
+}
+
+#[test]
+#[ignore]
+fn finding_a_nonexisting_node_in_a_simulated_network_times_out() {
+
+   let mut nodes = simulated_network(100);
+   
+   // Head finds tail in a few steps.
+   let head = nodes.pop_front().unwrap();
+
+   let random_hash = hash::Hash::random();
+   assert!(head.find_node(&random_hash).is_err());
+}
+
+fn simulated_network(nodes: usize) -> VecDeque<node::Node> {
+   let nodes: VecDeque<node::Node> = (0..nodes).map(|_| { node::Node::new().unwrap() }).collect();
    {
       let origin = node::Node::new().unwrap();
 
@@ -80,14 +94,7 @@ fn finding_on_simulated_unresponsive_network() {
          assert!(node.bootstrap(origin.local_info()).is_ok());
       }
    }
-
-   nodes.drain(30..70);
-   assert_eq!(nodes.len(), 60);
-   
-   // Head finds tail in a few steps.
-   let head = nodes.pop_front().unwrap();
-   let tail = nodes.pop_back().unwrap();
-
-   assert_eq!(head.find_node(tail.id()).unwrap().id, tail.local_info().id);
+   nodes
 }
+
 
