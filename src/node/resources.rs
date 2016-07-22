@@ -43,16 +43,11 @@ impl Resources {
    }
 
    pub fn ping(&self, id: Hash) -> SubotaiResult<()> {
-      let node = match self.table.specific_node(&id) {
-         None => try!(self.find_node(&id)),
-         Some(node) => node,
-      };
-
+      let node = try!(self.find_node(&id));
       let rpc = Rpc::ping(self.id.clone(), self.inbound.local_addr().unwrap().port());
       let packet = rpc.serialize();
       let responses = self.receptions().during(time::Duration::seconds(NETWORK_TIMEOUT_S))
          .rpc(receptions::RpcFilter::PingResponse).from(id.clone()).take(1);
-      
       try!(self.outbound.send_to(&packet, node.address));
 
       match responses.count() {
@@ -63,11 +58,7 @@ impl Resources {
 
    /// Sends a ping and doesn't wait for a response. Used by the maintenance thread.
    pub fn ping_and_forget(&self, id: Hash) -> SubotaiResult<()> {
-      let node = match self.table.specific_node(&id) {
-         None => try!(self.find_node(&id)),
-         Some(node) => node,
-      };
-
+      let node = try!(self.find_node(&id));
       let rpc = Rpc::ping(self.id.clone(), self.inbound.local_addr().unwrap().port());
       let packet = rpc.serialize();
       try!(self.outbound.send_to(&packet, node.address));
