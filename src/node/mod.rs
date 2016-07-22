@@ -128,14 +128,12 @@ impl Node {
       let mut buffer = [0u8; SOCKET_BUFFER_SIZE_BYTES];
 
       loop {
+         let message = resources.inbound.recv_from(&mut buffer);
          if let State::ShuttingDown = *resources.state.lock().unwrap() {
             break;
          }
 
-         if let Ok((_, source)) = resources.inbound.recv_from(&mut buffer) {
-            if let State::ShuttingDown = *resources.state.lock().unwrap() {
-               break;
-            }
+         if let Ok((_, source)) = message {
             if let Ok(rpc) = rpc::Rpc::deserialize(&buffer) {
                let resources_clone = resources.clone();
                thread::spawn(move || { resources_clone.process_incoming_rpc(rpc, source) } );
