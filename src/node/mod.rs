@@ -130,6 +130,7 @@ impl Node {
       loop {
          let message = resources.inbound.recv_from(&mut buffer);
          if let State::ShuttingDown = *resources.state.lock().unwrap() {
+            resources.updates.lock().unwrap().broadcast(resources::Update::Shutdown);
             break;
          }
 

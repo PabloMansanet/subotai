@@ -32,6 +32,7 @@ pub struct Resources {
 pub enum Update {
    RpcReceived(Rpc),
    Tick,
+   Shutdown,
 }
 
 impl Resources {

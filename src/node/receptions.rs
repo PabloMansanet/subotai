@@ -10,6 +10,7 @@ pub struct Receptions {
    timeout       : Option<time::SteadyTime>,
    rpc_filter    : Option<RpcFilter>,
    sender_filter : Option<Vec<Hash>>,
+   shutdown      : bool,
 }
 
 #[derive(Eq, PartialEq, Debug)]
@@ -31,7 +32,8 @@ impl Receptions {
          iter          : resources.updates.lock().unwrap().add_rx().into_iter(),
          timeout       : None,
          rpc_filter    : None,
-         sender_filter : None
+         sender_filter : None,
+         shutdown      : false,
       }
    }
 
@@ -70,29 +72,37 @@ impl Iterator for Receptions {
                break;
             }
          }
+         if self.shutdown {
+            break;
+         }
 
-         if let Some(resources::Update::RpcReceived(rpc)) = self.iter.next() {
-            if let Some(ref rpc_filter) = self.rpc_filter {
-               match rpc.kind {
-                  rpc::Kind::Ping                 => if *rpc_filter != RpcFilter::Ping { continue; },
-                  rpc::Kind::PingResponse         => if *rpc_filter != RpcFilter::PingResponse { continue; },
-                  rpc::Kind::Store(_)             => if *rpc_filter != RpcFilter::Store { continue; },
-                  rpc::Kind::FindNode(_)          => if *rpc_filter != RpcFilter::FindNode { continue; },
-                  rpc::Kind::FindNodeResponse(_)  => if *rpc_filter != RpcFilter::FindNodeResponse { continue; },
-                  rpc::Kind::FindValue(_)         => if *rpc_filter != RpcFilter::FindValue { continue; },
-                  rpc::Kind::FindValueResponse(_) => if *rpc_filter != RpcFilter::FindValueResponse { continue; },
-                  rpc::Kind::Bootstrap            => if *rpc_filter != RpcFilter::Bootstrap { continue; },
-                  rpc::Kind::BootstrapResponse(_) => if *rpc_filter != RpcFilter::BootstrapResponse { continue; },
+         //if let Some(resources::Update::RpcReceived(rpc)) = self.iter.next() {
+         match self.iter.next() {
+            Some(resources::Update::RpcReceived(rpc)) => {
+               if let Some(ref rpc_filter) = self.rpc_filter {
+                  match rpc.kind {
+                     rpc::Kind::Ping                 => if *rpc_filter != RpcFilter::Ping { continue; },
+                     rpc::Kind::PingResponse         => if *rpc_filter != RpcFilter::PingResponse { continue; },
+                     rpc::Kind::Store(_)             => if *rpc_filter != RpcFilter::Store { continue; },
+                     rpc::Kind::FindNode(_)          => if *rpc_filter != RpcFilter::FindNode { continue; },
+                     rpc::Kind::FindNodeResponse(_)  => if *rpc_filter != RpcFilter::FindNodeResponse { continue; },
+                     rpc::Kind::FindValue(_)         => if *rpc_filter != RpcFilter::FindValue { continue; },
+                     rpc::Kind::FindValueResponse(_) => if *rpc_filter != RpcFilter::FindValueResponse { continue; },
+                     rpc::Kind::Bootstrap            => if *rpc_filter != RpcFilter::Bootstrap { continue; },
+                     rpc::Kind::BootstrapResponse(_) => if *rpc_filter != RpcFilter::BootstrapResponse { continue; },
+                  }
                }
-            }
 
-            if let Some(ref sender_filter) = self.sender_filter {
-               if !sender_filter.contains(&rpc.sender_id) {
-                  continue;
+               if let Some(ref sender_filter) = self.sender_filter {
+                  if !sender_filter.contains(&rpc.sender_id) {
+                     continue;
+                  }
                }
-            }
 
-            return Some(rpc);
+               return Some(rpc);
+            },
+            Some(resources::Update::Shutdown) => self.shutdown = true,
+            _ => (),
          }
       }
       None
