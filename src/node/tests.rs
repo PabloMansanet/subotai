@@ -1,6 +1,4 @@
-use node;
-use time;
-use hash;
+use {node, time, hash};
 use std::collections::VecDeque;
 
 pub const POLL_FREQUENCY_MS: u64 = 50;

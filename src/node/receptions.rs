@@ -1,8 +1,6 @@
-use bus;
-use hash::Hash;
-use rpc;
-use time;
+use {bus, rpc, time};
 use node::resources;
+use hash::Hash;
 
 /// A blocking iterator over the RPCs received by a node.
 pub struct Receptions {

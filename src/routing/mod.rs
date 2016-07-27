@@ -1,11 +1,8 @@
-use hash::HASH_SIZE;
 use hash;
+use hash::HASH_SIZE;
 use hash::Hash;
-use std::net;
+use std::{net, mem, sync, iter};
 use std::collections::VecDeque;
-use std::mem;
-use std::sync::{Mutex, RwLock};
-use std::iter::{Chain, Rev};
 
 #[cfg(test)]
 mod tests;
@@ -36,7 +33,7 @@ const BUCKET_DEPTH : usize = K;
 /// be resolved later.
 pub struct Table {
    buckets   : Vec<Bucket>,
-   conflicts : Mutex<Vec<EvictionConflict>>,
+   conflicts : sync::Mutex<Vec<EvictionConflict>>,
    parent_id : Hash,
 }
 
@@ -71,7 +68,7 @@ impl Table {
    pub fn new(parent_id: Hash) -> Table {
       Table { 
          buckets   : (0..HASH_SIZE).map(|_| Bucket::new()).collect(),
-         conflicts : Mutex::new(Vec::new()),
+         conflicts : sync::Mutex::new(Vec::new()),
          parent_id : parent_id,
       }
    }
@@ -228,7 +225,7 @@ pub struct AllNodes<'a> {
 pub struct ClosestNodesTo<'a, 'b> {
    table          : &'a Table,
    reference      : &'b hash::Hash,     
-   lookup_order   : Chain<Rev<hash::IntoOnes>, hash::IntoZeroes>,
+   lookup_order   : iter::Chain<iter::Rev<hash::IntoOnes>, hash::IntoZeroes>,
    current_bucket : Vec<NodeInfo>,
 }
 
@@ -247,7 +244,7 @@ struct EvictionConflict {
 /// concurrent access to the table.
 #[derive(Debug)]
 struct Bucket {
-   entries: RwLock<VecDeque<NodeInfo>>,
+   entries: sync::RwLock<VecDeque<NodeInfo>>,
 }
 
 impl<'a, 'b> Iterator for ClosestNodesTo<'a, 'b> {
@@ -295,7 +292,7 @@ impl<'a> Iterator for AllNodes<'a> {
 impl Bucket {
    fn new() -> Bucket {
       Bucket{
-         entries: RwLock::new(VecDeque::with_capacity(BUCKET_DEPTH))
+         entries: sync::RwLock::new(VecDeque::with_capacity(BUCKET_DEPTH))
       }
    }
 }

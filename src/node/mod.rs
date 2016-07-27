@@ -1,21 +1,14 @@
 pub mod receptions;
+pub use routing::NodeInfo as NodeInfo;
 
 #[cfg(test)]
 mod tests;
 mod resources;
 
-use routing;
-use rpc;
-use bus;
-use SubotaiResult;
-
-pub use routing::NodeInfo as NodeInfo;
-
+use {routing, rpc, bus, SubotaiResult};
 use hash::Hash;
-use std::{net, thread};
-use std::sync;
+use std::{net, thread, sync};
 use std::time::Duration as StdDuration;
-use std::sync::Arc;
 
 /// Timeout period in seconds to stop waiting for a remote node response. 
 pub const NETWORK_TIMEOUT_S : i64 = 5;
@@ -30,7 +23,7 @@ const UPDATE_BUS_SIZE_BYTES    : usize = 50;
 ///
 /// On construction, it launches a detached thread for packet reception.
 pub struct Node {
-   resources: Arc<resources::Resources>,
+   resources: sync::Arc<resources::Resources>,
 }
 
 /// State of a Subotai node. 
@@ -68,7 +61,7 @@ impl Node {
    pub fn with_ports(inbound_port: u16, outbound_port: u16) -> SubotaiResult<Node> {
       let id = Hash::random();
 
-      let resources = Arc::new(resources::Resources {
+      let resources = sync::Arc::new(resources::Resources {
          id         : id.clone(),
          table      : routing::Table::new(id),
          inbound    : try!(net::UdpSocket::bind(("0.0.0.0", inbound_port))),
@@ -124,7 +117,7 @@ impl Node {
    }
 
    /// Receives and processes data as long as the table is alive.
-   fn reception_loop(resources: Arc<resources::Resources>) {
+   fn reception_loop(resources: sync::Arc<resources::Resources>) {
       let mut buffer = [0u8; SOCKET_BUFFER_SIZE_BYTES];
 
       loop {

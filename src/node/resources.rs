@@ -1,22 +1,14 @@
-use routing;
-use rpc;
-use bus;
-
+use {node, routing, rpc, bus, time, SubotaiError, SubotaiResult};
+use std::{net, sync};
 use rpc::Rpc;
-use time;
-use {SubotaiError, SubotaiResult};
-
 use hash::Hash;
-use std::net;
-use std::sync::Arc;
-use std::sync;
-use node::*;
+use node::receptions;
 
 /// Node resources for synchronous operations.
 ///
 /// All methods on this module are synchronous, and will wait for any
 /// remote nodes queried to reply to the RPCs sent, up to the timeout
-/// defined at `node::NETWORK_TIMEOUT_S`. The node layer above is in 
+/// defined at `node::node::NETWORK_TIMEOUT_S`. The node layer above is in 
 /// charge of parallelizing those operations by spawning threads when
 /// adequate.
 pub struct Resources {
@@ -24,7 +16,7 @@ pub struct Resources {
    pub table    : routing::Table,
    pub outbound : net::UdpSocket,
    pub inbound  : net::UdpSocket,
-   pub state    : sync::Mutex<State>,
+   pub state    : sync::Mutex<node::State>,
    pub updates  : sync::Mutex<bus::Bus<Update>>,
 }
 
@@ -48,7 +40,7 @@ impl Resources {
       let node = try!(self.find_node(&id));
       let rpc = Rpc::ping(self.id.clone(), self.inbound.local_addr().unwrap().port());
       let packet = rpc.serialize();
-      let responses = self.receptions().during(time::Duration::seconds(NETWORK_TIMEOUT_S))
+      let responses = self.receptions().during(time::Duration::seconds(node::NETWORK_TIMEOUT_S))
          .rpc(receptions::RpcFilter::PingResponse).from(id.clone()).take(1);
       try!(self.outbound.send_to(&packet, node.address));
 
@@ -81,7 +73,7 @@ impl Resources {
 
       let mut queried_ids = Vec::<Hash>::with_capacity(routing::K);
       let all_receptions = self.receptions();
-      let loop_timeout = time::Duration::seconds(2 * NETWORK_TIMEOUT_S);
+      let loop_timeout = time::Duration::seconds(2 * node::NETWORK_TIMEOUT_S);
       let deadline = time::SteadyTime::now() + loop_timeout;
      
       while queried_ids.len() < routing::K && time::SteadyTime::now() < deadline {
@@ -93,7 +85,7 @@ impl Resources {
 
          // We wait for the response from the same number of nodes, minus the 'IMPATIENCE' factor.
          let responses = self.receptions()
-            .during(time::Duration::seconds(NETWORK_TIMEOUT_S))
+            .during(time::Duration::seconds(node::NETWORK_TIMEOUT_S))
             .filter(|ref rpc| rpc.is_finding_node(id_to_find))
             .take(usize::saturating_sub(nodes_to_query.len(), routing::IMPATIENCE));
         
@@ -111,7 +103,7 @@ impl Resources {
        
       // One last wait until success or timeout, to compensate for impatience
       // (It could be that the nodes we ignored earlier come back with the response)
-      all_receptions.during(time::Duration::seconds(NETWORK_TIMEOUT_S))
+      all_receptions.during(time::Duration::seconds(node::NETWORK_TIMEOUT_S))
          .filter(|ref rpc| rpc.found_node(id_to_find))
          .take(1)
          .count();
@@ -122,7 +114,7 @@ impl Resources {
       self.table.insert_node(seed);
 
       // Timeout for the entire operation.
-      let total_timeout = time::Duration::seconds(2 * NETWORK_TIMEOUT_S);
+      let total_timeout = time::Duration::seconds(2 * node::NETWORK_TIMEOUT_S);
       let deadline = time::SteadyTime::now() + total_timeout;
       let mut responses = self.receptions()
          .rpc(receptions::RpcFilter::BootstrapResponse)
@@ -219,7 +211,7 @@ impl Resources {
       Ok(())
    }
 
-   fn handle_bootstrap_response(&self, payload: Arc<rpc::BootstrapResponsePayload>, sender: routing::NodeInfo) -> SubotaiResult<()> {
+   fn handle_bootstrap_response(&self, payload: sync::Arc<rpc::BootstrapResponsePayload>, sender: routing::NodeInfo) -> SubotaiResult<()> {
       self.table.insert_node(sender.clone());
       for node in &payload.nodes {
          self.table.insert_node(node.clone());
@@ -232,7 +224,7 @@ impl Resources {
       Ok(())
    }
 
-   fn handle_find_node(&self, payload: Arc<rpc::FindNodePayload>, sender: routing::NodeInfo) -> SubotaiResult<()> {
+   fn handle_find_node(&self, payload: sync::Arc<rpc::FindNodePayload>, sender: routing::NodeInfo) -> SubotaiResult<()> {
       self.table.insert_node(sender.clone());
       let lookup_results = self.table.lookup(&payload.id_to_find, payload.nodes_wanted, None);
       let rpc = Rpc::find_node_response(self.id.clone(), 
@@ -244,7 +236,7 @@ impl Resources {
       Ok(())
    }
 
-   fn handle_find_node_response(&self, payload: Arc<rpc::FindNodeResponsePayload>, sender: routing::NodeInfo) -> SubotaiResult<()> {
+   fn handle_find_node_response(&self, payload: sync::Arc<rpc::FindNodeResponsePayload>, sender: routing::NodeInfo) -> SubotaiResult<()> {
       self.table.insert_node(sender);
       match payload.result {
          routing::LookupResult::ClosestNodes(ref nodes) => for node in nodes { self.table.insert_node(node.clone()) },

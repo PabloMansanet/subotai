@@ -1,7 +1,5 @@
 use bincode::serde;
-use routing;
-use bincode;
-use node;
+use {routing, bincode, node};
 use std::sync::Arc;
 use hash::Hash;
 
