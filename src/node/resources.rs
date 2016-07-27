@@ -40,8 +40,11 @@ impl Resources {
       let node = try!(self.find_node(&id));
       let rpc = Rpc::ping(self.id.clone(), self.inbound.local_addr().unwrap().port());
       let packet = rpc.serialize();
-      let responses = self.receptions().during(time::Duration::seconds(node::NETWORK_TIMEOUT_S))
-         .rpc(receptions::RpcFilter::PingResponse).from(id.clone()).take(1);
+      let responses = self.receptions()
+         .during(time::Duration::seconds(node::NETWORK_TIMEOUT_S))
+         .rpc(receptions::RpcFilter::PingResponse)
+         .from(id.clone())
+         .take(1);
       try!(self.outbound.send_to(&packet, node.address));
 
       match responses.count() {
