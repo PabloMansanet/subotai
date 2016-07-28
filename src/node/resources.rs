@@ -63,10 +63,6 @@ impl Resources {
       Ok(())
    }
 
-   pub fn receptions(&self) -> receptions::Receptions {
-      receptions::Receptions::new(self)
-   }
-
    /// Attempts to find a node through the network.
    pub fn find_node(&self, id_to_find: &Hash) -> SubotaiResult<routing::NodeInfo> {
       // If the node is already present in our table, we are done early.

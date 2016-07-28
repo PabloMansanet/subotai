@@ -36,8 +36,14 @@ pub enum KindFilter {
    BootstrapResponse,
 }
 
+impl resources::Resources {
+   pub fn receptions(&self) -> Receptions {
+      Receptions::new(self)
+   }
+}
+
 impl Receptions {
-   pub fn new(resources: &resources::Resources) -> Receptions {
+   fn new(resources: &resources::Resources) -> Receptions {
       Receptions {
          iter          : resources.updates.lock().unwrap().add_rx().into_iter(),
          timeout       : None,
