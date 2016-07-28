@@ -120,6 +120,11 @@ impl Table {
    ///
    /// * "Bounce" back up, checking the buckets indexed by the position of
    ///   every "0" in that distance hash, in ascending order.
+   ///
+   /// This algorithm should be as efficient as the one proposed in the 
+   /// Kademlia paper with bucket splitting, but it avoids the necessity of
+   /// splitting the buckets, reducing the amount of dynamic allocations
+   /// needed. 
    pub fn lookup(&self, id: &Hash, n: usize, blacklist: Option<&Vec<Hash>>) -> LookupResult {
       if id == &self.parent_id {
          return LookupResult::Myself;
