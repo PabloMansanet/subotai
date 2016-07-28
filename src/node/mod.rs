@@ -1,3 +1,19 @@
+//! #Node
+//!
+//! The node module is the main point of contact with Subotai. Node structs contain
+//! all the pieces needed to join a Subotai network.
+//!
+//! When you initialize a Node struct, a few threads are automatically launched that 
+//! take care of listening to RPCs from other nodes, automatic maintenance and eviction
+//! of older node entries, and more. 
+//!
+//! Nodes start in the `OffGrid` state by default, meaning they aren't associated to
+//! a network. You must bootstrap the node by providing the address of another node,
+//! at which point the state will change to `Alive`.
+//!
+//! Destroying a node automatically schedules all threads to terminate after finishing 
+//! any pending operations.
+
 pub mod receptions;
 pub use routing::NodeInfo as NodeInfo;
 
@@ -27,22 +43,18 @@ pub struct Node {
 }
 
 /// State of a Subotai node. 
-///
-/// * `OffGrid`: The node is initialized but disconnected from the 
-///   network. Needs to go through succesful bootstrapping.
-///
-/// * `Alive`: The node is online and connected to the network.
-///
-/// * `Error`: The node is in an error state.
-///
-/// * `ShuttingDown`: The node is in a process of shutting down;
-///   all of it's resources will be deallocated after completion
-///   of any pending async operations.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone, Copy)]
 pub enum State {
+   /// The node is initialized but disconnected from the 
+   /// network. Needs to go through succesful bootstrapping.
    OffGrid,
+   /// The node is online and connected to the network.
    Alive,
+   /// The node is in an error state.
    Error,
+   /// The node is in a process of shutting down;
+   /// all of its resources will be deallocated after completion
+   /// of any pending async operations.
    ShuttingDown,
 }
 
@@ -55,6 +67,11 @@ impl Node {
    /// Returns the hash used to identify this node in the network.
    pub fn id(&self) -> &Hash {
       &self.resources.id
+   }
+
+   /// Returns the current state of the node.
+   pub fn state(&self)-> State {
+      *self.resources.state.lock().unwrap()
    }
 
    /// Constructs a node with a given inbound/outbound UDP port pair.

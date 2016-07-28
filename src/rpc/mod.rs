@@ -1,12 +1,20 @@
+//! #Remote Procedure Call. 
+//!
+//! Subotai RPCs are the packets sent over TCP between nodes. They
+//! contain information about the sender, as well as an optional payload.
+
 use bincode::serde;
 use {routing, bincode, node};
 use std::sync::Arc;
 use hash::Hash;
 
+/// Serializable struct implementation of an RPC.
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
 pub struct Rpc {
    pub kind        : Kind,
+   /// Hash ID of the original sender.
    pub sender_id   : Hash,
+   /// Port through which the original sender is listening for responses.
    pub reply_port  : u16,
 }
 
@@ -65,6 +73,7 @@ impl Rpc {
          _ => false,
       }
    }
+
    /// Reports whether the RPC is a FindNodeResponse that found
    /// a particular node.
    pub fn found_node(&self, id: &Hash) -> bool {
@@ -78,6 +87,9 @@ impl Rpc {
    }
 }
 
+/// Types of RPC contemplated by the standard, plus some unique to the Subotai
+/// DHT (such as as a specialized Bootstrap RPC). Some include reference
+/// counted payloads.
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
 pub enum Kind {
    Ping,
@@ -94,6 +106,7 @@ pub enum Kind {
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
 pub struct StorePayload;
 
+/// Includes the ID to find and the amount of nodes required.
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
 pub struct FindNodePayload {
    pub id_to_find    : Hash,
@@ -103,12 +116,14 @@ pub struct FindNodePayload {
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
 pub struct FindValuePayload;
 
+/// Includes the ID to find and the results of the table lookup.
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
 pub struct FindNodeResponsePayload {
    pub id_to_find : Hash,
    pub result     : routing::LookupResult,
 }
 
+/// Includes a vector of up to 'K' nodes close to the respondee.
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
 pub struct BootstrapResponsePayload {
    pub nodes: Vec<routing::NodeInfo>,
