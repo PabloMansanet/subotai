@@ -42,7 +42,7 @@ impl Resources {
       let packet = rpc.serialize();
       let responses = self.receptions()
          .during(time::Duration::seconds(node::NETWORK_TIMEOUT_S))
-         .rpc(receptions::RpcFilter::PingResponse)
+         .of_kind(receptions::KindFilter::PingResponse)
          .from(id.clone())
          .take(1);
       try!(self.outbound.send_to(&packet, node.address));
@@ -120,7 +120,7 @@ impl Resources {
       let total_timeout = time::Duration::seconds(2 * node::NETWORK_TIMEOUT_S);
       let deadline = time::SteadyTime::now() + total_timeout;
       let mut responses = self.receptions()
-         .rpc(receptions::RpcFilter::BootstrapResponse)
+         .of_kind(receptions::KindFilter::BootstrapResponse)
          .during(total_timeout);
        
       // We want our network to be as big as the K factor, or the user supplied limit.
