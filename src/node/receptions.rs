@@ -135,7 +135,7 @@ mod tests {
        let beta_receptions = 
           beta.receptions()
               .during(time::Duration::seconds(1))
-              .rpc(KindFilter::Ping);
+              .of_kind(KindFilter::Ping);
 
        assert!(alpha.ping(beta.local_info().id).is_ok());
        assert!(alpha.ping(beta.local_info().id).is_ok());
@@ -156,7 +156,7 @@ mod tests {
           receiver.receptions()
                   .during(time::Duration::seconds(1))
                   .from_senders(allowed)
-                  .rpc(KindFilter::Ping);
+                  .of_kind(KindFilter::Ping);
 
        assert!(alpha.bootstrap_until(receiver.local_info(), 1).is_ok());
        assert!(beta.bootstrap_until(receiver.local_info(), 1).is_ok());
