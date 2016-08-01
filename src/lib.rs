@@ -36,7 +36,7 @@
 //!
 //! ```
 #![allow(dead_code, unknown_lints, wrong_self_convention)]
-#![feature(custom_derive, plugin)]
+#![feature(custom_derive, plugin, vec_deque_contains)]
 #![plugin(serde_macros)]
 
 extern crate itertools;

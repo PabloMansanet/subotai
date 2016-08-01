@@ -16,18 +16,22 @@ fn node_info_no_net(id : Hash) -> NodeInfo {
 fn inserting_and_retrieving_specific_node() {
    let node_info = node_info_no_net(Hash::random());
    let table = Table::new(Hash::random());
-   table.insert_node(node_info.clone());
+   table.update_node(node_info.clone());
    assert_eq!(table.specific_node(&node_info.id), Some(node_info));
 }
 
 #[test]
 fn measuring_table_length() {
    let table = Table::new(Hash::random());
+   let mut conflicts = 0usize;
    for _ in 0..50 {
-      table.insert_node(node_info_no_net(Hash::random()));
+      match table.update_node(node_info_no_net(Hash::random())) {
+         UpdateResult::CausedConflict(_) => conflicts += 1,
+         _ => (),
+      };
    }
 
-   assert_eq!(50, table.len() + table.conflicts_len());
+   assert_eq!(50, table.len() + conflicts);
 }
 
 #[test]
@@ -38,46 +42,22 @@ fn inserting_in_a_full_bucket_causes_eviction_conflict() {
    let table = Table::new(parent_id);
 
    table.fill_bucket(8, super::BUCKET_DEPTH as u8);
-   assert_eq!(table.conflicts_len(), 0);
 
    // When we add another node to the same bucket, we cause a conflict.
    let mut id = Hash::blank();
    id.raw[0] = 0xFF;
    let info = node_info_no_net(id);
-   table.insert_node(info);
-   assert_eq!(table.conflicts_len(), 1); 
+   match table.update_node(info) {
+      UpdateResult::CausedConflict(_) => (),
+      _ => panic!(),
+   }
 }
-
-//#[test]
-//fn reverting_an_eviction_conflict_reinserts_the_evicted_node_in_place_of_evictor() {
-//   let mut parent_id = Hash::blank();
-//   parent_id.raw[1] = 1; // This will guarantee all nodes will fall on the same bucket.
-//
-//   let table = Table::new(parent_id);
-//
-//   table.fill_bucket(8, super::BUCKET_DEPTH as u8);
-//   assert_eq!(table.conflicts_len(), 0);
-//
-//   // When we add another node to the same bucket, we cause a conflict.
-//   let mut id = Hash::blank();
-//   id.raw[0] = 0xFF;
-//   let info = node_info_no_net(id);
-//   table.insert_node(info);
-//   assert_eq!(table.conflicts_len(), 1);
-//   let conflict = table.buckets[8].read().unwrap().conflicts.pop().unwrap();
-//
-//   table.revert_conflict(conflict.clone());
-//   // The evictor has been removed.
-//   assert!(table.specific_node(&conflict.inserted.id).is_none());
-//   // And the evicted has been reinserted.
-//   assert!(table.specific_node(&conflict.evicted.id).is_some());
-//}
 
 #[test]
 fn lookup_for_a_stored_node() { 
    let table = Table::new(Hash::random());
    let node = node_info_no_net(Hash::random());
-   table.insert_node(node.clone());
+   table.update_node(node.clone());
 
    assert_eq!(table.lookup(&node.id, 20, None), LookupResult::Found(node));
 }
@@ -164,12 +144,12 @@ fn lookup_with_blacklist() {
    let normal_node = node_info_no_net(Hash::random());
 
    for node in &blacklist {
-      table.insert_node(node.clone());
+      table.update_node(node.clone());
    }
   
    let blacklist = blacklist.iter().map(|info: &NodeInfo| info.id.clone()).collect::<Vec<Hash>>();
 
-   table.insert_node(normal_node.clone());
+   table.update_node(normal_node.clone());
    
    if let LookupResult::ClosestNodes(mut nodes) = table.lookup(&Hash::random(), 5, Some(&blacklist)) {
       assert_eq!(nodes.len(), 1);
@@ -187,7 +167,7 @@ fn efficient_bounce_lookup_on_a_randomized_table() {
       // We create ids that will distribute more or less uniformly over the buckets.
       let mut id = parent_id.clone();
       id.mutate_random_bits(3);
-      table.insert_node(node_info_no_net(id));
+      table.update_node(node_info_no_net(id));
    }
 
    // We construct an origin node from which to calculate distances for the lookup.
@@ -229,7 +209,7 @@ impl Table {
 
          id.raw[0] = i as u8;
          let info = node_info_no_net(id);
-         self.insert_node(info);
+         self.update_node(info);
       }
    }
 }

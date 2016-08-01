@@ -61,6 +61,12 @@ pub enum LookupResult {
    Nothing,
 }
 
+pub enum UpdateResult {
+   AddedNode,
+   UpdatedNode,
+   CausedConflict(EvictionConflict),
+}
+
 impl Table {
    /// Constructs a routing table based on a parent node id. Other nodes
    /// will be stored in this table based on their distance to the node id provided.
@@ -76,11 +82,6 @@ impl Table {
       self.buckets.iter().map(|bucket| bucket.read().unwrap().entries.len()).sum()
    }
 
-   /// Returns the number of eviction conflicts currently on the table.
-   pub fn conflicts_len(&self) -> usize {
-      self.buckets.iter().map(|bucket| bucket.read().unwrap().conflicts.len()).sum()
-   }
-
    pub fn is_empty(&self) -> bool {
       self.len() == 0
    }
@@ -88,20 +89,27 @@ impl Table {
    /// Inserts a node in the routing table. Employs least-recently-seen eviction
    /// by kicking out the oldest node in case the bucket is full, and registering
    /// an eviction conflict that can be revised later.
-   pub fn insert_node(&self, info: NodeInfo) {
+   pub fn update_node(&self, info: NodeInfo) -> UpdateResult {
+      let mut result = UpdateResult::AddedNode;
       if let Some(index) = self.bucket_for_node(&info.id) {
          let mut bucket = self.buckets[index].write().unwrap();
+
+         if bucket.entries.contains(&info) {
+            result = UpdateResult::UpdatedNode;
+         }
 
          bucket.entries.retain(|ref stored_info| info.id != stored_info.id);
          if bucket.entries.len() == BUCKET_DEPTH {
             let conflict = EvictionConflict { 
                evicted  : bucket.entries.pop_front().unwrap(),
-               inserted : info.clone() 
+               inserted : info.clone(),
+               date     : time::SteadyTime::now(),
             };
-            bucket.conflicts.push(conflict);
+            result = UpdateResult::CausedConflict(conflict);
          }
          bucket.entries.push_back(info);
       }
+      result
    }
 
    /// Performs a node lookup on the routing table. The lookup result may
@@ -214,7 +222,7 @@ impl Table {
          if let Some(ref mut evictor) = entries.iter_mut().find(|ref info| conflict.inserted.id == info.id) {
             mem::replace::<NodeInfo>(evictor, conflict.evicted);
          } else {
-            self.insert_node(conflict.evicted);
+            self.update_node(conflict.evicted);
          }
       }
    }
@@ -240,9 +248,10 @@ pub struct ClosestNodesTo<'a, 'b> {
 /// Represents a conflict derived from attempting to insert a node in a full
 /// bucket. 
 #[derive(Debug,Clone)]
-struct EvictionConflict {
+pub struct EvictionConflict {
    evicted  : NodeInfo,
-   inserted : NodeInfo
+   inserted : NodeInfo,
+   date     : time::SteadyTime
 }
 
 /// Bucket size is estimated to be small enough not to warrant
@@ -254,7 +263,6 @@ struct EvictionConflict {
 struct Bucket {
    entries     : VecDeque<NodeInfo>,
    last_lookup : Option<time::SteadyTime>,
-   conflicts   : Vec<EvictionConflict>,
 }
 
 impl<'a, 'b> Iterator for ClosestNodesTo<'a, 'b> {
@@ -304,7 +312,6 @@ impl Bucket {
       Bucket{
          entries     : VecDeque::with_capacity(BUCKET_DEPTH),
          last_lookup : None,
-         conflicts   : Vec::new(),
       }
    }
 }
