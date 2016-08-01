@@ -21,7 +21,7 @@ pub use routing::NodeInfo as NodeInfo;
 mod tests;
 mod resources;
 
-use {routing, rpc, bus, SubotaiResult, time};
+use {routing, rpc, bus, SubotaiResult};
 use hash::Hash;
 use std::{net, thread, sync};
 use std::time::Duration as StdDuration;
@@ -84,7 +84,8 @@ impl Node {
          inbound    : try!(net::UdpSocket::bind(("0.0.0.0", inbound_port))),
          outbound   : try!(net::UdpSocket::bind(("0.0.0.0", outbound_port))),
          state      : sync::Mutex::new(State::OffGrid),
-         updates    : sync::Mutex::new(bus::Bus::new(UPDATE_BUS_SIZE_BYTES))
+         updates    : sync::Mutex::new(bus::Bus::new(UPDATE_BUS_SIZE_BYTES)),
+         conflicts  : sync::Mutex::new(Vec::new()),
       });
 
       try!(resources.inbound.set_read_timeout(Some(StdDuration::new(SOCKET_TIMEOUT_S,0))));
@@ -158,34 +159,29 @@ impl Node {
       }
    }
 
+   /// Initiates pings to stale nodes that have been part of an eviction
+   /// conflict, and disposes of conflicts that haven't been resolved.
    fn conflict_resolution_loop(resources: sync::Arc<resources::Resources>) {
       loop {
          if let State::ShuttingDown = *resources.state.lock().unwrap() {
             break;
          }
-
-         let receptions = resources.receptions()
-            .of_kind(receptions::KindFilter::PingResponse)
-            .during(time::Duration::seconds(1));
          
          { // Lock scope
-            let conflicts = resources.conflicts.lock().unwrap();
+            let mut conflicts = resources.conflicts.lock().unwrap();
             // Conflicts that weren't solved in five pings are removed.
-            conflicts.retain(|routing::EvictionConflict{times_pinged, ..}| times_pinged <= 5);
+            // This means the incoming node that caused the conflict has priority.
+            conflicts.retain(|&routing::EvictionConflict{times_pinged, ..}| times_pinged <= 5);
             // We ping the evicted nodes for all conflicts that remain.
             for conflict in conflicts.iter_mut() {
-               resources.ping_and_forget(conflict.evicted.id.clone());
+               resources.ping_and_forget(conflict.evicted.id.clone()).unwrap();
                conflict.times_pinged += 1;
             }
          }
-
-         // We wait for responses from these nodes, during one second, in no particular order.
-         for rpc in receptions {
-            resources.revert_conflicts_for_sender(&rpc.sender_id);
-         }
+         // We wait for responses from these nodes.
+         thread::sleep(StdDuration::new(NETWORK_TIMEOUT_S as u64,0));
       }
    }
-
 }
 
 impl Drop for Node {

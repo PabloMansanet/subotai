@@ -1,4 +1,4 @@
-use {node, routing, rpc, bus, time, SubotaiError, SubotaiResult, hash};
+use {node, routing, rpc, bus, time, SubotaiError, SubotaiResult};
 use std::{net, sync};
 use rpc::Rpc;
 use hash::Hash;
@@ -69,7 +69,7 @@ impl Resources {
    /// if necessary.
    pub fn update_table(&self, info: routing::NodeInfo) {
       match self.table.update_node(info) {
-         routing::UpdateResult::CausedConflict(_) => unimplemented!(),
+         routing::UpdateResult::CausedConflict(conflict) => self.conflicts.lock().unwrap().push(conflict),
          _ => (),
       }
    }
@@ -180,15 +180,13 @@ impl Resources {
    }
 
    pub fn revert_conflicts_for_sender(&self, sender_id: &Hash) {
-      let conflicts = self.conflicts.lock().unwrap();
-      let matched_conflict = conflicts
-         .iter()
+      if let Some((index, _)) = 
+         self.conflicts.lock().unwrap().iter()
          .enumerate()
          .filter(|&(_,&routing::EvictionConflict{ref evicted, ..})| sender_id == &evicted.id )
-         .next();
-
-      if let Some(index, _) = matched_conflict{
-         let conflict = conflicts.remove(index);
+         .next()
+      {
+         let conflict = self.conflicts.lock().unwrap().remove(index);
          self.table.revert_conflict(conflict);
       }
    }
@@ -209,7 +207,8 @@ impl Resources {
          rpc::Kind::BootstrapResponse(ref payload) => self.handle_bootstrap_response(payload.clone(),sender),
          _ => unimplemented!(),
       };
-
+      
+      self.revert_conflicts_for_sender(&rpc.sender_id.clone());
       self.updates.lock().unwrap().broadcast(Update::RpcReceived(rpc));
       result
    }

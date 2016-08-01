@@ -101,9 +101,9 @@ impl Table {
          bucket.entries.retain(|ref stored_info| info.id != stored_info.id);
          if bucket.entries.len() == BUCKET_DEPTH {
             let conflict = EvictionConflict { 
-               evicted  : bucket.entries.pop_front().unwrap(),
-               inserted : info.clone(),
-               date     : time::SteadyTime::now(),
+               evicted      : bucket.entries.pop_front().unwrap(),
+               inserted     : info.clone(),
+               times_pinged : 0,
             };
             result = UpdateResult::CausedConflict(conflict);
          }
@@ -214,7 +214,7 @@ impl Table {
        (&self.parent_id ^ id).height()
    }
 
-   fn revert_conflict(&self, conflict: EvictionConflict) {
+   pub fn revert_conflict(&self, conflict: EvictionConflict) {
       if let Some(index) = self.bucket_for_node(&conflict.inserted.id) {
          let bucket = &self.buckets[index];
          let ref mut entries = bucket.write().unwrap().entries;
@@ -249,9 +249,9 @@ pub struct ClosestNodesTo<'a, 'b> {
 /// bucket. 
 #[derive(Debug,Clone)]
 pub struct EvictionConflict {
-   evicted      : NodeInfo,
-   inserted     : NodeInfo,
-   times_pinged : u8,
+   pub evicted      : NodeInfo,
+   inserted         : NodeInfo,
+   pub times_pinged : u8,
 }
 
 /// Bucket size is estimated to be small enough not to warrant

@@ -103,12 +103,13 @@ fn updating_table_with_full_bucket_starts_the_conflict_resolution_mechanism()
    let node = node::Node::new().unwrap();
    node.resources.table.fill_bucket(8, routing::K as u8); // Bucket completely full
 
-   let mut id = hash::Hash::blank();
+   let mut id = node.id().clone();
+   id.flip_bit(8);
    id.raw[0] = 0xFF;
    let info = node_info_no_net(id);
 
    node.resources.update_table(info);
-   
+   assert_eq!(node.resources.conflicts.lock().unwrap().len(), 1);
 }
 
 fn node_info_no_net(id : hash::Hash) -> routing::NodeInfo {
@@ -117,18 +118,3 @@ fn node_info_no_net(id : hash::Hash) -> routing::NodeInfo {
       address : net::SocketAddr::from_str("0.0.0.0:0").unwrap(),
    }
 }
-
-//impl routing::Table {
-//   pub fn fill_bucket(&self, bucket_index : usize, fill_quantity : u8) {
-//      // Otherwise this helper function becomes quite complex.
-//      assert!(bucket_index > 7);
-//      for i in 0..fill_quantity {
-//         let mut id = self.parent_id.clone();
-//         id.flip_bit(bucket_index);
-//
-//         id.raw[0] = i as u8;
-//         let info = node_info_no_net(id);
-//         self.update_node(info);
-//      }
-//   }
-//}
