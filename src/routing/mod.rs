@@ -99,8 +99,10 @@ impl Table {
             result = UpdateResult::UpdatedNode;
          }
 
+         println!("Adding at length {} for bucket {}", bucket.entries.len(), index);
          bucket.entries.retain(|ref stored_info| info.id != stored_info.id);
          if bucket.entries.len() == BUCKET_DEPTH {
+            println!("Caused conflict");
             let conflict = EvictionConflict { 
                evicted      : bucket.entries.pop_front().unwrap(),
                inserted     : info.clone(),
@@ -211,7 +213,7 @@ impl Table {
    /// Returns the appropriate position for a node, by computing
    /// the index where their prefix starts differing. If we are requesting
    /// the bucket for this table's own parent node, it can't be stored.
-   fn bucket_for_node(&self, id: &Hash) -> Option<usize> {
+   pub fn bucket_for_node(&self, id: &Hash) -> Option<usize> {
        (&self.parent_id ^ id).height()
    }
 

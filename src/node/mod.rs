@@ -179,7 +179,7 @@ impl Node {
             }
          }
          // We wait for responses from these nodes.
-         thread::sleep(StdDuration::new(NETWORK_TIMEOUT_S as u64,0));
+         thread::sleep(StdDuration::new(1u64,0));
       }
    }
 }

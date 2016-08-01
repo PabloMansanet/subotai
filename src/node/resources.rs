@@ -70,10 +70,12 @@ impl Resources {
    pub fn update_table(&self, info: routing::NodeInfo) {
       match self.table.update_node(info) {
          routing::UpdateResult::CausedConflict(conflict) => {
+            println!("Got a conflict");
             let mut conflicts = self.conflicts.lock().unwrap();
             if conflicts.len() == routing::MAX_CONFLICTS {
                self.table.revert_conflict(conflict);
             } else {
+               println!("Pusing a conflict");
                conflicts.push(conflict);
             }
          },

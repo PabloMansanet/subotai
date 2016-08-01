@@ -2,6 +2,7 @@ use {node, routing, time, hash};
 use std::collections::VecDeque;
 use std::str::FromStr;
 use std::net;
+use node::receptions;
 
 pub const POLL_FREQUENCY_MS: u64 = 50;
 pub const TRIES: u8 = 5;
@@ -111,6 +112,26 @@ fn updating_table_with_full_bucket_starts_the_conflict_resolution_mechanism()
    node.resources.update_table(info);
    assert_eq!(node.resources.conflicts.lock().unwrap().len(), 1);
 }
+
+#[test]
+fn generating_a_conflict_causes_a_ping_to_the_evicted_node()
+{
+   let alpha = node::Node::new().unwrap();
+   let beta = node::Node::new().unwrap();
+   alpha.bootstrap_until(beta.local_info(), 1).unwrap();
+  
+   let index = alpha.resources.table.bucket_for_node(beta.id()).unwrap();
+
+   // We expect a ping to beta
+   let pings = beta.receptions()
+      .of_kind(receptions::KindFilter::Ping)
+      .during(time::Duration::seconds(2));
+
+   // We fill the bucket corresponding to Beta until we cause a conflict.
+   alpha.resources.table.fill_bucket(index, routing::K as u8);
+   assert_eq!(pings.count(), 1);
+}
+
 
 fn node_info_no_net(id : hash::Hash) -> routing::NodeInfo {
    routing::NodeInfo {
