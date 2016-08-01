@@ -68,7 +68,6 @@ impl Resources {
    /// Updates the table with a new node, and starts the conflict resolution mechanism
    /// if necessary.
    pub fn update_table(&self, info: routing::NodeInfo) {
-      
       match self.table.update_node(info) {
          routing::UpdateResult::CausedConflict(conflict) => {
             let mut conflicts = self.conflicts.lock().unwrap();

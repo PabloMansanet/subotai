@@ -32,8 +32,8 @@ pub const NETWORK_TIMEOUT_S : i64 = 5;
 /// Size of a typical UDP socket buffer.
 pub const SOCKET_BUFFER_SIZE_BYTES : usize = 65536;
 
-const SOCKET_TIMEOUT_S         : u64   = 1;
-const UPDATE_BUS_SIZE_BYTES    : usize = 50;
+const SOCKET_TIMEOUT_MS     : u64   = 200;
+const UPDATE_BUS_SIZE_BYTES : usize = 50;
 
 /// Subotai node. 
 ///
@@ -88,7 +88,7 @@ impl Node {
          conflicts  : sync::Mutex::new(Vec::with_capacity(routing::MAX_CONFLICTS)),
       });
 
-      try!(resources.inbound.set_read_timeout(Some(StdDuration::new(SOCKET_TIMEOUT_S,0))));
+      try!(resources.inbound.set_read_timeout(Some(StdDuration::from_millis(SOCKET_TIMEOUT_MS))));
 
       let reception_resources = resources.clone();
       thread::spawn(move || { Node::reception_loop(reception_resources) });
