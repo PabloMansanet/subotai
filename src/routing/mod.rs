@@ -249,9 +249,9 @@ pub struct ClosestNodesTo<'a, 'b> {
 /// bucket. 
 #[derive(Debug,Clone)]
 pub struct EvictionConflict {
-   evicted  : NodeInfo,
-   inserted : NodeInfo,
-   date     : time::SteadyTime
+   evicted      : NodeInfo,
+   inserted     : NodeInfo,
+   times_pinged : u8,
 }
 
 /// Bucket size is estimated to be small enough not to warrant

@@ -1,5 +1,7 @@
-use {node, time, hash};
+use {node, routing, time, hash};
 use std::collections::VecDeque;
+use std::str::FromStr;
+use std::net;
 
 pub const POLL_FREQUENCY_MS: u64 = 50;
 pub const TRIES: u8 = 5;
@@ -95,4 +97,38 @@ fn simulated_network(nodes: usize) -> VecDeque<node::Node> {
    nodes
 }
 
+#[test]
+fn updating_table_with_full_bucket_starts_the_conflict_resolution_mechanism()
+{
+   let node = node::Node::new().unwrap();
+   node.resources.table.fill_bucket(8, routing::K as u8); // Bucket completely full
 
+   let mut id = hash::Hash::blank();
+   id.raw[0] = 0xFF;
+   let info = node_info_no_net(id);
+
+   node.resources.update_table(info);
+   
+}
+
+fn node_info_no_net(id : hash::Hash) -> routing::NodeInfo {
+   routing::NodeInfo {
+      id : id,
+      address : net::SocketAddr::from_str("0.0.0.0:0").unwrap(),
+   }
+}
+
+//impl routing::Table {
+//   pub fn fill_bucket(&self, bucket_index : usize, fill_quantity : u8) {
+//      // Otherwise this helper function becomes quite complex.
+//      assert!(bucket_index > 7);
+//      for i in 0..fill_quantity {
+//         let mut id = self.parent_id.clone();
+//         id.flip_bit(bucket_index);
+//
+//         id.raw[0] = i as u8;
+//         let info = node_info_no_net(id);
+//         self.update_node(info);
+//      }
+//   }
+//}

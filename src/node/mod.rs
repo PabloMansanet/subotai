@@ -21,7 +21,7 @@ pub use routing::NodeInfo as NodeInfo;
 mod tests;
 mod resources;
 
-use {routing, rpc, bus, SubotaiResult};
+use {routing, rpc, bus, SubotaiResult, time};
 use hash::Hash;
 use std::{net, thread, sync};
 use std::time::Duration as StdDuration;
@@ -92,6 +92,9 @@ impl Node {
       let reception_resources = resources.clone();
       thread::spawn(move || { Node::reception_loop(reception_resources) });
 
+      let conflict_resolution_resources = resources.clone();
+      thread::spawn(move || { Node::conflict_resolution_loop(conflict_resolution_resources) });
+
       Ok( Node{ resources: resources } )
    }
 
@@ -154,6 +157,35 @@ impl Node {
          resources.updates.lock().unwrap().broadcast(resources::Update::Tick);
       }
    }
+
+   fn conflict_resolution_loop(resources: sync::Arc<resources::Resources>) {
+      loop {
+         if let State::ShuttingDown = *resources.state.lock().unwrap() {
+            break;
+         }
+
+         let receptions = resources.receptions()
+            .of_kind(receptions::KindFilter::PingResponse)
+            .during(time::Duration::seconds(1));
+         
+         { // Lock scope
+            let conflicts = resources.conflicts.lock().unwrap();
+            // Conflicts that weren't solved in five pings are removed.
+            conflicts.retain(|routing::EvictionConflict{times_pinged, ..}| times_pinged <= 5);
+            // We ping the evicted nodes for all conflicts that remain.
+            for conflict in conflicts.iter_mut() {
+               resources.ping_and_forget(conflict.evicted.id.clone());
+               conflict.times_pinged += 1;
+            }
+         }
+
+         // We wait for responses from these nodes, during one second, in no particular order.
+         for rpc in receptions {
+            resources.revert_conflicts_for_sender(&rpc.sender_id);
+         }
+      }
+   }
+
 }
 
 impl Drop for Node {

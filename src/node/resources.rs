@@ -1,4 +1,4 @@
-use {node, routing, rpc, bus, time, SubotaiError, SubotaiResult};
+use {node, routing, rpc, bus, time, SubotaiError, SubotaiResult, hash};
 use std::{net, sync};
 use rpc::Rpc;
 use hash::Hash;
@@ -12,12 +12,13 @@ use node::receptions;
 /// charge of parallelizing those operations by spawning threads when
 /// adequate.
 pub struct Resources {
-   pub id       : Hash,
-   pub table    : routing::Table,
-   pub outbound : net::UdpSocket,
-   pub inbound  : net::UdpSocket,
-   pub state    : sync::Mutex<node::State>,
-   pub updates  : sync::Mutex<bus::Bus<Update>>,
+   pub id        : Hash,
+   pub table     : routing::Table,
+   pub outbound  : net::UdpSocket,
+   pub inbound   : net::UdpSocket,
+   pub state     : sync::Mutex<node::State>,
+   pub updates   : sync::Mutex<bus::Bus<Update>>,
+   pub conflicts : sync::Mutex<Vec<routing::EvictionConflict>>,
 }
 
 #[derive(Clone)]
@@ -53,7 +54,8 @@ impl Resources {
       }
    }
 
-   /// Sends a ping and doesn't wait for a response. Used by the maintenance thread.
+   /// Sends a ping and doesn't wait for a response. Used by the maintenance thread
+   /// and for conflict resolution.
    pub fn ping_and_forget(&self, id: Hash) -> SubotaiResult<()> {
       let node = try!(self.find_node(&id));
       let rpc = Rpc::ping(self.id.clone(), self.inbound.local_addr().unwrap().port());
@@ -61,6 +63,15 @@ impl Resources {
       try!(self.outbound.send_to(&packet, node.address));
 
       Ok(())
+   }
+
+   /// Updates the table with a new node, and starts the conflict resolution mechanism
+   /// if necessary.
+   pub fn update_table(&self, info: routing::NodeInfo) {
+      match self.table.update_node(info) {
+         routing::UpdateResult::CausedConflict(_) => unimplemented!(),
+         _ => (),
+      }
    }
 
    /// Attempts to find a node through the network.
@@ -166,6 +177,20 @@ impl Resources {
       }
 
       Ok(())
+   }
+
+   pub fn revert_conflicts_for_sender(&self, sender_id: &Hash) {
+      let conflicts = self.conflicts.lock().unwrap();
+      let matched_conflict = conflicts
+         .iter()
+         .enumerate()
+         .filter(|&(_,&routing::EvictionConflict{ref evicted, ..})| sender_id == &evicted.id )
+         .next();
+
+      if let Some(index, _) = matched_conflict{
+         let conflict = conflicts.remove(index);
+         self.table.revert_conflict(conflict);
+      }
    }
 
    pub fn process_incoming_rpc(&self, rpc: Rpc, mut source: net::SocketAddr) -> SubotaiResult<()>{
