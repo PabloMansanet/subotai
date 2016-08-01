@@ -1,6 +1,6 @@
 use hash::HASH_SIZE;
 use hash;
-use hash::Hash;
+use hash::SubotaiHash;
 use std::net;
 use std::collections::VecDeque;
 use std::mem;
@@ -13,7 +13,7 @@ mod tests;
 /// System-wide concurrency factor. It's used, for example, to decide the
 /// number of remote nodes to interrogate concurrently when performing a 
 /// network-wide lookup.
-pub const ALPHA    : usize = 3;
+pub const ALPHA: usize = 3;
 
 /// Impatience factor, valid in the range [0..ALPHA). When performing "waves",
 /// the impatience factor denotes how many nodes we can give up waiting for, before
@@ -21,7 +21,7 @@ pub const ALPHA    : usize = 3;
 ///
 /// If we send a request to ALPHA nodes during a lookup wave, we will start
 /// the next wave after we receive 'ALPHA - IMPATIENCE' responses.
-pub const IMPATIENCE    : usize = 1;
+pub const IMPATIENCE: usize = 1;
 
 /// Data structure factor. It's used, among other places, to dictate the 
 /// size of a K-bucket.
@@ -37,13 +37,13 @@ const BUCKET_DEPTH : usize = K;
 pub struct Table {
    buckets   : Vec<Bucket>,
    conflicts : Mutex<Vec<EvictionConflict>>,
-   parent_id : Hash,
+   parent_id : SubotaiHash,
 }
 
 /// ID - Address pair that identifies a unique Subotai node in the network.
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
 pub struct NodeInfo {
-   pub id      : Hash,
+   pub id      : SubotaiHash,
    pub address : net::SocketAddr,
 }
 
@@ -68,7 +68,7 @@ pub enum LookupResult {
 impl Table {
    /// Constructs a routing table based on a parent node id. Other nodes
    /// will be stored in this table based on their distance to the node id provided.
-   pub fn new(parent_id: Hash) -> Table {
+   pub fn new(parent_id: SubotaiHash) -> Table {
       Table { 
          buckets   : (0..HASH_SIZE).map(|_| Bucket::new()).collect(),
          conflicts : Mutex::new(Vec::new()),
@@ -123,7 +123,7 @@ impl Table {
    ///
    /// * "Bounce" back up, checking the buckets indexed by the position of
    ///   every "0" in that distance hash, in ascending order.
-   pub fn lookup(&self, id: &Hash, n: usize, blacklist: Option<&Vec<Hash>>) -> LookupResult {
+   pub fn lookup(&self, id: &SubotaiHash, n: usize, blacklist: Option<&Vec<SubotaiHash>>) -> LookupResult {
       if id == &self.parent_id {
          return LookupResult::Myself;
       }
@@ -145,7 +145,7 @@ impl Table {
       }
    }
 
-   fn is_allowed(id: &Hash, blacklist: Option<&Vec<Hash>>) -> bool {
+   fn is_allowed(id: &SubotaiHash, blacklist: Option<&Vec<SubotaiHash>>) -> bool {
       if let Some(blacklist) = blacklist {
          !blacklist.contains(id)
       } else {
@@ -173,7 +173,7 @@ impl Table {
    /// will return a "snapshot" of all nodes for a specific moment in time. 
    /// Buckets already visited may be modified elsewhere through iteraton, 
    /// and unvisited buckets may accrue new nodes.
-   pub fn closest_nodes_to<'a,'b>(&'a self, id: &'b Hash) -> ClosestNodesTo<'a,'b> {
+   pub fn closest_nodes_to<'a,'b>(&'a self, id: &'b SubotaiHash) -> ClosestNodesTo<'a,'b> {
       let distance = &self.parent_id ^ id;
       let descent  = distance.clone().into_ones().rev();
       let ascent   = distance.into_zeroes();
@@ -188,7 +188,7 @@ impl Table {
    }
 
    /// Returns a table entry for the specific node with a given hash.
-   pub fn specific_node(&self, id: &Hash) -> Option<NodeInfo> {
+   pub fn specific_node(&self, id: &SubotaiHash) -> Option<NodeInfo> {
       if let Some(index) = self.bucket_for_node(id) {
          let entries = &self.buckets[index].entries.read().unwrap();
          return entries.iter().find(|ref info| *id == info.id).cloned();
@@ -199,7 +199,7 @@ impl Table {
    /// Returns the appropriate position for a node, by computing
    /// the index where their prefix starts differing. If we are requesting
    /// the bucket for this table's own parent node, it can't be stored.
-   fn bucket_for_node(&self, id: &Hash) -> Option<usize> {
+   fn bucket_for_node(&self, id: &SubotaiHash) -> Option<usize> {
        (&self.parent_id ^ id).height()
    }
 
@@ -227,7 +227,7 @@ pub struct AllNodes<'a> {
 /// distance from a reference ID.
 pub struct ClosestNodesTo<'a, 'b> {
    table          : &'a Table,
-   reference      : &'b hash::Hash,     
+   reference      : &'b hash::SubotaiHash,     
    lookup_order   : Chain<Rev<hash::IntoOnes>, hash::IntoZeroes>,
    current_bucket : Vec<NodeInfo>,
 }

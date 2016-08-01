@@ -6,7 +6,7 @@ use rpc::Rpc;
 use time;
 use {SubotaiError, SubotaiResult};
 
-use hash::Hash;
+use hash::SubotaiHash;
 use std::net;
 use std::sync::Arc;
 use std::sync;
@@ -20,7 +20,7 @@ use node::*;
 /// charge of parallelizing those operations by spawning threads when
 /// adequate.
 pub struct Resources {
-   pub id       : Hash,
+   pub id       : SubotaiHash,
    pub table    : routing::Table,
    pub outbound : net::UdpSocket,
    pub inbound  : net::UdpSocket,
@@ -44,7 +44,7 @@ impl Resources {
    }
 
    /// Pings a node, blocking until ping response.
-   pub fn ping(&self, id: Hash) -> SubotaiResult<()> {
+   pub fn ping(&self, id: SubotaiHash) -> SubotaiResult<()> {
       let node = try!(self.find_node(&id));
       let rpc = Rpc::ping(self.id.clone(), self.inbound.local_addr().unwrap().port());
       let packet = rpc.serialize();
@@ -59,7 +59,7 @@ impl Resources {
    }
 
    /// Sends a ping and doesn't wait for a response. Used by the maintenance thread.
-   pub fn ping_and_forget(&self, id: Hash) -> SubotaiResult<()> {
+   pub fn ping_and_forget(&self, id: SubotaiHash) -> SubotaiResult<()> {
       let node = try!(self.find_node(&id));
       let rpc = Rpc::ping(self.id.clone(), self.inbound.local_addr().unwrap().port());
       let packet = rpc.serialize();
@@ -73,13 +73,13 @@ impl Resources {
    }
 
    /// Attempts to find a node through the network.
-   pub fn find_node(&self, id_to_find: &Hash) -> SubotaiResult<routing::NodeInfo> {
+   pub fn find_node(&self, id_to_find: &SubotaiHash) -> SubotaiResult<routing::NodeInfo> {
       // If the node is already present in our table, we are done early.
       if let Some(node) = self.table.specific_node(id_to_find) {
          return Ok(node);
       }
 
-      let mut queried_ids = Vec::<Hash>::with_capacity(routing::K);
+      let mut queried_ids = Vec::<SubotaiHash>::with_capacity(routing::K);
       let all_receptions = self.receptions();
       let loop_timeout = time::Duration::seconds(2 * NETWORK_TIMEOUT_S);
       let deadline = time::SteadyTime::now() + loop_timeout;
@@ -134,7 +134,7 @@ impl Resources {
          None => routing::K,
       };
 
-      let mut queried_ids = Vec::<Hash>::with_capacity(routing::K);
+      let mut queried_ids = Vec::<SubotaiHash>::with_capacity(routing::K);
       while queried_ids.len() < expected_length {
          let nodes_to_query: Vec<routing::NodeInfo> = self.table.all_nodes()
             .filter(|ref node_info| !queried_ids.contains(&node_info.id))
@@ -150,7 +150,7 @@ impl Resources {
       Ok(())
    }
 
-   fn bootstrap_wave(&self, nodes_to_query: &[routing::NodeInfo], queried: &mut Vec<Hash>) -> SubotaiResult<()> {
+   fn bootstrap_wave(&self, nodes_to_query: &[routing::NodeInfo], queried: &mut Vec<SubotaiHash>) -> SubotaiResult<()> {
       let rpc = Rpc::bootstrap(self.id.clone(), self.inbound.local_addr().unwrap().port());
       let packet = rpc.serialize(); 
       for node in nodes_to_query {
@@ -160,7 +160,7 @@ impl Resources {
       Ok(())
    }
 
-   fn lookup_wave(&self, id_to_find: &Hash, nodes_to_query: &[routing::NodeInfo], queried: &mut Vec<Hash>) -> SubotaiResult<()> {
+   fn lookup_wave(&self, id_to_find: &SubotaiHash, nodes_to_query: &[routing::NodeInfo], queried: &mut Vec<SubotaiHash>) -> SubotaiResult<()> {
       let rpc = Rpc::find_node(
          self.id.clone(), 
          self.inbound.local_addr().unwrap().port(),

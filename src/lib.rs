@@ -46,9 +46,10 @@ extern crate bus;
 extern crate time;
 
 pub mod node;
-pub mod hash;
-pub mod routing;
-pub mod rpc;
+mod hash;
+mod routing;
+mod storage;
+mod rpc;
 
 mod error;
 pub use error::SubotaiError as SubotaiError;

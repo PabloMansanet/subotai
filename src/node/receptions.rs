@@ -1,5 +1,5 @@
 use bus;
-use hash::Hash;
+use hash::SubotaiHash;
 use rpc;
 use time;
 use node::resources;
@@ -9,7 +9,7 @@ pub struct Receptions {
    iter          : bus::BusIntoIter<resources::Update>,
    timeout       : Option<time::SteadyTime>,
    rpc_filter    : Option<RpcFilter>,
-   sender_filter : Option<Vec<Hash>>,
+   sender_filter : Option<Vec<SubotaiHash>>,
    shutdown      : bool,
 }
 
@@ -50,13 +50,13 @@ impl Receptions {
    }
 
    /// Only from a sender
-   pub fn from(mut self, sender: Hash) -> Receptions {
+   pub fn from(mut self, sender: SubotaiHash) -> Receptions {
       self.sender_filter = Some(vec![sender]);
       self
    }
 
    /// Only from a set of senders
-   pub fn from_senders(mut self, senders: Vec<Hash>) -> Receptions {
+   pub fn from_senders(mut self, senders: Vec<SubotaiHash>) -> Receptions {
       self.sender_filter = Some(senders);
       self
    }

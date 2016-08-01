@@ -75,7 +75,7 @@ fn finding_a_nonexisting_node_in_a_simulated_network_times_out() {
    // Head finds tail in a few steps.
    let head = nodes.pop_front().unwrap();
 
-   let random_hash = hash::Hash::random();
+   let random_hash = hash::SubotaiHash::random();
    assert!(head.find_node(&random_hash).is_err());
 }
 

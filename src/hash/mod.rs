@@ -5,7 +5,6 @@ use std::fmt;
 use std::fmt::Write;
 use std::cmp::{PartialOrd, Ordering};
 
-
 /// Hash length in bits. Generally 160 for Kademlia variants.
 pub const HASH_SIZE : usize = 160;
 pub const HASH_SIZE_BYTES : usize = HASH_SIZE / 8;
@@ -14,20 +13,20 @@ pub const HASH_SIZE_BYTES : usize = HASH_SIZE / 8;
 ///
 /// We aren't interested in strong cryptography, but rather
 /// a simple way to generate `HASH_SIZE` bit key identifiers.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Hash {
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct SubotaiHash {
    pub raw : [u8; HASH_SIZE_BYTES],
 }
 
-impl Hash {
+impl SubotaiHash {
    /// Generates a blank hash (every bit set to 0).
-   pub fn blank() -> Hash {
-      Hash { raw : [0; HASH_SIZE_BYTES] }
+   pub fn blank() -> SubotaiHash {
+      SubotaiHash { raw : [0; HASH_SIZE_BYTES] }
    }
 
    /// Generates a random hash via kernel supplied entropy.
-   pub fn random() -> Hash {
-      let mut hash = Hash::blank();
+   pub fn random() -> SubotaiHash {
+      let mut hash = SubotaiHash::blank();
       thread_rng().fill_bytes(&mut hash.raw);
       hash
    }
@@ -89,7 +88,7 @@ impl Hash {
    }
 }
 
-impl fmt::Display for Hash {
+impl fmt::Display for SubotaiHash {
    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
       let mut leftpad_over = false;
       let mut hex = String::new();
@@ -110,26 +109,26 @@ impl fmt::Display for Hash {
 
 /// Iterator through the indices of each '0' in a hash.
 pub struct Zeroes<'a> { 
-   hash  : &'a Hash,
+   hash  : &'a SubotaiHash,
    index : usize,
    rev   : usize
 }
 
 /// Iterator through the indices of each '1' in a hash.
 pub struct Ones<'a> { 
-   hash  : &'a Hash,
+   hash  : &'a SubotaiHash,
    index : usize,
    rev   : usize,
 }
 
 pub struct IntoZeroes { 
-   hash  : Hash,
+   hash  : SubotaiHash,
    index : usize,
    rev   : usize
 }
 
 pub struct IntoOnes { 
-   hash  : Hash,
+   hash  : SubotaiHash,
    index : usize,
    rev   : usize,
 }
@@ -246,7 +245,7 @@ impl DoubleEndedIterator for IntoOnes {
    }
 }
 
-impl PartialOrd for Hash {
+impl PartialOrd for SubotaiHash {
    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
       for (a,b) in self.raw.iter().rev().zip(other.raw.iter().rev()) {
          match a.cmp(b) {
@@ -259,7 +258,7 @@ impl PartialOrd for Hash {
    }
 }
 
-impl Ord for Hash {
+impl Ord for SubotaiHash {
    fn cmp(&self, other: &Self) -> Ordering {
       match self.partial_cmp(other) {
          Some(order) => order,
@@ -268,11 +267,11 @@ impl Ord for Hash {
    }
 }
 
-impl<'a, 'b> BitXor<&'b Hash> for &'a Hash {
-   type Output = Hash;
+impl<'a, 'b> BitXor<&'b SubotaiHash> for &'a SubotaiHash {
+   type Output = SubotaiHash;
 
-   fn bitxor (self, rhs: &'b Hash) -> Hash {
-      let mut result = Hash::blank();
+   fn bitxor (self, rhs: &'b SubotaiHash) -> SubotaiHash {
+      let mut result = SubotaiHash::blank();
       for (d, a, b) in Zip::new((&mut result.raw, &self.raw, &rhs.raw)) {
          *d = a^b;
       }
@@ -280,10 +279,10 @@ impl<'a, 'b> BitXor<&'b Hash> for &'a Hash {
    }
 }
 
-impl BitXor for Hash {
-   type Output = Hash;
+impl BitXor for SubotaiHash {
+   type Output = SubotaiHash;
 
-   fn bitxor (self, rhs: Self) -> Hash {
+   fn bitxor (self, rhs: Self) -> SubotaiHash {
       let mut raw = self.raw;
       for (a, b) in raw.iter_mut().zip(rhs.raw.iter()) {
          *a ^= *b;
@@ -298,12 +297,12 @@ mod tests {
 
     #[test]
     fn random_generation() {
-       assert!(Hash::random() != Hash::random());
+       assert!(SubotaiHash::random() != SubotaiHash::random());
     }
 
     #[test]
     fn computing_height() {
-       let mut test_hash = Hash::blank();
+       let mut test_hash = SubotaiHash::blank();
        assert!(test_hash.height().is_none());
        
        // First bit
@@ -321,7 +320,7 @@ mod tests {
 
     #[test]
     fn bit_flipping() {
-       let mut test_hash = Hash::blank();
+       let mut test_hash = SubotaiHash::blank();
        test_hash.flip_bit(9);
        assert_eq!(test_hash.raw[1], 2);
        test_hash.flip_bit(9);
@@ -330,7 +329,7 @@ mod tests {
 
     #[test]
     fn iterating_over_ones() {
-       let mut test_hash = Hash::blank();
+       let mut test_hash = SubotaiHash::blank();
        let bits = vec![5usize,20,40];
 
        for bit in &bits {

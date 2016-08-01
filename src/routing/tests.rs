@@ -1,11 +1,11 @@
 use super::*;
 use std::net;
 use std::str::FromStr;
-use hash::Hash;
+use hash::SubotaiHash;
 use hash::HASH_SIZE;
 use rand::{thread_rng, Rng};
 
-fn node_info_no_net(id : Hash) -> NodeInfo {
+fn node_info_no_net(id : SubotaiHash) -> NodeInfo {
    NodeInfo {
       id : id,
       address : net::SocketAddr::from_str("0.0.0.0:0").unwrap(),
@@ -14,17 +14,17 @@ fn node_info_no_net(id : Hash) -> NodeInfo {
 
 #[test]
 fn inserting_and_retrieving_specific_node() {
-   let node_info = node_info_no_net(Hash::random());
-   let table = Table::new(Hash::random());
+   let node_info = node_info_no_net(SubotaiHash::random());
+   let table = Table::new(SubotaiHash::random());
    table.insert_node(node_info.clone());
    assert_eq!(table.specific_node(&node_info.id), Some(node_info));
 }
 
 #[test]
 fn measuring_table_length() {
-   let table = Table::new(Hash::random());
+   let table = Table::new(SubotaiHash::random());
    for _ in 0..50 {
-      table.insert_node(node_info_no_net(Hash::random()));
+      table.insert_node(node_info_no_net(SubotaiHash::random()));
    }
 
    assert_eq!(50, table.len() + table.conflicts.lock().unwrap().len());
@@ -32,7 +32,7 @@ fn measuring_table_length() {
 
 #[test]
 fn inserting_in_a_full_bucket_causes_eviction_conflict() {
-   let mut parent_id = Hash::blank();
+   let mut parent_id = SubotaiHash::blank();
    parent_id.raw[1] = 1; // This will guarantee all nodes will fall on the same bucket.
 
    let table = Table::new(parent_id);
@@ -41,7 +41,7 @@ fn inserting_in_a_full_bucket_causes_eviction_conflict() {
    assert!(table.conflicts.lock().unwrap().is_empty());
 
    // When we add another node to the same bucket, we cause a conflict.
-   let mut id = Hash::blank();
+   let mut id = SubotaiHash::blank();
    id.raw[0] = 0xFF;
    let info = node_info_no_net(id);
    table.insert_node(info);
@@ -55,7 +55,7 @@ fn inserting_in_a_full_bucket_causes_eviction_conflict() {
 
 #[test]
 fn reverting_an_eviction_conflict_reinserts_the_evicted_node_in_place_of_evictor() {
-   let mut parent_id = Hash::blank();
+   let mut parent_id = SubotaiHash::blank();
    parent_id.raw[1] = 1; // This will guarantee all nodes will fall on the same bucket.
 
    let table = Table::new(parent_id);
@@ -64,7 +64,7 @@ fn reverting_an_eviction_conflict_reinserts_the_evicted_node_in_place_of_evictor
    assert!(table.conflicts.lock().unwrap().is_empty());
 
    // When we add another node to the same bucket, we cause a conflict.
-   let mut id = Hash::blank();
+   let mut id = SubotaiHash::blank();
    id.raw[0] = 0xFF;
    let info = node_info_no_net(id);
    table.insert_node(info);
@@ -80,8 +80,8 @@ fn reverting_an_eviction_conflict_reinserts_the_evicted_node_in_place_of_evictor
 
 #[test]
 fn lookup_for_a_stored_node() { 
-   let table = Table::new(Hash::random());
-   let node = node_info_no_net(Hash::random());
+   let table = Table::new(SubotaiHash::random());
+   let node = node_info_no_net(SubotaiHash::random());
    table.insert_node(node.clone());
 
    assert_eq!(table.lookup(&node.id, 20, None), LookupResult::Found(node));
@@ -89,14 +89,14 @@ fn lookup_for_a_stored_node() {
 
 #[test]
 fn lookup_for_self() {
-   let parent_id = Hash::random();
+   let parent_id = SubotaiHash::random();
    let table = Table::new(parent_id.clone());
    assert_eq!(table.lookup(&parent_id, 20, None), LookupResult::Myself);
 }
 
 #[test]
 fn ascending_lookup_on_a_sparse_table() {
-   let parent_id = Hash::random();
+   let parent_id = SubotaiHash::random();
    let table = Table::new(parent_id.clone());
    for i in (10..50).filter(|x| x%2 == 0) {
      table.fill_bucket(i, 2);
@@ -118,7 +118,7 @@ fn ascending_lookup_on_a_sparse_table() {
 
 #[test]
 fn descending_lookup_on_a_sparse_table() {
-   let parent_id = Hash::random();
+   let parent_id = SubotaiHash::random();
    let table = Table::new(parent_id.clone());
    for i in (10..50).filter(|x| x%2 == 0) {
      table.fill_bucket(i, 2);
@@ -141,7 +141,7 @@ fn descending_lookup_on_a_sparse_table() {
 
 #[test]
 fn lookup_on_a_sparse_table() {
-   let parent_id = Hash::random();
+   let parent_id = SubotaiHash::random();
    let table = Table::new(parent_id.clone());
    for i in (10..50).filter(|x| x%2 == 0) {
      table.fill_bucket(i, 2);
@@ -164,19 +164,19 @@ fn lookup_on_a_sparse_table() {
 
 #[test]
 fn lookup_with_blacklist() {
-   let table = Table::new(Hash::random());
-   let blacklist = vec![node_info_no_net(Hash::random()); 5];
-   let normal_node = node_info_no_net(Hash::random());
+   let table = Table::new(SubotaiHash::random());
+   let blacklist = vec![node_info_no_net(SubotaiHash::random()); 5];
+   let normal_node = node_info_no_net(SubotaiHash::random());
 
    for node in &blacklist {
       table.insert_node(node.clone());
    }
   
-   let blacklist = blacklist.iter().map(|info: &NodeInfo| info.id.clone()).collect::<Vec<Hash>>();
+   let blacklist = blacklist.iter().map(|info: &NodeInfo| info.id.clone()).collect::<Vec<SubotaiHash>>();
 
    table.insert_node(normal_node.clone());
    
-   if let LookupResult::ClosestNodes(mut nodes) = table.lookup(&Hash::random(), 5, Some(&blacklist)) {
+   if let LookupResult::ClosestNodes(mut nodes) = table.lookup(&SubotaiHash::random(), 5, Some(&blacklist)) {
       assert_eq!(nodes.len(), 1);
       assert_eq!(nodes.pop().unwrap().id, normal_node.id);
    } else {
@@ -186,7 +186,7 @@ fn lookup_with_blacklist() {
 
 #[test]
 fn efficient_bounce_lookup_on_a_randomized_table() {
-   let parent_id = Hash::random();
+   let parent_id = SubotaiHash::random();
    let table = Table::new(parent_id.clone());
    for _ in 0..300 {
       // We create ids that will distribute more or less uniformly over the buckets.
@@ -239,7 +239,7 @@ impl Table {
    }
 }
 
-impl Hash {
+impl SubotaiHash {
    pub fn mutate_random_bits(&mut self, number_of_bits : u8) {
       for _ in 0..number_of_bits {
          

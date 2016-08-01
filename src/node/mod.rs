@@ -11,7 +11,7 @@ use SubotaiResult;
 
 pub use routing::NodeInfo as NodeInfo;
 
-use hash::Hash;
+use hash::SubotaiHash;
 use std::{net, thread};
 use std::sync;
 use std::time::Duration as StdDuration;
@@ -60,13 +60,13 @@ impl Node {
    }
 
    /// Returns the hash used to identify this node in the network.
-   pub fn id(&self) -> &Hash {
+   pub fn id(&self) -> &SubotaiHash {
       &self.resources.id
    }
 
    /// Constructs a node with a given inbound/outbound UDP port pair.
    pub fn with_ports(inbound_port: u16, outbound_port: u16) -> SubotaiResult<Node> {
-      let id = Hash::random();
+      let id = SubotaiHash::random();
 
       let resources = Arc::new(resources::Resources {
          id         : id.clone(),
@@ -94,7 +94,7 @@ impl Node {
 
    /// Sends a ping RPC to a destination node. If the ID is unknown, this request is 
    /// promoted into a find_node RPC followed by a ping to the node.
-   pub fn ping(&self, id: Hash) -> SubotaiResult<()> {
+   pub fn ping(&self, id: SubotaiHash) -> SubotaiResult<()> {
       self.resources.ping(id)
    }
 
@@ -119,7 +119,7 @@ impl Node {
 
    /// Recursive node lookup through the network. Will block until
    /// finished and return the node information if succeful.
-   pub fn find_node(&self, id: &Hash) -> SubotaiResult<NodeInfo> {
+   pub fn find_node(&self, id: &SubotaiHash) -> SubotaiResult<NodeInfo> {
       self.resources.find_node(id)
    }
 
