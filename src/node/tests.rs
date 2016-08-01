@@ -43,7 +43,7 @@ fn reception_iterator_times_out_correctly() {
 #[test]
 fn bootstrapping_and_finding_on_simulated_network() {
 
-   let mut nodes = simulated_network(100);
+   let mut nodes = simulated_network(30);
 
    // Head finds tail in a few steps.
    let head = nodes.pop_front().unwrap();
@@ -55,9 +55,9 @@ fn bootstrapping_and_finding_on_simulated_network() {
 #[test]
 fn finding_on_simulated_unresponsive_network() {
 
-   let mut nodes = simulated_network(100);
-   nodes.drain(30..70);
-   assert_eq!(nodes.len(), 60);
+   let mut nodes = simulated_network(30);
+   nodes.drain(5..25);
+   assert_eq!(nodes.len(), 10);
    
    // Head finds tail in a few steps.
    let head = nodes.pop_front().unwrap();
@@ -70,7 +70,7 @@ fn finding_on_simulated_unresponsive_network() {
 #[ignore]
 fn finding_a_nonexisting_node_in_a_simulated_network_times_out() {
 
-   let mut nodes = simulated_network(100);
+   let mut nodes = simulated_network(30);
    
    // Head finds tail in a few steps.
    let head = nodes.pop_front().unwrap();

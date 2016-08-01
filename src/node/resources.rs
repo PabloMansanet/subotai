@@ -68,8 +68,16 @@ impl Resources {
    /// Updates the table with a new node, and starts the conflict resolution mechanism
    /// if necessary.
    pub fn update_table(&self, info: routing::NodeInfo) {
+      
       match self.table.update_node(info) {
-         routing::UpdateResult::CausedConflict(conflict) => self.conflicts.lock().unwrap().push(conflict),
+         routing::UpdateResult::CausedConflict(conflict) => {
+            let mut conflicts = self.conflicts.lock().unwrap();
+            if conflicts.len() == routing::MAX_CONFLICTS {
+               self.table.revert_conflict(conflict);
+            } else {
+               conflicts.push(conflict);
+            }
+         },
          _ => (),
       }
    }
@@ -121,7 +129,7 @@ impl Resources {
    }
 
    pub fn bootstrap(&self, seed: routing::NodeInfo, network_size: Option<usize>) -> SubotaiResult<()>  {
-      self.table.update_node(seed);
+      self.update_table(seed);
 
       // Timeout for the entire operation.
       let total_timeout = time::Duration::seconds(2 * node::NETWORK_TIMEOUT_S);
@@ -214,7 +222,7 @@ impl Resources {
    }
 
    fn handle_ping(&self, sender: routing::NodeInfo) -> SubotaiResult<()> {
-      self.table.update_node(sender.clone());
+      self.update_table(sender.clone());
       let rpc = Rpc::ping_response(self.id.clone(), self.inbound.local_addr().unwrap().port());
       let packet = rpc.serialize();
       try!(self.outbound.send_to(&packet, sender.address));
@@ -222,7 +230,7 @@ impl Resources {
    }
 
    fn handle_bootstrap(&self, sender: routing::NodeInfo) -> SubotaiResult<()> {
-      self.table.update_node(sender.clone());
+      self.update_table(sender.clone());
       let closest_to_sender: Vec<_> = self.table.closest_nodes_to(&sender.id)
          .filter(|ref info| &info.id != &sender.id) // We don't want to reply with the sender itself
          .take(routing::K)
@@ -235,20 +243,20 @@ impl Resources {
    }
 
    fn handle_bootstrap_response(&self, payload: sync::Arc<rpc::BootstrapResponsePayload>, sender: routing::NodeInfo) -> SubotaiResult<()> {
-      self.table.update_node(sender.clone());
+      self.update_table(sender.clone());
       for node in &payload.nodes {
-         self.table.update_node(node.clone());
+         self.update_table(node.clone());
       }
       Ok(())
    }
 
    fn handle_ping_response(&self, sender: routing::NodeInfo) -> SubotaiResult<()> {
-      self.table.update_node(sender);
+      self.update_table(sender);
       Ok(())
    }
 
    fn handle_find_node(&self, payload: sync::Arc<rpc::FindNodePayload>, sender: routing::NodeInfo) -> SubotaiResult<()> {
-      self.table.update_node(sender.clone());
+      self.update_table(sender.clone());
       let lookup_results = self.table.lookup(&payload.id_to_find, payload.nodes_wanted, None);
       let rpc = Rpc::find_node_response(self.id.clone(), 
                                         self.inbound.local_addr().unwrap().port(),
@@ -260,10 +268,10 @@ impl Resources {
    }
 
    fn handle_find_node_response(&self, payload: sync::Arc<rpc::FindNodeResponsePayload>, sender: routing::NodeInfo) -> SubotaiResult<()> {
-      self.table.update_node(sender);
+      self.update_table(sender);
       match payload.result {
-         routing::LookupResult::ClosestNodes(ref nodes) => for node in nodes { self.table.update_node(node.clone()); },
-         routing::LookupResult::Found(ref node) => { self.table.update_node(node.clone()); },
+         routing::LookupResult::ClosestNodes(ref nodes) => for node in nodes { self.update_table(node.clone()); },
+         routing::LookupResult::Found(ref node) => { self.update_table(node.clone()); },
          _ => (),
       }
       Ok(())

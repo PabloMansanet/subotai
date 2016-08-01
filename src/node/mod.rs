@@ -85,7 +85,7 @@ impl Node {
          outbound   : try!(net::UdpSocket::bind(("0.0.0.0", outbound_port))),
          state      : sync::Mutex::new(State::OffGrid),
          updates    : sync::Mutex::new(bus::Bus::new(UPDATE_BUS_SIZE_BYTES)),
-         conflicts  : sync::Mutex::new(Vec::new()),
+         conflicts  : sync::Mutex::new(Vec::with_capacity(routing::MAX_CONFLICTS)),
       });
 
       try!(resources.inbound.set_read_timeout(Some(StdDuration::new(SOCKET_TIMEOUT_S,0))));

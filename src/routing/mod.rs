@@ -22,8 +22,9 @@ pub const IMPATIENCE    : usize = 1;
 
 /// Data structure factor. It's used, among other places, to dictate the 
 /// size of a K-bucket.
-pub const K        : usize = 20;
-const BUCKET_DEPTH : usize = K;
+pub const K         : usize = 20;
+pub const BUCKET_DEPTH  : usize = K;
+pub const MAX_CONFLICTS : usize = 3*K;
 
 /// Routing table with 160 buckets of `BUCKET_DEPTH` (k) node
 /// identifiers each, constructed around a parent node ID.
