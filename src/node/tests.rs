@@ -102,7 +102,7 @@ fn simulated_network(nodes: usize) -> VecDeque<node::Node> {
 fn updating_table_with_full_bucket_starts_the_conflict_resolution_mechanism()
 {
    let node = node::Node::new().unwrap();
-   node.resources.table.fill_bucket(8, routing::K as u8); // Bucket completely full
+   node.resources.table.fill_bucket(8, routing::K_FACTOR as u8); // Bucket completely full
 
    let mut id = node.id().clone();
    id.flip_bit(8);
@@ -123,7 +123,7 @@ fn generating_a_conflict_causes_a_ping_to_the_evicted_node()
    let index = alpha.resources.table.bucket_for_node(beta.id()).unwrap();
 
    // We fill the bucket corresponding to Beta until we are ready to cause a conflict.
-   alpha.resources.table.fill_bucket(index, (routing::K -1) as u8);
+   alpha.resources.table.fill_bucket(index, (routing::K_FACTOR -1) as u8);
 
    // We expect a ping to beta
    let pings = beta.receptions()
@@ -144,7 +144,7 @@ fn generating_too_many_conflicts_causes_the_node_to_enter_defensive_state()
 {
    let node = node::Node::new().unwrap();
 
-   for index in 0..(routing::K + routing::MAX_CONFLICTS) {
+   for index in 0..(routing::K_FACTOR + routing::MAX_CONFLICTS) {
       let mut id = node.id().clone();
       id.flip_bit(140); // Arbitrary bucket
       id.raw[0] = index as u8;

@@ -41,7 +41,7 @@ fn inserting_in_a_full_bucket_causes_eviction_conflict() {
 
    let table = Table::new(parent_id);
 
-   table.fill_bucket(8, super::BUCKET_DEPTH as u8);
+   table.fill_bucket(8, super::K_FACTOR as u8);
 
    // When we add another node to the same bucket, we cause a conflict.
    let mut id = SubotaiHash::blank();

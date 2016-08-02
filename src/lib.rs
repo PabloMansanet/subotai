@@ -50,7 +50,7 @@ extern crate time;
 
 pub mod node;
 pub mod hash;
-mod routing;
+pub mod routing;
 mod storage;
 mod rpc;
 

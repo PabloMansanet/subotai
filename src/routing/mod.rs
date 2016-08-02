@@ -22,12 +22,16 @@ pub const IMPATIENCE: usize = 1;
 
 /// Data structure factor. It's used, among other places, to dictate the 
 /// size of a K-bucket.
-pub const K                 : usize = 20;
-pub const BUCKET_DEPTH      : usize = K;
-pub const MAX_CONFLICTS     : usize = 3*K;
-pub const DEFENSE_TIMEOUT_S : u64 = 30;
+pub const K_FACTOR          : usize = 20;
 
-/// Routing table with 160 buckets of `BUCKET_DEPTH` (k) node
+/// Maximum amount of eviction conflicts allowed before the node goes into
+/// defensive mode. 
+pub const MAX_CONFLICTS     : usize = 3*K_FACTOR;
+
+/// Minimum time the node will spend in defensive mode.
+pub const DEFENSE_TIMEOUT_S : u64   = 30;
+
+/// Routing table with 160 buckets of `K_FACTOR` node
 /// identifiers each, constructed around a parent node ID.
 ///
 /// The structure employs least-recently seen eviction. Conflicts generated
@@ -111,7 +115,7 @@ impl Table {
          }
 
          bucket.entries.retain(|ref stored_info| info.id != stored_info.id);
-         if bucket.entries.len() == BUCKET_DEPTH {
+         if bucket.entries.len() == K_FACTOR {
             let conflict = EvictionConflict { 
                evicted      : bucket.entries.pop_front().unwrap(),
                evictor      : info.clone(),
@@ -186,7 +190,7 @@ impl Table {
    pub fn all_nodes(&self) -> AllNodes {
       AllNodes {
          table          : self,
-         current_bucket : Vec::with_capacity(BUCKET_DEPTH),
+         current_bucket : Vec::with_capacity(K_FACTOR),
          bucket_index   : 0,
       }
    }
@@ -207,7 +211,7 @@ impl Table {
          table          : self,
          reference      : id,
          lookup_order   : lookup_order,
-         current_bucket : Vec::with_capacity(BUCKET_DEPTH),
+         current_bucket : Vec::with_capacity(K_FACTOR),
       }
    }
 
@@ -321,7 +325,7 @@ impl<'a> Iterator for AllNodes<'a> {
 impl Bucket {
    fn new() -> Bucket {
       Bucket{
-         entries     : VecDeque::with_capacity(BUCKET_DEPTH),
+         entries     : VecDeque::with_capacity(K_FACTOR),
          last_lookup : None,
       }
    }

@@ -103,12 +103,12 @@ impl Resources {
          return Ok(node);
       }
 
-      let mut queried_ids = Vec::<SubotaiHash>::with_capacity(routing::K);
+      let mut queried_ids = Vec::<SubotaiHash>::with_capacity(routing::K_FACTOR);
       let all_receptions = self.receptions();
       let loop_timeout = time::Duration::seconds(3 * node::NETWORK_TIMEOUT_S);
       let deadline = time::SteadyTime::now() + loop_timeout;
      
-      while queried_ids.len() < routing::K && time::SteadyTime::now() < deadline {
+      while queried_ids.len() < routing::K_FACTOR && time::SteadyTime::now() < deadline {
          // We query the 'ALPHA' nodes closest to the target we haven't yet queried.
          let nodes_to_query: Vec<routing::NodeInfo> = self.table.closest_nodes_to(id_to_find)
             .filter(|ref info| !queried_ids.contains(&info.id))
@@ -156,10 +156,10 @@ impl Resources {
       // We want our network to be as big as the K factor, or the user supplied limit.
       let expected_length = match network_size {
          Some(size) => size,
-         None => routing::K,
+         None => routing::K_FACTOR,
       };
 
-      let mut queried_ids = Vec::<SubotaiHash>::with_capacity(routing::K);
+      let mut queried_ids = Vec::<SubotaiHash>::with_capacity(routing::K_FACTOR);
       while queried_ids.len() < expected_length {
          let nodes_to_query: Vec<routing::NodeInfo> = self.table.all_nodes()
             .filter(|ref node_info| !queried_ids.contains(&node_info.id))
@@ -190,7 +190,7 @@ impl Resources {
          self.id.clone(), 
          self.inbound.local_addr().unwrap().port(),
          id_to_find.clone(),
-         routing::K,
+         routing::K_FACTOR,
       );
       let packet = rpc.serialize(); 
       for node in nodes_to_query {
@@ -247,7 +247,7 @@ impl Resources {
       self.update_table(sender.clone());
       let closest_to_sender: Vec<_> = self.table.closest_nodes_to(&sender.id)
          .filter(|ref info| &info.id != &sender.id) // We don't want to reply with the sender itself
-         .take(routing::K)
+         .take(routing::K_FACTOR)
          .collect();
 
       let rpc = Rpc::bootstrap_response(self.id.clone(), self.inbound.local_addr().unwrap().port(), closest_to_sender);
