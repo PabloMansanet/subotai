@@ -57,8 +57,8 @@ fn bootstrapping_and_finding_on_simulated_network() {
 fn finding_on_simulated_unresponsive_network() {
 
    let mut nodes = simulated_network(30);
-   nodes.drain(5..25);
-   assert_eq!(nodes.len(), 10);
+   nodes.drain(10..20);
+   assert_eq!(nodes.len(), 20);
    
    // Head finds tail in a few steps.
    let head = nodes.pop_front().unwrap();

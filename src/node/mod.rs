@@ -50,6 +50,10 @@ pub enum State {
    OffGrid,
    /// The node is online and connected to the network.
    Alive,
+   /// The node is in defensive mode. Too many conflicts have 
+   /// been generated recently, so the node gives preference
+   /// to its older contacts untill all conflicts are resolved.
+   Defensive,
    /// The node is in an error state.
    Error,
    /// The node is in a process of shutting down;
@@ -71,7 +75,7 @@ impl Node {
 
    /// Returns the current state of the node.
    pub fn state(&self)-> State {
-      *self.resources.state.lock().unwrap()
+      *self.resources.state.read().unwrap()
    }
 
    /// Constructs a node with a given inbound/outbound UDP port pair.
@@ -83,7 +87,7 @@ impl Node {
          table      : routing::Table::new(id),
          inbound    : try!(net::UdpSocket::bind(("0.0.0.0", inbound_port))),
          outbound   : try!(net::UdpSocket::bind(("0.0.0.0", outbound_port))),
-         state      : sync::Mutex::new(State::OffGrid),
+         state      : sync::RwLock::new(State::OffGrid),
          updates    : sync::Mutex::new(bus::Bus::new(UPDATE_BUS_SIZE_BYTES)),
          conflicts  : sync::Mutex::new(Vec::with_capacity(routing::MAX_CONFLICTS)),
       });
@@ -120,14 +124,14 @@ impl Node {
    /// Bootstraps the node from a seed, and returns the amount of nodes in the final table.
    pub fn bootstrap(&self, seed: NodeInfo) -> SubotaiResult<usize> {
        try!(self.resources.bootstrap(seed, None));
-       *self.resources.state.lock().unwrap() = State::Alive;
+       *self.resources.state.write().unwrap() = State::Alive;
        Ok(self.resources.table.len())
    }
 
    /// Bootstraps to a network with a limited number of nodes.
    pub fn bootstrap_until(&self, seed: NodeInfo, network_size: usize) -> SubotaiResult<usize> {
        try!(self.resources.bootstrap(seed, Some(network_size)));
-       *self.resources.state.lock().unwrap() = State::Alive;
+       *self.resources.state.write().unwrap() = State::Alive;
        Ok(self.resources.table.len())
    }
 
@@ -143,7 +147,7 @@ impl Node {
 
       loop {
          let message = resources.inbound.recv_from(&mut buffer);
-         if let State::ShuttingDown = *resources.state.lock().unwrap() {
+         if let State::ShuttingDown = *resources.state.read().unwrap() {
             resources.updates.lock().unwrap().broadcast(resources::Update::Shutdown);
             break;
          }
@@ -164,30 +168,47 @@ impl Node {
    #[allow(unused_must_use)]
    fn conflict_resolution_loop(resources: sync::Arc<resources::Resources>) {
       loop {
-         if let State::ShuttingDown = *resources.state.lock().unwrap() {
+         if let State::ShuttingDown = *resources.state.read().unwrap() {
             break;
          }
          
-         { // Lock scope
+         let conflicts_empty = { // Lock scope
             let mut conflicts = resources.conflicts.lock().unwrap();
             // Conflicts that weren't solved in five pings are removed.
             // This means the incoming node that caused the conflict has priority.
             conflicts.retain(|&routing::EvictionConflict{times_pinged, ..}| times_pinged < 5);
+
             // We ping the evicted nodes for all conflicts that remain.
             for conflict in conflicts.iter_mut() {
                resources.ping_for_conflict(&conflict.evicted);
                conflict.times_pinged += 1;
             }
-         }
+            conflicts.is_empty()
+         };
+
          // We wait for responses from these nodes.
          thread::sleep(StdDuration::new(1u64,0));
+         
+         let defensive = { // Lock scope
+            *resources.state.read().unwrap() == State::Defensive
+         };
+
+         if defensive && conflicts_empty {
+            // We stall the conflict resolution thread and leave defensive mode after a certain period.
+            thread::sleep(StdDuration::new(routing::DEFENSE_TIMEOUT_S,0));
+            let mut state = resources.state.write().unwrap();
+            // Assuming we are still in defensive state.
+            if *state == State::Defensive {
+               *state = State::Alive;
+            }
+         }
       }
    }
 }
 
 impl Drop for Node {
    fn drop(&mut self) {
-      *self.resources.state.lock().unwrap() = State::ShuttingDown;
+      *self.resources.state.write().unwrap() = State::ShuttingDown;
    }
 }
 

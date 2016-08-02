@@ -14,9 +14,10 @@ use node::receptions;
 pub struct Resources {
    pub id        : SubotaiHash,
    pub table     : routing::Table,
+   //pub storage   : storage::Storage,
    pub outbound  : net::UdpSocket,
    pub inbound   : net::UdpSocket,
-   pub state     : sync::Mutex<node::State>,
+   pub state     : sync::RwLock<node::State>,
    pub updates   : sync::Mutex<bus::Bus<Update>>,
    pub conflicts : sync::Mutex<Vec<routing::EvictionConflict>>,
 }
@@ -75,13 +76,20 @@ impl Resources {
    /// Updates the table with a new node, and starts the conflict resolution mechanism
    /// if necessary.
    pub fn update_table(&self, info: routing::NodeInfo) {
+      let defensive = { // Lock scope
+         *self.state.read().unwrap() == node::State::Defensive
+      };
+
       match self.table.update_node(info) {
          routing::UpdateResult::CausedConflict(conflict) => {
-            let mut conflicts = self.conflicts.lock().unwrap();
-            if conflicts.len() == routing::MAX_CONFLICTS {
+            if defensive {
                self.table.revert_conflict(conflict);
             } else {
+               let mut conflicts = self.conflicts.lock().unwrap();
                conflicts.push(conflict);
+               if conflicts.len() == routing::MAX_CONFLICTS {
+                  *self.state.write().unwrap() = node::State::Defensive;
+               }
             }
          },
          _ => (),
@@ -97,7 +105,7 @@ impl Resources {
 
       let mut queried_ids = Vec::<SubotaiHash>::with_capacity(routing::K);
       let all_receptions = self.receptions();
-      let loop_timeout = time::Duration::seconds(2 * node::NETWORK_TIMEOUT_S);
+      let loop_timeout = time::Duration::seconds(3 * node::NETWORK_TIMEOUT_S);
       let deadline = time::SteadyTime::now() + loop_timeout;
      
       while queried_ids.len() < routing::K && time::SteadyTime::now() < deadline {
@@ -124,10 +132,11 @@ impl Resources {
             }
          }
       }
-       
+      
       // One last wait until success or timeout, to compensate for impatience
       // (It could be that the nodes we ignored earlier come back with the response)
-      all_receptions.during(time::Duration::seconds(node::NETWORK_TIMEOUT_S))
+      all_receptions
+         .during(time::Duration::seconds(node::NETWORK_TIMEOUT_S))
          .filter(|ref rpc| rpc.found_node(id_to_find))
          .take(1)
          .count();
@@ -138,7 +147,7 @@ impl Resources {
       self.update_table(seed);
 
       // Timeout for the entire operation.
-      let total_timeout = time::Duration::seconds(2 * node::NETWORK_TIMEOUT_S);
+      let total_timeout = time::Duration::seconds(3 * node::NETWORK_TIMEOUT_S);
       let deadline = time::SteadyTime::now() + total_timeout;
       let mut responses = self.receptions()
          .of_kind(receptions::KindFilter::BootstrapResponse)
@@ -189,7 +198,6 @@ impl Resources {
          try!(self.outbound.send_to(&packet, node.address));
          queried.push(node.id.clone());
       }
-
       Ok(())
    }
 
