@@ -108,7 +108,7 @@ impl Node {
 
    /// Sends a ping RPC to a destination node. If the ID is unknown, this request is 
    /// promoted into a find_node RPC followed by a ping to the node.
-   pub fn ping(&self, id: Hash) -> SubotaiResult<()> {
+   pub fn ping(&self, id: &Hash) -> SubotaiResult<()> {
       self.resources.ping(id)
    }
 
@@ -161,6 +161,7 @@ impl Node {
 
    /// Initiates pings to stale nodes that have been part of an eviction
    /// conflict, and disposes of conflicts that haven't been resolved.
+   #[allow(unused_must_use)]
    fn conflict_resolution_loop(resources: sync::Arc<resources::Resources>) {
       loop {
          if let State::ShuttingDown = *resources.state.lock().unwrap() {
@@ -171,10 +172,10 @@ impl Node {
             let mut conflicts = resources.conflicts.lock().unwrap();
             // Conflicts that weren't solved in five pings are removed.
             // This means the incoming node that caused the conflict has priority.
-            conflicts.retain(|&routing::EvictionConflict{times_pinged, ..}| times_pinged <= 5);
+            conflicts.retain(|&routing::EvictionConflict{times_pinged, ..}| times_pinged < 5);
             // We ping the evicted nodes for all conflicts that remain.
             for conflict in conflicts.iter_mut() {
-               resources.ping_and_forget(conflict.evicted.id.clone()).unwrap();
+               resources.ping_for_conflict(&conflict.evicted);
                conflict.times_pinged += 1;
             }
          }

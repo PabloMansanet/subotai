@@ -20,7 +20,7 @@ fn node_ping() {
    let beta_receptions = alpha.receptions().during(span).from(beta.id().clone());
 
    // Alpha pings beta.
-   assert!(alpha.ping(beta.resources.id.clone()).is_ok());
+   assert!(alpha.ping(&beta.resources.id).is_ok());
    assert_eq!(1, beta_receptions.count());
 }
 
@@ -118,17 +118,24 @@ fn generating_a_conflict_causes_a_ping_to_the_evicted_node()
 {
    let alpha = node::Node::new().unwrap();
    let beta = node::Node::new().unwrap();
-   alpha.bootstrap_until(beta.local_info(), 1).unwrap();
+   alpha.resources.update_table(beta.local_info());
   
    let index = alpha.resources.table.bucket_for_node(beta.id()).unwrap();
+
+   // We fill the bucket corresponding to Beta until we are ready to cause a conflict.
+   alpha.resources.table.fill_bucket(index, (routing::K -1) as u8);
 
    // We expect a ping to beta
    let pings = beta.receptions()
       .of_kind(receptions::KindFilter::Ping)
       .during(time::Duration::seconds(2));
 
-   // We fill the bucket corresponding to Beta until we cause a conflict.
-   alpha.resources.table.fill_bucket(index, routing::K as u8);
+   // Adding a new node causes a conflict.
+   let mut id = beta.id().clone();
+   id.raw[0] = 0xFF;
+   let info = node_info_no_net(id);
+   alpha.resources.update_table(info);
+   
    assert_eq!(pings.count(), 1);
 }
 

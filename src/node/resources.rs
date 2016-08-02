@@ -37,8 +37,8 @@ impl Resources {
    }
 
    /// Pings a node, blocking until ping response.
-   pub fn ping(&self, id: Hash) -> SubotaiResult<()> {
-      let node = try!(self.find_node(&id));
+   pub fn ping(&self, id: &Hash) -> SubotaiResult<()> {
+      let node = try!(self.find_node(id));
       let rpc = Rpc::ping(self.id.clone(), self.inbound.local_addr().unwrap().port());
       let packet = rpc.serialize();
       let responses = self.receptions()
@@ -54,14 +54,21 @@ impl Resources {
       }
    }
 
-   /// Sends a ping and doesn't wait for a response. Used by the maintenance thread
-   /// and for conflict resolution.
-   pub fn ping_and_forget(&self, id: Hash) -> SubotaiResult<()> {
-      let node = try!(self.find_node(&id));
+   /// Sends a ping and doesn't wait for a response. Used by the maintenance thread.
+   pub fn ping_and_forget(&self, id: &Hash) -> SubotaiResult<()> {
+      let node = try!(self.find_node(id));
       let rpc = Rpc::ping(self.id.clone(), self.inbound.local_addr().unwrap().port());
       let packet = rpc.serialize();
       try!(self.outbound.send_to(&packet, node.address));
+      Ok(())
+   }
 
+   /// Sends a ping to an evicted node not present in the routing table anymore. Used
+   /// by the conflict resolution thread.
+   pub fn ping_for_conflict(&self, evicted: &routing::NodeInfo) -> SubotaiResult<()> {
+      let rpc = Rpc::ping(self.id.clone(), self.inbound.local_addr().unwrap().port());
+      let packet = rpc.serialize();
+      try!(self.outbound.send_to(&packet, evicted.address));
       Ok(())
    }
 
@@ -70,12 +77,10 @@ impl Resources {
    pub fn update_table(&self, info: routing::NodeInfo) {
       match self.table.update_node(info) {
          routing::UpdateResult::CausedConflict(conflict) => {
-            println!("Got a conflict");
             let mut conflicts = self.conflicts.lock().unwrap();
             if conflicts.len() == routing::MAX_CONFLICTS {
                self.table.revert_conflict(conflict);
             } else {
-               println!("Pusing a conflict");
                conflicts.push(conflict);
             }
          },

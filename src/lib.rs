@@ -29,7 +29,7 @@
 //!
 //! let receptions = beta.receptions().during(time::Duration::seconds(1));
 //!
-//! alpha.ping(beta.local_info().id);
+//! alpha.ping(beta.id());
 //!  
 //! assert_eq!(receptions.count(), 1);
 //! # }

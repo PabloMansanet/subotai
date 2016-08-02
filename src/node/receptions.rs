@@ -143,8 +143,8 @@ mod tests {
               .during(time::Duration::seconds(1))
               .of_kind(KindFilter::Ping);
 
-       assert!(alpha.ping(beta.local_info().id).is_ok());
-       assert!(alpha.ping(beta.local_info().id).is_ok());
+       assert!(alpha.ping(beta.id()).is_ok());
+       assert!(alpha.ping(beta.id()).is_ok());
 
        assert_eq!(beta_receptions.count(),2);
     }
@@ -167,8 +167,8 @@ mod tests {
        assert!(alpha.bootstrap_until(receiver.local_info(), 1).is_ok());
        assert!(beta.bootstrap_until(receiver.local_info(), 1).is_ok());
 
-       assert!(alpha.ping(receiver.local_info().id).is_ok());
-       assert!(beta.ping(receiver.local_info().id).is_ok());
+       assert!(alpha.ping(receiver.id()).is_ok());
+       assert!(beta.ping(receiver.id()).is_ok());
 
        assert_eq!(receptions.count(),1);
     }

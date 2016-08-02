@@ -99,15 +99,14 @@ impl Table {
             result = UpdateResult::UpdatedNode;
          }
 
-         println!("Adding at length {} for bucket {}", bucket.entries.len(), index);
          bucket.entries.retain(|ref stored_info| info.id != stored_info.id);
          if bucket.entries.len() == BUCKET_DEPTH {
-            println!("Caused conflict");
             let conflict = EvictionConflict { 
                evicted      : bucket.entries.pop_front().unwrap(),
                inserted     : info.clone(),
                times_pinged : 0,
             };
+
             result = UpdateResult::CausedConflict(conflict);
          }
          bucket.entries.push_back(info);
