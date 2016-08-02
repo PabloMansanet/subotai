@@ -13,7 +13,7 @@ alpha.bootstrap(beta.local_info());
 
 let receptions = 
    beta.receptions()
-       .of_kind(PingResponse);
+       .of_kind(Ping);
        .during(Duration::seconds(1))
 
 alpha.ping(beta.id());
