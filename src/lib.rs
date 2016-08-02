@@ -29,14 +29,14 @@
 //!
 //! let receptions = beta.receptions().during(time::Duration::seconds(1));
 //!
-//! alpha.ping(beta.local_info().id);
+//! alpha.ping(beta.id());
 //!  
 //! assert_eq!(receptions.count(), 1);
 //! # }
 //!
 //! ```
 #![allow(dead_code, unknown_lints, wrong_self_convention)]
-#![feature(custom_derive, plugin)]
+#![feature(custom_derive, plugin, vec_deque_contains)]
 #![plugin(serde_macros)]
 
 extern crate itertools;

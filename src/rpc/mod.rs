@@ -1,51 +1,67 @@
+//! #Remote Procedure Call. 
+//!
+//! Subotai RPCs are the packets sent over TCP between nodes. They
+//! contain information about the sender, as well as an optional payload.
+
 use bincode::serde;
-use routing;
-use bincode;
-use node;
+use {routing, bincode, node};
 use std::sync::Arc;
 use hash::SubotaiHash;
 
+/// Serializable struct implementation of an RPC.
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
 pub struct Rpc {
-   pub kind        : Kind,
-   pub sender_id   : SubotaiHash,
-   pub reply_port  : u16,
+   /// Category of RPC.
+   pub kind       : Kind,
+   /// Hash ID of the original sender.
+   pub sender_id  : SubotaiHash,
+   /// Port through which the original sender is listening for responses.
+   pub reply_port : u16,
 }
 
 impl Rpc {
+   /// Constructs a ping RPC. Pings simply carry information about the
+   /// sender, and expect a response indicating that the receiving node
+   /// is alive.
    pub fn ping(sender_id: SubotaiHash, reply_port: u16) -> Rpc {
       Rpc { kind: Kind::Ping, sender_id: sender_id, reply_port: reply_port }
    }
 
+   /// Constructs a ping response. 
    pub fn ping_response(sender_id: SubotaiHash, reply_port: u16) -> Rpc {
       Rpc { kind: Kind::PingResponse, sender_id: sender_id, reply_port: reply_port }
    }
 
-   /// Asks for a the results of a table node lookup.
+   /// Constructs an RPC asking for a the results of a table node lookup.
    pub fn find_node(sender_id: SubotaiHash, reply_port: u16, id_to_find: SubotaiHash, nodes_wanted: usize) -> Rpc {
       let payload = Arc::new(FindNodePayload { id_to_find: id_to_find, nodes_wanted: nodes_wanted });
       Rpc { kind: Kind::FindNode(payload), sender_id: sender_id, reply_port: reply_port }
    }
 
-   /// Encapsulates the response to a previously requested find_node RPC.
+   /// Constructs an RPC with the response to a find_node RPC.
    pub fn find_node_response(sender_id: SubotaiHash, reply_port: u16, id_to_find: SubotaiHash, result: routing::LookupResult) -> Rpc {
       let payload = Arc::new(FindNodeResponsePayload { id_to_find: id_to_find, result: result} );
       Rpc { kind: Kind::FindNodeResponse(payload), sender_id: sender_id, reply_port: reply_port }
    }
 
+   /// Constructs a bootstrap RPC. It asks the receiving node to provide a list of
+   /// nodes close to the sender, to facilitate joining the network.
    pub fn bootstrap(sender_id: SubotaiHash, reply_port: u16) -> Rpc {
       Rpc { kind: Kind::Bootstrap, sender_id: sender_id, reply_port: reply_port }
    }
 
+   /// Constructs the response to a bootstrap RPC.
    pub fn bootstrap_response(sender_id: SubotaiHash, reply_port: u16, nodes: Vec<routing::NodeInfo>) -> Rpc {
       let payload = Arc::new(BootstrapResponsePayload { nodes: nodes } );
       Rpc { kind: Kind::BootstrapResponse(payload), sender_id: sender_id, reply_port: reply_port }
    }
 
+   /// Serializes an RPC to be send over TCP. 
    pub fn serialize(&self) -> Vec<u8> {
        serde::serialize(&self, bincode::SizeLimit::Bounded(node::SOCKET_BUFFER_SIZE_BYTES as u64)).unwrap()
    }
 
+   /// Deserializes into an RPC structure.
    pub fn deserialize(serialized: &[u8]) -> serde::DeserializeResult<Rpc> {
        serde::deserialize(serialized)
    }
@@ -58,6 +74,7 @@ impl Rpc {
          _ => false,
       }
    }
+
    /// Reports whether the RPC is a FindNodeResponse that found
    /// a particular node
    pub fn found_node(&self, id: &SubotaiHash) -> bool {
@@ -71,6 +88,9 @@ impl Rpc {
    }
 }
 
+/// Types of RPC contemplated by the standard, plus some unique to the Subotai
+/// DHT (such as as a specialized Bootstrap RPC). Some include reference
+/// counted payloads.
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
 pub enum Kind {
    Ping,
@@ -87,6 +107,7 @@ pub enum Kind {
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
 pub struct StorePayload;
 
+/// Includes the ID to find and the amount of nodes required.
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
 pub struct FindNodePayload {
    pub id_to_find    : SubotaiHash,
@@ -96,12 +117,14 @@ pub struct FindNodePayload {
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
 pub struct FindValuePayload;
 
+/// Includes the ID to find and the results of the table lookup.
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
 pub struct FindNodeResponsePayload {
    pub id_to_find : SubotaiHash,
    pub result     : routing::LookupResult,
 }
 
+/// Includes a vector of up to 'K' nodes close to the respondee.
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
 pub struct BootstrapResponsePayload {
    pub nodes: Vec<routing::NodeInfo>,

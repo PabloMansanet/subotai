@@ -1,21 +1,30 @@
+//! #Node
+//!
+//! The node module is the main point of contact with Subotai. Node structs contain
+//! all the pieces needed to join a Subotai network.
+//!
+//! When you initialize a Node struct, a few threads are automatically launched that 
+//! take care of listening to RPCs from other nodes, automatic maintenance and eviction
+//! of older node entries, and more. 
+//!
+//! Nodes start in the `OffGrid` state by default, meaning they aren't associated to
+//! a network. You must bootstrap the node by providing the address of another node,
+//! at which point the state will change to `Alive`.
+//!
+//! Destroying a node automatically schedules all threads to terminate after finishing 
+//! any pending operations.
+
 pub mod receptions;
+pub use routing::NodeInfo as NodeInfo;
 
 #[cfg(test)]
 mod tests;
 mod resources;
 
-use routing;
-use rpc;
-use bus;
-use SubotaiResult;
-
-pub use routing::NodeInfo as NodeInfo;
-
+use {routing, rpc, bus, SubotaiResult};
 use hash::SubotaiHash;
-use std::{net, thread};
-use std::sync;
+use std::{net, thread, sync};
 use std::time::Duration as StdDuration;
-use std::sync::Arc;
 
 /// Timeout period in seconds to stop waiting for a remote node response. 
 pub const NETWORK_TIMEOUT_S : i64 = 5;
@@ -23,33 +32,29 @@ pub const NETWORK_TIMEOUT_S : i64 = 5;
 /// Size of a typical UDP socket buffer.
 pub const SOCKET_BUFFER_SIZE_BYTES : usize = 65536;
 
-const SOCKET_TIMEOUT_S         : u64   = 1;
-const UPDATE_BUS_SIZE_BYTES    : usize = 50;
+const SOCKET_TIMEOUT_MS     : u64   = 200;
+const UPDATE_BUS_SIZE_BYTES : usize = 50;
 
 /// Subotai node. 
 ///
 /// On construction, it launches a detached thread for packet reception.
 pub struct Node {
-   resources: Arc<resources::Resources>,
+   resources: sync::Arc<resources::Resources>,
 }
 
 /// State of a Subotai node. 
-///
-/// * `OffGrid`: The node is initialized but disconnected from the 
-///   network. Needs to go through succesful bootstrapping.
-///
-/// * `Alive`: The node is online and connected to the network.
-///
-/// * `Error`: The node is in an error state.
-///
-/// * `ShuttingDown`: The node is in a process of shutting down;
-///   all of it's resources will be deallocated after completion
-///   of any pending async operations.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone, Copy)]
 pub enum State {
+   /// The node is initialized but disconnected from the 
+   /// network. Needs to go through succesful bootstrapping.
    OffGrid,
+   /// The node is online and connected to the network.
    Alive,
+   /// The node is in an error state.
    Error,
+   /// The node is in a process of shutting down;
+   /// all of its resources will be deallocated after completion
+   /// of any pending async operations.
    ShuttingDown,
 }
 
@@ -64,23 +69,32 @@ impl Node {
       &self.resources.id
    }
 
+   /// Returns the current state of the node.
+   pub fn state(&self)-> State {
+      *self.resources.state.lock().unwrap()
+   }
+
    /// Constructs a node with a given inbound/outbound UDP port pair.
    pub fn with_ports(inbound_port: u16, outbound_port: u16) -> SubotaiResult<Node> {
       let id = SubotaiHash::random();
 
-      let resources = Arc::new(resources::Resources {
+      let resources = sync::Arc::new(resources::Resources {
          id         : id.clone(),
          table      : routing::Table::new(id),
          inbound    : try!(net::UdpSocket::bind(("0.0.0.0", inbound_port))),
          outbound   : try!(net::UdpSocket::bind(("0.0.0.0", outbound_port))),
          state      : sync::Mutex::new(State::OffGrid),
-         updates    : sync::Mutex::new(bus::Bus::new(UPDATE_BUS_SIZE_BYTES))
+         updates    : sync::Mutex::new(bus::Bus::new(UPDATE_BUS_SIZE_BYTES)),
+         conflicts  : sync::Mutex::new(Vec::with_capacity(routing::MAX_CONFLICTS)),
       });
 
-      try!(resources.inbound.set_read_timeout(Some(StdDuration::new(SOCKET_TIMEOUT_S,0))));
+      try!(resources.inbound.set_read_timeout(Some(StdDuration::from_millis(SOCKET_TIMEOUT_MS))));
 
       let reception_resources = resources.clone();
       thread::spawn(move || { Node::reception_loop(reception_resources) });
+
+      let conflict_resolution_resources = resources.clone();
+      thread::spawn(move || { Node::conflict_resolution_loop(conflict_resolution_resources) });
 
       Ok( Node{ resources: resources } )
    }
@@ -94,7 +108,7 @@ impl Node {
 
    /// Sends a ping RPC to a destination node. If the ID is unknown, this request is 
    /// promoted into a find_node RPC followed by a ping to the node.
-   pub fn ping(&self, id: SubotaiHash) -> SubotaiResult<()> {
+   pub fn ping(&self, id: &SubotaiHash) -> SubotaiResult<()> {
       self.resources.ping(id)
    }
 
@@ -124,7 +138,7 @@ impl Node {
    }
 
    /// Receives and processes data as long as the table is alive.
-   fn reception_loop(resources: Arc<resources::Resources>) {
+   fn reception_loop(resources: sync::Arc<resources::Resources>) {
       let mut buffer = [0u8; SOCKET_BUFFER_SIZE_BYTES];
 
       loop {
@@ -142,6 +156,31 @@ impl Node {
          }
 
          resources.updates.lock().unwrap().broadcast(resources::Update::Tick);
+      }
+   }
+
+   /// Initiates pings to stale nodes that have been part of an eviction
+   /// conflict, and disposes of conflicts that haven't been resolved.
+   #[allow(unused_must_use)]
+   fn conflict_resolution_loop(resources: sync::Arc<resources::Resources>) {
+      loop {
+         if let State::ShuttingDown = *resources.state.lock().unwrap() {
+            break;
+         }
+         
+         { // Lock scope
+            let mut conflicts = resources.conflicts.lock().unwrap();
+            // Conflicts that weren't solved in five pings are removed.
+            // This means the incoming node that caused the conflict has priority.
+            conflicts.retain(|&routing::EvictionConflict{times_pinged, ..}| times_pinged < 5);
+            // We ping the evicted nodes for all conflicts that remain.
+            for conflict in conflicts.iter_mut() {
+               resources.ping_for_conflict(&conflict.evicted);
+               conflict.times_pinged += 1;
+            }
+         }
+         // We wait for responses from these nodes.
+         thread::sleep(StdDuration::new(1u64,0));
       }
    }
 }

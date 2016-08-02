@@ -1,20 +1,30 @@
-use bus;
-use hash::SubotaiHash;
-use rpc;
-use time;
+//! #Receptions
+//!
+//! A receptions object is a convenient iterator over all RPCs received
+//! by a node. 
+//!
+//! By default, iterating over a Receptions object will block indefinitely
+//! while waiting for packet arrivals, but it's possible to specify an
+//! imprecise timeout so the iterator is only valid for a span of time.
+//!
+//! It is also possible to filter the iterator so it only applies to particular
+//! senders or RPC kinds without resorting to iterator adapters.
+
+use {bus, rpc, time};
 use node::resources;
+use hash::SubotaiHash;
 
 /// A blocking iterator over the RPCs received by a node.
 pub struct Receptions {
    iter          : bus::BusIntoIter<resources::Update>,
    timeout       : Option<time::SteadyTime>,
-   rpc_filter    : Option<RpcFilter>,
+   kind_filter   : Option<KindFilter>,
    sender_filter : Option<Vec<SubotaiHash>>,
    shutdown      : bool,
 }
 
 #[derive(Eq, PartialEq, Debug)]
-pub enum RpcFilter {
+pub enum KindFilter {
    Ping,
    PingResponse,
    Store,
@@ -26,12 +36,18 @@ pub enum RpcFilter {
    BootstrapResponse,
 }
 
+impl resources::Resources {
+   pub fn receptions(&self) -> Receptions {
+      Receptions::new(self)
+   }
+}
+
 impl Receptions {
-   pub fn new(resources: &resources::Resources) -> Receptions {
+   fn new(resources: &resources::Resources) -> Receptions {
       Receptions {
          iter          : resources.updates.lock().unwrap().add_rx().into_iter(),
          timeout       : None,
-         rpc_filter    : None,
+         kind_filter    : None,
          sender_filter : None,
          shutdown      : false,
       }
@@ -43,19 +59,19 @@ impl Receptions {
       self
    }
 
-   /// Only produces a particular rpc
-   pub fn rpc(mut self, filter: RpcFilter) -> Receptions {
-      self.rpc_filter = Some(filter);
+   /// Only produces a particular rpc kind.
+   pub fn of_kind(mut self, filter: KindFilter) -> Receptions {
+      self.kind_filter = Some(filter);
       self
    }
 
-   /// Only from a sender
+   /// Only from a sender.
    pub fn from(mut self, sender: SubotaiHash) -> Receptions {
       self.sender_filter = Some(vec![sender]);
       self
    }
 
-   /// Only from a set of senders
+   /// Only from a set of senders.
    pub fn from_senders(mut self, senders: Vec<SubotaiHash>) -> Receptions {
       self.sender_filter = Some(senders);
       self
@@ -79,17 +95,17 @@ impl Iterator for Receptions {
          //if let Some(resources::Update::RpcReceived(rpc)) = self.iter.next() {
          match self.iter.next() {
             Some(resources::Update::RpcReceived(rpc)) => {
-               if let Some(ref rpc_filter) = self.rpc_filter {
+               if let Some(ref kind_filter) = self.kind_filter {
                   match rpc.kind {
-                     rpc::Kind::Ping                 => if *rpc_filter != RpcFilter::Ping { continue; },
-                     rpc::Kind::PingResponse         => if *rpc_filter != RpcFilter::PingResponse { continue; },
-                     rpc::Kind::Store(_)             => if *rpc_filter != RpcFilter::Store { continue; },
-                     rpc::Kind::FindNode(_)          => if *rpc_filter != RpcFilter::FindNode { continue; },
-                     rpc::Kind::FindNodeResponse(_)  => if *rpc_filter != RpcFilter::FindNodeResponse { continue; },
-                     rpc::Kind::FindValue(_)         => if *rpc_filter != RpcFilter::FindValue { continue; },
-                     rpc::Kind::FindValueResponse(_) => if *rpc_filter != RpcFilter::FindValueResponse { continue; },
-                     rpc::Kind::Bootstrap            => if *rpc_filter != RpcFilter::Bootstrap { continue; },
-                     rpc::Kind::BootstrapResponse(_) => if *rpc_filter != RpcFilter::BootstrapResponse { continue; },
+                     rpc::Kind::Ping                 => if *kind_filter != KindFilter::Ping { continue; },
+                     rpc::Kind::PingResponse         => if *kind_filter != KindFilter::PingResponse { continue; },
+                     rpc::Kind::Store(_)             => if *kind_filter != KindFilter::Store { continue; },
+                     rpc::Kind::FindNode(_)          => if *kind_filter != KindFilter::FindNode { continue; },
+                     rpc::Kind::FindNodeResponse(_)  => if *kind_filter != KindFilter::FindNodeResponse { continue; },
+                     rpc::Kind::FindValue(_)         => if *kind_filter != KindFilter::FindValue { continue; },
+                     rpc::Kind::FindValueResponse(_) => if *kind_filter != KindFilter::FindValueResponse { continue; },
+                     rpc::Kind::Bootstrap            => if *kind_filter != KindFilter::Bootstrap { continue; },
+                     rpc::Kind::BootstrapResponse(_) => if *kind_filter != KindFilter::BootstrapResponse { continue; },
                   }
                }
 
@@ -113,7 +129,7 @@ impl Iterator for Receptions {
 mod tests {
     use node;
     use time;
-    use super::RpcFilter;
+    use super::KindFilter;
 
     #[test]
     fn produces_rpcs_but_not_ticks() {
@@ -125,10 +141,10 @@ mod tests {
        let beta_receptions = 
           beta.receptions()
               .during(time::Duration::seconds(1))
-              .rpc(RpcFilter::Ping);
+              .of_kind(KindFilter::Ping);
 
-       assert!(alpha.ping(beta.local_info().id).is_ok());
-       assert!(alpha.ping(beta.local_info().id).is_ok());
+       assert!(alpha.ping(beta.id()).is_ok());
+       assert!(alpha.ping(beta.id()).is_ok());
 
        assert_eq!(beta_receptions.count(),2);
     }
@@ -146,13 +162,13 @@ mod tests {
           receiver.receptions()
                   .during(time::Duration::seconds(1))
                   .from_senders(allowed)
-                  .rpc(RpcFilter::Ping);
+                  .of_kind(KindFilter::Ping);
 
        assert!(alpha.bootstrap_until(receiver.local_info(), 1).is_ok());
        assert!(beta.bootstrap_until(receiver.local_info(), 1).is_ok());
 
-       assert!(alpha.ping(receiver.local_info().id).is_ok());
-       assert!(beta.ping(receiver.local_info().id).is_ok());
+       assert!(alpha.ping(receiver.id()).is_ok());
+       assert!(beta.ping(receiver.id()).is_ok());
 
        assert_eq!(receptions.count(),1);
     }

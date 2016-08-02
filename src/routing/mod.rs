@@ -1,11 +1,8 @@
+use std::{net, mem, sync, iter};
+use {hash, time};
 use hash::HASH_SIZE;
-use hash;
 use hash::SubotaiHash;
-use std::net;
 use std::collections::VecDeque;
-use std::mem;
-use std::sync::{Mutex, RwLock};
-use std::iter::{Chain, Rev};
 
 #[cfg(test)]
 mod tests;
@@ -25,8 +22,9 @@ pub const IMPATIENCE: usize = 1;
 
 /// Data structure factor. It's used, among other places, to dictate the 
 /// size of a K-bucket.
-pub const K        : usize = 20;
-const BUCKET_DEPTH : usize = K;
+pub const K         : usize = 20;
+pub const BUCKET_DEPTH  : usize = K;
+pub const MAX_CONFLICTS : usize = 3*K;
 
 /// Routing table with 160 buckets of `BUCKET_DEPTH` (k) node
 /// identifiers each, constructed around a parent node ID.
@@ -35,8 +33,7 @@ const BUCKET_DEPTH : usize = K;
 /// by evicting a node by inserting a newer one remain tracked, so they can
 /// be resolved later.
 pub struct Table {
-   buckets   : Vec<Bucket>,
-   conflicts : Mutex<Vec<EvictionConflict>>,
+   buckets   : Vec<sync::RwLock<Bucket> >,
    parent_id : SubotaiHash,
 }
 
@@ -65,20 +62,25 @@ pub enum LookupResult {
    Nothing,
 }
 
+pub enum UpdateResult {
+   AddedNode,
+   UpdatedNode,
+   CausedConflict(EvictionConflict),
+}
+
 impl Table {
    /// Constructs a routing table based on a parent node id. Other nodes
    /// will be stored in this table based on their distance to the node id provided.
    pub fn new(parent_id: SubotaiHash) -> Table {
       Table { 
-         buckets   : (0..HASH_SIZE).map(|_| Bucket::new()).collect(),
-         conflicts : Mutex::new(Vec::new()),
+         buckets   : (0..HASH_SIZE).map(|_| sync::RwLock::new(Bucket::new())).collect(),
          parent_id : parent_id,
       }
    }
 
    /// Returns the number of nodes currently on the table.
    pub fn len(&self) -> usize {
-      self.buckets.iter().map(|bucket| bucket.entries.read().unwrap().len()).sum()
+      self.buckets.iter().map(|bucket| bucket.read().unwrap().entries.len()).sum()
    }
 
    pub fn is_empty(&self) -> bool {
@@ -88,22 +90,28 @@ impl Table {
    /// Inserts a node in the routing table. Employs least-recently-seen eviction
    /// by kicking out the oldest node in case the bucket is full, and registering
    /// an eviction conflict that can be revised later.
-   pub fn insert_node(&self, info: NodeInfo) {
+   pub fn update_node(&self, info: NodeInfo) -> UpdateResult {
+      let mut result = UpdateResult::AddedNode;
       if let Some(index) = self.bucket_for_node(&info.id) {
-         let bucket = &self.buckets[index];
-         let mut entries = bucket.entries.write().unwrap();
+         let mut bucket = self.buckets[index].write().unwrap();
 
-         entries.retain(|ref stored_info| info.id != stored_info.id);
-         if entries.len() == BUCKET_DEPTH {
-            let conflict = EvictionConflict { 
-               evicted  : entries.pop_front().unwrap(),
-               inserted : info.clone() 
-            };
-            let mut conflicts = self.conflicts.lock().unwrap();
-            conflicts.push(conflict);
+         if bucket.entries.contains(&info) {
+            result = UpdateResult::UpdatedNode;
          }
-         entries.push_back(info);
+
+         bucket.entries.retain(|ref stored_info| info.id != stored_info.id);
+         if bucket.entries.len() == BUCKET_DEPTH {
+            let conflict = EvictionConflict { 
+               evicted      : bucket.entries.pop_front().unwrap(),
+               inserted     : info.clone(),
+               times_pinged : 0,
+            };
+
+            result = UpdateResult::CausedConflict(conflict);
+         }
+         bucket.entries.push_back(info);
       }
+      result
    }
 
    /// Performs a node lookup on the routing table. The lookup result may
@@ -123,6 +131,11 @@ impl Table {
    ///
    /// * "Bounce" back up, checking the buckets indexed by the position of
    ///   every "0" in that distance hash, in ascending order.
+   ///
+   /// This algorithm should be as efficient as the one proposed in the 
+   /// Kademlia paper with bucket splitting, but it avoids the necessity of
+   /// splitting the buckets, reducing the amount of dynamic allocations
+   /// needed. 
    pub fn lookup(&self, id: &SubotaiHash, n: usize, blacklist: Option<&Vec<SubotaiHash>>) -> LookupResult {
       if id == &self.parent_id {
          return LookupResult::Myself;
@@ -190,7 +203,7 @@ impl Table {
    /// Returns a table entry for the specific node with a given hash.
    pub fn specific_node(&self, id: &SubotaiHash) -> Option<NodeInfo> {
       if let Some(index) = self.bucket_for_node(id) {
-         let entries = &self.buckets[index].entries.read().unwrap();
+         let entries = &self.buckets[index].read().unwrap().entries;
          return entries.iter().find(|ref info| *id == info.id).cloned();
       }
       None
@@ -199,17 +212,19 @@ impl Table {
    /// Returns the appropriate position for a node, by computing
    /// the index where their prefix starts differing. If we are requesting
    /// the bucket for this table's own parent node, it can't be stored.
-   fn bucket_for_node(&self, id: &SubotaiHash) -> Option<usize> {
+   pub fn bucket_for_node(&self, id: &SubotaiHash) -> Option<usize> {
        (&self.parent_id ^ id).height()
    }
 
-   fn revert_conflict(&self, conflict: EvictionConflict) {
+   pub fn revert_conflict(&self, conflict: EvictionConflict) {
       if let Some(index) = self.bucket_for_node(&conflict.inserted.id) {
-         let mut entries = self.buckets[index].entries.write().unwrap();
+         let bucket = &self.buckets[index];
+         let ref mut entries = bucket.write().unwrap().entries;
+
          if let Some(ref mut evictor) = entries.iter_mut().find(|ref info| conflict.inserted.id == info.id) {
             mem::replace::<NodeInfo>(evictor, conflict.evicted);
          } else {
-            self.insert_node(conflict.evicted);
+            self.update_node(conflict.evicted);
          }
       }
    }
@@ -228,16 +243,17 @@ pub struct AllNodes<'a> {
 pub struct ClosestNodesTo<'a, 'b> {
    table          : &'a Table,
    reference      : &'b hash::SubotaiHash,     
-   lookup_order   : Chain<Rev<hash::IntoOnes>, hash::IntoZeroes>,
+   lookup_order   : iter::Chain<iter::Rev<hash::IntoOnes>, hash::IntoZeroes>,
    current_bucket : Vec<NodeInfo>,
 }
 
 /// Represents a conflict derived from attempting to insert a node in a full
 /// bucket. 
 #[derive(Debug,Clone)]
-struct EvictionConflict {
-   evicted  : NodeInfo,
-   inserted : NodeInfo
+pub struct EvictionConflict {
+   pub evicted      : NodeInfo,
+   inserted         : NodeInfo,
+   pub times_pinged : u8,
 }
 
 /// Bucket size is estimated to be small enough not to warrant
@@ -247,7 +263,8 @@ struct EvictionConflict {
 /// concurrent access to the table.
 #[derive(Debug)]
 struct Bucket {
-   entries: RwLock<VecDeque<NodeInfo>>,
+   entries     : VecDeque<NodeInfo>,
+   last_lookup : Option<time::SteadyTime>,
 }
 
 impl<'a, 'b> Iterator for ClosestNodesTo<'a, 'b> {
@@ -260,11 +277,11 @@ impl<'a, 'b> Iterator for ClosestNodesTo<'a, 'b> {
 
       while let Some(index) = self.lookup_order.next() {
          let mut new_bucket = { // Lock scope
-            let bucket = self.table.buckets[index].entries.read().unwrap();
-            if bucket.is_empty() {
+            let ref bucket = self.table.buckets[index].read().unwrap();
+            if bucket.entries.is_empty() {
                continue;
             }
-            bucket.clone()
+            bucket.entries.clone()
          }.into_iter().collect::<Vec<NodeInfo>>();
 
          new_bucket.sort_by(|ref info_a, ref info_b| (&info_b.id ^ self.reference).cmp(&(&info_a.id ^ self.reference)));
@@ -281,7 +298,7 @@ impl<'a> Iterator for AllNodes<'a> {
    fn next(&mut self) -> Option<NodeInfo> {
       while self.bucket_index < HASH_SIZE && self.current_bucket.is_empty() {
          let mut new_bucket = { // Lock scope
-            self.table.buckets[self.bucket_index].entries.read().unwrap().clone()
+            self.table.buckets[self.bucket_index].read().unwrap().entries.clone()
          }.into_iter().collect::<Vec<NodeInfo>>();
 
          new_bucket.sort_by_key(|ref info| &info.id ^ &self.table.parent_id);
@@ -295,7 +312,8 @@ impl<'a> Iterator for AllNodes<'a> {
 impl Bucket {
    fn new() -> Bucket {
       Bucket{
-         entries: RwLock::new(VecDeque::with_capacity(BUCKET_DEPTH))
+         entries     : VecDeque::with_capacity(BUCKET_DEPTH),
+         last_lookup : None,
       }
    }
 }
