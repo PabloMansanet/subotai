@@ -12,10 +12,9 @@ let beta  = Node::new().unwrap();
 alpha.bootstrap(beta.local_info());
 
 let receptions = 
-   beta
-   .receptions()
-   .during(Duration::seconds(1))
-   .rpc(PingResponse);
+   beta.receptions()
+       .of_kind(PingResponse);
+       .during(Duration::seconds(1))
 
 alpha.ping(beta.id());
 assert_eq!(receptions.count(), 1);
