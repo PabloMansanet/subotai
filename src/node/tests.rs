@@ -139,6 +139,26 @@ fn generating_a_conflict_causes_a_ping_to_the_evicted_node()
    assert_eq!(pings.count(), 1);
 }
 
+#[test]
+fn generating_too_many_conflicts_causes_the_node_to_enter_defensive_state()
+{
+   let node = node::Node::new().unwrap();
+
+   for index in 0..(routing::K + routing::MAX_CONFLICTS) {
+      let mut id = node.id().clone();
+      id.flip_bit(140); // Arbitrary bucket
+      id.raw[0] = index as u8;
+      let info = node_info_no_net(id);
+      node.resources.update_table(info);
+   }
+
+   let state = *node.resources.state.read().unwrap();
+   match state {
+      node::State::Defensive => (),
+      _ => panic!(),
+   }
+}
+
 fn node_info_no_net(id : hash::SubotaiHash) -> routing::NodeInfo {
    routing::NodeInfo {
       id : id,
