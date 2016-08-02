@@ -157,6 +157,21 @@ fn generating_too_many_conflicts_causes_the_node_to_enter_defensive_state()
       node::State::Defensive => (),
       _ => panic!(),
    }
+
+   // Trying to add new conflictive nodes while in defensive state will fail.
+   let mut id = node.id().clone();
+   id.flip_bit(140); // Arbitrary bucket
+   id.raw[0] = 0xFF;
+   let info = node_info_no_net(id.clone());
+
+   node.resources.update_table(info);
+   assert!(node.resources.table.specific_node(&id).is_none());
+
+   // However, if they would fall in a different bucket, it's ok.
+   id.flip_bit(155);
+   let info = node_info_no_net(id.clone());
+   node.resources.update_table(info);
+   assert!(node.resources.table.specific_node(&id).is_some());
 }
 
 fn node_info_no_net(id : hash::SubotaiHash) -> routing::NodeInfo {

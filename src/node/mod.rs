@@ -21,7 +21,7 @@ pub use routing::NodeInfo as NodeInfo;
 mod tests;
 mod resources;
 
-use {routing, rpc, bus, SubotaiResult};
+use {storage, routing, rpc, bus, SubotaiResult};
 use hash::SubotaiHash;
 use std::{net, thread, sync};
 use std::time::Duration as StdDuration;
@@ -83,13 +83,14 @@ impl Node {
       let id = SubotaiHash::random();
 
       let resources = sync::Arc::new(resources::Resources {
-         id         : id.clone(),
-         table      : routing::Table::new(id),
-         inbound    : try!(net::UdpSocket::bind(("0.0.0.0", inbound_port))),
-         outbound   : try!(net::UdpSocket::bind(("0.0.0.0", outbound_port))),
-         state      : sync::RwLock::new(State::OffGrid),
-         updates    : sync::Mutex::new(bus::Bus::new(UPDATE_BUS_SIZE_BYTES)),
-         conflicts  : sync::Mutex::new(Vec::with_capacity(routing::MAX_CONFLICTS)),
+         id        : id.clone(),
+         table     : routing::Table::new(id),
+         storage   : storage::Storage::new(),
+         inbound   : try!(net::UdpSocket::bind(("0.0.0.0", inbound_port))),
+         outbound  : try!(net::UdpSocket::bind(("0.0.0.0", outbound_port))),
+         state     : sync::RwLock::new(State::OffGrid),
+         updates   : sync::Mutex::new(bus::Bus::new(UPDATE_BUS_SIZE_BYTES)),
+         conflicts : sync::Mutex::new(Vec::with_capacity(routing::MAX_CONFLICTS)),
       });
 
       try!(resources.inbound.set_read_timeout(Some(StdDuration::from_millis(SOCKET_TIMEOUT_MS))));

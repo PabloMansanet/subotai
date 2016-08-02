@@ -91,6 +91,13 @@ impl Table {
    /// Inserts a node in the routing table. Employs least-recently-seen eviction
    /// by kicking out the oldest node in case the bucket is full, and registering
    /// an eviction conflict that can be revised later.
+   ///
+   /// This differs to Kademlia in that newer nodes take preference until
+   /// older nodes respond to the conflict resolution ping. However, there
+   /// is a mechanism against DDoS attacks in the form of a defensive 
+   /// mode, that is adopted when too many conflicts happen in a short period
+   /// of time. Defensive mode causes the node to reject any updates that would
+   /// cause conflicts until a given time period has elapsed.
    pub fn update_node(&self, info: NodeInfo) -> UpdateResult {
       let mut result = UpdateResult::AddedNode;
       if let Some(index) = self.bucket_for_node(&info.id) {
@@ -104,7 +111,7 @@ impl Table {
          if bucket.entries.len() == BUCKET_DEPTH {
             let conflict = EvictionConflict { 
                evicted      : bucket.entries.pop_front().unwrap(),
-               inserted     : info.clone(),
+               evictor      : info.clone(),
                times_pinged : 0,
             };
 
@@ -218,14 +225,12 @@ impl Table {
    }
 
    pub fn revert_conflict(&self, conflict: EvictionConflict) {
-      if let Some(index) = self.bucket_for_node(&conflict.inserted.id) {
+      if let Some(index) = self.bucket_for_node(&conflict.evictor.id) {
          let bucket = &self.buckets[index];
          let ref mut entries = bucket.write().unwrap().entries;
 
-         if let Some(ref mut evictor) = entries.iter_mut().find(|ref info| conflict.inserted.id == info.id) {
+         if let Some(ref mut evictor) = entries.iter_mut().find(|ref info| conflict.evictor.id == info.id) {
             mem::replace::<NodeInfo>(evictor, conflict.evicted);
-         } else {
-            self.update_node(conflict.evicted);
          }
       }
    }
@@ -253,7 +258,7 @@ pub struct ClosestNodesTo<'a, 'b> {
 #[derive(Debug,Clone)]
 pub struct EvictionConflict {
    pub evicted      : NodeInfo,
-   inserted         : NodeInfo,
+   evictor          : NodeInfo,
    pub times_pinged : u8,
 }
 

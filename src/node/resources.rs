@@ -1,4 +1,4 @@
-use {node, routing, rpc, bus, time, SubotaiError, SubotaiResult};
+use {node, routing, storage, rpc, bus, time, SubotaiError, SubotaiResult};
 use std::{net, sync};
 use rpc::Rpc;
 use hash::SubotaiHash;
@@ -14,7 +14,7 @@ use node::receptions;
 pub struct Resources {
    pub id        : SubotaiHash,
    pub table     : routing::Table,
-   //pub storage   : storage::Storage,
+   pub storage   : storage::Storage,
    pub outbound  : net::UdpSocket,
    pub inbound   : net::UdpSocket,
    pub state     : sync::RwLock<node::State>,
