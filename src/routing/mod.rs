@@ -46,26 +46,29 @@ pub struct NodeInfo {
 }
 
 /// Result of a table lookup. 
-/// * `Myself`: The requested ID is precisely the parent node.
-///
-/// * `Found`: The requested ID was found on the table.
-///
-/// * `ClosestNodes`: The requested ID was not found, but here are the next
-///   closest nodes to consult.
-/// 
-/// * `Nothing`: The table is empty or the blacklist provided doesn't allow 
-///   returning any close nodes.
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
 pub enum LookupResult {
+   /// The requested ID is precisely the parent node.
    Myself,
+   /// The requested ID was found on the table.
    Found(NodeInfo), 
+   /// The requested ID was not found, but here are the next
+   /// closest nodes to consult.
    ClosestNodes(Vec<NodeInfo>),
+   /// The table is empty or the blacklist provided doesn't allow 
+   /// returning any close nodes.
    Nothing,
 }
 
+/// Result of updating the table with a recently contacted node.
 pub enum UpdateResult {
+   /// There wasn't an entry for the node, so it has been added.
    AddedNode,
+   /// There was an entry for the node, so it has been moved to
+   /// the tail of its bucket.
    UpdatedNode,
+   /// There wasn't an entry for the node and the bucket was full,
+   /// so it has been added, evicting an older node.
    CausedConflict(EvictionConflict),
 }
 

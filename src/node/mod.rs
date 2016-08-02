@@ -52,7 +52,7 @@ pub enum State {
    Alive,
    /// The node is in defensive mode. Too many conflicts have 
    /// been generated recently, so the node gives preference
-   /// to its older contacts untill all conflicts are resolved.
+   /// to its older contacts until all conflicts are resolved.
    Defensive,
    /// The node is in an error state.
    Error,
@@ -196,7 +196,7 @@ impl Node {
 
          if defensive && conflicts_empty {
             // We stall the conflict resolution thread and leave defensive mode after a certain period.
-            thread::sleep(StdDuration::new(routing::DEFENSE_TIMEOUT_S,0));
+            thread::sleep(StdDuration::new(routing::DEFENSE_TIMEOUT_S, 0));
             let mut state = resources.state.write().unwrap();
             // Assuming we are still in defensive state.
             if *state == State::Defensive {

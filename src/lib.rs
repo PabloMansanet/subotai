@@ -8,7 +8,10 @@
 //!   a sane result or an explicit timeout. Internally however, subotai is fully concurrent,
 //!   and parallel operations will often help each other complete!
 //!
-//! * **Introduce nodes first, resolve conflicts later**: ...
+//! * **Introduce nodes first, resolve conflicts later**: Subotai differs to the original Kademlia
+//!   implementation in that it gives temporary priority to newer contacts for full buckets. This
+//!   makes the network more dynamic and capable to adapt quickly, while still providing protection
+//!   against DDoS attacks in the form of a defensive state.
 //!
 //! * ...
 //!
@@ -46,7 +49,7 @@ extern crate bus;
 extern crate time;
 
 pub mod node;
-mod hash;
+pub mod hash;
 mod routing;
 mod storage;
 mod rpc;

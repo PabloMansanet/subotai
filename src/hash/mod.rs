@@ -51,6 +51,8 @@ impl SubotaiHash {
       }
    }
 
+   /// Provides a consuming iterator through the 
+   /// indices of each of its "0" bits.
    pub fn into_zeroes(self) -> IntoZeroes {
       IntoZeroes {
          hash  : self,
@@ -59,6 +61,8 @@ impl SubotaiHash {
       }
    }
 
+   /// Provides a consuming iterator through the 
+   /// indices of each of its "1" bits.
    pub fn into_ones(self) -> IntoOnes {
       IntoOnes {
          hash  : self,
@@ -121,12 +125,14 @@ pub struct Ones<'a> {
    rev   : usize,
 }
 
+/// Consuming iterator through the indices of each '0' in a hash.
 pub struct IntoZeroes { 
    hash  : SubotaiHash,
    index : usize,
    rev   : usize
 }
 
+/// Consuming iterator through the indices of each '1' in a hash.
 pub struct IntoOnes { 
    hash  : SubotaiHash,
    index : usize,
