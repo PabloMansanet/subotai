@@ -196,6 +196,32 @@ fn remote_key_value_storage()
    assert_eq!(value, retrieved_value);
 }
 
+#[test]
+fn node_probing_in_simulated_network()
+{
+   let mut nodes = simulated_network(40);
+   // We manually collect the info tags of all nodes except for the tail.
+   let tail = nodes.pop_back().unwrap();
+   let mut info_nodes: Vec<routing::NodeInfo> = nodes
+      .iter()
+      .map(|ref node| node.local_info())
+      .collect();
+
+
+   // We sort our manual collection by distance to the tail node.
+   info_nodes.sort_by(|ref info_a, ref info_b| (&info_a.id ^ tail.id()).cmp(&(&info_b.id ^ tail.id())));
+   info_nodes.truncate(routing::K_FACTOR); // This guarantees us the closest ids to the tail
+
+   let head = nodes.pop_front().unwrap();
+   let probe_results = head.resources.probe_node(tail.id()).unwrap();
+   
+   assert_eq!(info_nodes.len(), probe_results.len());
+   for (a, b) in info_nodes.iter().zip(probe_results.iter()) {
+      println!("{} vs {}", a.id, b.id);
+      assert_eq!(a.id, b.id);
+   }
+}
+
 fn node_info_no_net(id : hash::SubotaiHash) -> routing::NodeInfo {
    routing::NodeInfo {
       id : id,
