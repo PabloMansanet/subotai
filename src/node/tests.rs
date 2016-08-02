@@ -174,6 +174,28 @@ fn generating_too_many_conflicts_causes_the_node_to_enter_defensive_state()
    assert!(node.resources.table.specific_node(&id).is_some());
 }
 
+#[test]
+fn remote_key_value_storage()
+{
+   let alpha = node::Node::new().unwrap();
+   let beta  = node::Node::new().unwrap();
+   
+   assert!(alpha.bootstrap_until(beta.local_info(), 1).is_ok());
+  
+   let key = hash::SubotaiHash::random();
+   let value = hash::SubotaiHash::random();
+   let mut receptions = 
+      beta.receptions()
+          .of_kind(receptions::KindFilter::Store)
+          .during(time::Duration::seconds(1));
+
+   alpha.resources.store_remotely(beta.id(), key.clone(), value.clone()).unwrap();
+   assert!(receptions.next().is_some());
+   
+   let retrieved_value = beta.resources.storage.get(&key).unwrap();
+   assert_eq!(value, retrieved_value);
+}
+
 fn node_info_no_net(id : hash::SubotaiHash) -> routing::NodeInfo {
    routing::NodeInfo {
       id : id,

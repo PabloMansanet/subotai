@@ -44,16 +44,27 @@ impl Rpc {
       Rpc { kind: Kind::FindNodeResponse(payload), sender_id: sender_id, reply_port: reply_port }
    }
 
-   /// Constructs a bootstrap RPC. It asks the receiving node to provide a list of
-   /// nodes close to the sender, to facilitate joining the network.
-   pub fn bootstrap(sender_id: SubotaiHash, reply_port: u16) -> Rpc {
-      Rpc { kind: Kind::Bootstrap, sender_id: sender_id, reply_port: reply_port }
+   /// Constructs a probe RPC. It asks the receiving node to provide a list of
+   /// K nodes close to a given node. It's a simpler version of the find_node 
+   /// RPC, that doesn't end early if the node is found.
+   pub fn probe(sender_id: SubotaiHash, reply_port: u16, id_to_probe: SubotaiHash) -> Rpc {
+      let payload = Arc::new(ProbePayload { id_to_probe: id_to_probe });
+      Rpc { kind: Kind::Probe(payload), sender_id: sender_id, reply_port: reply_port }
    }
 
-   /// Constructs the response to a bootstrap RPC.
-   pub fn bootstrap_response(sender_id: SubotaiHash, reply_port: u16, nodes: Vec<routing::NodeInfo>) -> Rpc {
-      let payload = Arc::new(BootstrapResponsePayload { nodes: nodes } );
-      Rpc { kind: Kind::BootstrapResponse(payload), sender_id: sender_id, reply_port: reply_port }
+   /// Constructs the response to a probe RPC.
+   pub fn probe_response(sender_id: SubotaiHash, 
+                         reply_port: u16, 
+                         nodes: Vec<routing::NodeInfo>,
+                         id_to_probe: SubotaiHash) -> Rpc {
+      let payload = Arc::new(ProbeResponsePayload { id_to_probe: id_to_probe, nodes: nodes } );
+      Rpc { kind: Kind::ProbeResponse(payload), sender_id: sender_id, reply_port: reply_port }
+   }
+
+   /// Constructs a store RPC. It asks the receiving node to store a key->value pair.
+   pub fn store(sender_id: SubotaiHash, reply_port: u16, key: SubotaiHash, value: SubotaiHash) -> Rpc {
+      let payload = Arc::new(StorePayload { key: key, value: value });     
+      Rpc { kind: Kind::Store(payload), sender_id: sender_id, reply_port: reply_port }
    }
 
    /// Serializes an RPC to be send over TCP. 
@@ -89,7 +100,7 @@ impl Rpc {
 }
 
 /// Types of RPC contemplated by the standard, plus some unique to the Subotai
-/// DHT (such as as a specialized Bootstrap RPC). Some include reference
+/// DHT (such as as a specialized Probe RPC). Some include reference
 /// counted payloads.
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
 pub enum Kind {
@@ -100,12 +111,15 @@ pub enum Kind {
    FindNodeResponse(Arc<FindNodeResponsePayload>),
    FindValue(Arc<FindValuePayload>),
    FindValueResponse(Arc<FindValueResponsePayload>),
-   Bootstrap,
-   BootstrapResponse(Arc<BootstrapResponsePayload>)
+   Probe(Arc<ProbePayload>),
+   ProbeResponse(Arc<ProbeResponsePayload>)
 }
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
-pub struct StorePayload;
+pub struct StorePayload {
+   pub key   : SubotaiHash,
+   pub value : SubotaiHash,
+}
 
 /// Includes the ID to find and the amount of nodes required.
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
@@ -124,10 +138,16 @@ pub struct FindNodeResponsePayload {
    pub result     : routing::LookupResult,
 }
 
-/// Includes a vector of up to 'K' nodes close to the respondee.
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
-pub struct BootstrapResponsePayload {
-   pub nodes: Vec<routing::NodeInfo>,
+pub struct ProbePayload {
+   pub id_to_probe : SubotaiHash,
+}
+
+/// Includes a vector of up to 'K' nodes close to the id to probe.
+#[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
+pub struct ProbeResponsePayload {
+   pub id_to_probe : SubotaiHash,
+   pub nodes       : Vec<routing::NodeInfo>,
 }
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]

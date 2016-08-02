@@ -32,8 +32,8 @@ pub enum KindFilter {
    FindNodeResponse,
    FindValue,
    FindValueResponse,
-   Bootstrap,
-   BootstrapResponse,
+   Probe,
+   ProbeResponse,
 }
 
 impl resources::Resources {
@@ -66,6 +66,7 @@ impl Receptions {
    }
 
    /// Only from a sender.
+   /// TODO: Make it reference bound so we can avoid clones
    pub fn from(mut self, sender: SubotaiHash) -> Receptions {
       self.sender_filter = Some(vec![sender]);
       self
@@ -104,8 +105,8 @@ impl Iterator for Receptions {
                      rpc::Kind::FindNodeResponse(_)  => if *kind_filter != KindFilter::FindNodeResponse { continue; },
                      rpc::Kind::FindValue(_)         => if *kind_filter != KindFilter::FindValue { continue; },
                      rpc::Kind::FindValueResponse(_) => if *kind_filter != KindFilter::FindValueResponse { continue; },
-                     rpc::Kind::Bootstrap            => if *kind_filter != KindFilter::Bootstrap { continue; },
-                     rpc::Kind::BootstrapResponse(_) => if *kind_filter != KindFilter::BootstrapResponse { continue; },
+                     rpc::Kind::Probe(_)             => if *kind_filter != KindFilter::Probe { continue; },
+                     rpc::Kind::ProbeResponse(_)     => if *kind_filter != KindFilter::ProbeResponse { continue; },
                   }
                }
 

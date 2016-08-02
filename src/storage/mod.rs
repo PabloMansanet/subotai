@@ -1,12 +1,17 @@
 use hash::SubotaiHash;
 use std::collections::HashMap;
 use std::sync::RwLock;
-use error::{SubotaiResult, SubotaiError};
 
 pub const MAX_STORAGE: usize = 300;
 
 pub struct Storage {
    values: RwLock<HashMap<SubotaiHash, SubotaiHash> >,
+}
+
+pub enum StoreResult {
+   Success,
+   AlreadyPresent,
+   StorageFull
 }
 
 impl Storage {
@@ -24,13 +29,15 @@ impl Storage {
       self.values.read().unwrap().is_empty()
    }
 
-   pub fn insert(&self, key: SubotaiHash, value: SubotaiHash) -> SubotaiResult<()> {
+   pub fn store(&self, key: SubotaiHash, value: SubotaiHash) -> StoreResult {
       let mut values = self.values.write().unwrap();
       if values.len() >= MAX_STORAGE {
-         Err(SubotaiError::StorageFull)
+         StoreResult::StorageFull
       } else {
-         values.insert(key, value);
-         Ok(())
+         match values.insert(key, value) {
+            None    => StoreResult::Success,
+            Some(_) => StoreResult::AlreadyPresent,
+         }
       }
    }
 

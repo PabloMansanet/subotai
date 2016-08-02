@@ -142,6 +142,18 @@ impl Resources {
          .count();
       self.table.specific_node(id_to_find).ok_or(SubotaiError::NodeNotFound)
    }
+   
+   /// Locates a node in the network and instructs it to locate a key-value pair.
+   pub fn store_remotely(&self, id: &SubotaiHash, key: SubotaiHash, value: SubotaiHash) -> SubotaiResult<()> {
+      let node = try!(self.find_node(id));
+      let rpc = Rpc::store(self.id.clone(), 
+                           self.inbound.local_addr().unwrap().port(),
+                           key,
+                           value);
+      let packet = rpc.serialize();
+      try!(self.outbound.send_to(&packet, node.address));
+      Ok(())
+   }
 
    pub fn bootstrap(&self, seed: routing::NodeInfo, network_size: Option<usize>) -> SubotaiResult<()>  {
       self.update_table(seed);
@@ -150,7 +162,7 @@ impl Resources {
       let total_timeout = time::Duration::seconds(3 * node::NETWORK_TIMEOUT_S);
       let deadline = time::SteadyTime::now() + total_timeout;
       let mut responses = self.receptions()
-         .of_kind(receptions::KindFilter::BootstrapResponse)
+         .of_kind(receptions::KindFilter::ProbeResponse)
          .during(total_timeout);
        
       // We want our network to be as big as the K factor, or the user supplied limit.
@@ -176,7 +188,7 @@ impl Resources {
    }
 
    fn bootstrap_wave(&self, nodes_to_query: &[routing::NodeInfo], queried: &mut Vec<SubotaiHash>) -> SubotaiResult<()> {
-      let rpc = Rpc::bootstrap(self.id.clone(), self.inbound.local_addr().unwrap().port());
+      let rpc = Rpc::probe(self.id.clone(), self.inbound.local_addr().unwrap().port(), self.id.clone());
       let packet = rpc.serialize(); 
       for node in nodes_to_query {
          try!(self.outbound.send_to(&packet, node.address));
@@ -225,8 +237,9 @@ impl Resources {
          rpc::Kind::PingResponse                   => self.handle_ping_response(sender),
          rpc::Kind::FindNode(ref payload)          => self.handle_find_node(payload.clone(), sender),
          rpc::Kind::FindNodeResponse(ref payload)  => self.handle_find_node_response(payload.clone(), sender),
-         rpc::Kind::Bootstrap                      => self.handle_bootstrap(sender),
-         rpc::Kind::BootstrapResponse(ref payload) => self.handle_bootstrap_response(payload.clone(),sender),
+         rpc::Kind::Probe(ref payload)             => self.handle_probe(payload.clone(), sender),
+         rpc::Kind::ProbeResponse(ref payload)     => self.handle_probe_response(payload.clone(), sender),
+         rpc::Kind::Store(ref payload)             => self.handle_store(payload.clone(), sender),
          _ => unimplemented!(),
       };
       
@@ -243,20 +256,29 @@ impl Resources {
       Ok(())
    }
 
-   fn handle_bootstrap(&self, sender: routing::NodeInfo) -> SubotaiResult<()> {
+   fn handle_store(&self, payload: sync::Arc<rpc::StorePayload>,  sender: routing::NodeInfo) -> SubotaiResult<()> {
       self.update_table(sender.clone());
-      let closest_to_sender: Vec<_> = self.table.closest_nodes_to(&sender.id)
-         .filter(|ref info| &info.id != &sender.id) // We don't want to reply with the sender itself
+      self.storage.store(payload.key.clone(), payload.value.clone());
+      Ok(())
+   }
+
+   fn handle_probe(&self, payload: sync::Arc<rpc::ProbePayload>, sender: routing::NodeInfo) -> SubotaiResult<()> {
+      self.update_table(sender.clone());
+      let closest: Vec<_> = self.table.closest_nodes_to(&payload.id_to_probe)
+         .filter(|ref info| &info.id != &payload.id_to_probe)
          .take(routing::K_FACTOR)
          .collect();
 
-      let rpc = Rpc::bootstrap_response(self.id.clone(), self.inbound.local_addr().unwrap().port(), closest_to_sender);
+      let rpc = Rpc::probe_response(self.id.clone(), 
+                                    self.inbound.local_addr().unwrap().port(),
+                                    closest, 
+                                    payload.id_to_probe.clone());
       let packet = rpc.serialize();
       try!(self.outbound.send_to(&packet, sender.address));
       Ok(())
    }
 
-   fn handle_bootstrap_response(&self, payload: sync::Arc<rpc::BootstrapResponsePayload>, sender: routing::NodeInfo) -> SubotaiResult<()> {
+   fn handle_probe_response(&self, payload: sync::Arc<rpc::ProbeResponsePayload>, sender: routing::NodeInfo) -> SubotaiResult<()> {
       self.update_table(sender.clone());
       for node in &payload.nodes {
          self.update_table(node.clone());
