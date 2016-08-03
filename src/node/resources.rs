@@ -1,4 +1,4 @@
-use {node, routing, storage, rpc, bus, time, SubotaiError, SubotaiResult};
+use {hash, node, routing, storage, rpc, bus, time, SubotaiError, SubotaiResult};
 use std::{net, sync};
 use rpc::Rpc;
 use hash::SubotaiHash;
@@ -145,6 +145,18 @@ impl Resources {
          .take(1)
          .count();
       self.table.specific_node(target).ok_or(SubotaiError::NodeNotFound)
+   }
+
+   /// Probes a random node in a bucket, refreshing it.
+   pub fn refresh_bucket(&self, index: usize) -> SubotaiResult<()> {
+      if index > hash::HASH_SIZE {
+         return Err(SubotaiError::OutOfBounds);
+      }
+      //TODO: Make it random
+      let mut id = self.id.clone();
+      id.flip_bit(index);
+      try!(self.probe_node(&id));
+      Ok(())
    }
 
    /// Thoroughly searches for the nodes closest to a given ID, returning the 'K_FACTOR' closest.

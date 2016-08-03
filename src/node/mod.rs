@@ -21,7 +21,7 @@ pub use routing::NodeInfo as NodeInfo;
 mod tests;
 mod resources;
 
-use {storage, routing, rpc, bus, SubotaiResult};
+use {storage, routing, rpc, bus, SubotaiResult, time};
 use hash::SubotaiHash;
 use std::{net, thread, sync};
 use std::time::Duration as StdDuration;
@@ -35,9 +35,16 @@ pub const SOCKET_BUFFER_SIZE_BYTES : usize = 65536;
 const SOCKET_TIMEOUT_MS     : u64   = 200;
 const UPDATE_BUS_SIZE_BYTES : usize = 50;
 
+/// Maintenance thread sleep period.
+const MAINTENANCE_SLEEP_S : u64 = 5;
+
 /// Subotai node. 
 ///
-/// On construction, it launches a detached thread for packet reception.
+/// On construction, it launches three asynchronous threads.
+///
+/// * For packet reception.
+/// * For conflict resolution.
+/// * For general maintenance.
 pub struct Node {
    resources: sync::Arc<resources::Resources>,
 }
@@ -103,6 +110,9 @@ impl Node {
       let conflict_resolution_resources = resources.clone();
       thread::spawn(move || { Node::conflict_resolution_loop(conflict_resolution_resources) });
 
+      let maintenance_resources = resources.clone();
+      thread::spawn(move || { Node::maintenance_loop(maintenance_resources) });
+
       Ok( Node{ resources: resources } )
    }
 
@@ -153,7 +163,7 @@ impl Node {
    //   unimplemented!();
    //}
 
-   /// Receives and processes data as long as the table is alive.
+   /// Receives and processes data as long as the node is alive.
    fn reception_loop(resources: sync::Arc<resources::Resources>) {
       let mut buffer = [0u8; SOCKET_BUFFER_SIZE_BYTES];
 
@@ -172,6 +182,28 @@ impl Node {
          }
 
          resources.updates.lock().unwrap().broadcast(resources::Update::Tick);
+      }
+   }
+
+   /// Wakes up every `MAINTENANCE_SLEEP_S` seconds and refreshes the oldest bucket,
+   /// unless they are all younger than 1 hour, in which case it goes back to sleep.
+   #[allow(unused_must_use)]
+   fn maintenance_loop(resources: sync::Arc<resources::Resources>) {
+      let hour = time::Duration::hours(1);
+      loop {
+         thread::sleep(StdDuration::new(MAINTENANCE_SLEEP_S,0));
+         if let State::ShuttingDown = *resources.state.read().unwrap() {
+            break;
+         }
+
+         let now = time::SteadyTime::now();
+         // If the oldest bucket was refreshed more than a hour ago,
+         // or it was never refreshed, refresh it.
+         match resources.table.oldest_bucket() {
+            (i, None) => {resources.refresh_bucket(i);},
+            (i, Some(time)) if (now - time) > hour => {resources.refresh_bucket(i);},
+            _ => (),
+         }
       }
    }
 
@@ -195,7 +227,7 @@ impl Node {
          };
 
          // We wait for responses from these nodes.
-         thread::sleep(StdDuration::new(1u64,0));
+         thread::sleep(StdDuration::new(1,0));
          
          let mut state = resources.state.write().unwrap();
          match *state {
@@ -206,6 +238,7 @@ impl Node {
          }
       }
    }
+
 }
 
 impl Drop for Node {
