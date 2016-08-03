@@ -1,5 +1,5 @@
 use {node, routing, storage, rpc, bus, time, SubotaiError, SubotaiResult};
-use std::{net, sync, cmp};
+use std::{net, sync};
 use rpc::Rpc;
 use hash::SubotaiHash;
 use node::receptions;
@@ -184,7 +184,7 @@ impl Resources {
          let mut responses = self.receptions()
             .of_kind(receptions::KindFilter::ProbeResponse)
             .during(time::Duration::seconds(node::NETWORK_TIMEOUT_S))
-            .take(cmp::max(1,usize::saturating_sub(nodes_to_query.len(), routing::IMPATIENCE)));
+            .take(usize::saturating_sub(nodes_to_query.len(), routing::IMPATIENCE));
 
          // We probe these nodes.
          try!(self.probe_wave(target.clone(), &nodes_to_query, &mut queried_ids));
