@@ -165,13 +165,12 @@ impl Resources {
 
       while queried_ids.len() < routing::K_FACTOR {
 
-         // Decide what nodes to query (The alpha closest we haven't queried yet)
+         // Decide what nodes to query (The alpha closest we haven't queried yet).
          let nodes_to_query: Vec<routing::NodeInfo> = closest.iter()
             .filter(|info| !queried_ids.contains(&info.id) && &info.id != &self.id)
             .take(routing::ALPHA)
             .cloned()
             .collect();
-
          if nodes_to_query.is_empty() {
             break;
          }
@@ -186,7 +185,7 @@ impl Resources {
          // We probe these nodes.
          try!(self.probe_wave(target.clone(), &nodes_to_query, &mut queried_ids));
 
-         // We incorporate the nodes we receive as responses.
+         // We incorporate the nodes we receive as responses, making sure to avoid ID duplicates.
          for response in responses {
             if let rpc::Kind::ProbeResponse(ref payload) = response.kind {
                let mut new_nodes = payload.nodes.clone();
@@ -204,7 +203,7 @@ impl Resources {
          }
       }
 
-      //closest.shrink_to_fit();
+      closest.shrink_to_fit();
       Ok(closest)
    }
    
