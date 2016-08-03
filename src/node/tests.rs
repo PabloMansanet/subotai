@@ -17,7 +17,10 @@ fn node_ping() {
    // Bootstrapping alpha:
    assert!(alpha.bootstrap_until(beta_seed, 1).is_ok());
 
-   let beta_receptions = alpha.receptions().during(span).from(beta.id().clone());
+   let beta_receptions = beta.receptions()
+      .during(span)
+      .from(alpha.id().clone())
+      .of_kind(receptions::KindFilter::Ping);
 
    // Alpha pings beta.
    assert!(alpha.ping(&beta.resources.id).is_ok());
@@ -83,15 +86,14 @@ fn finding_a_nonexisting_node_in_a_simulated_network_times_out() {
 fn simulated_network(nodes: usize) -> VecDeque<node::Node> {
    let nodes: VecDeque<node::Node> = (0..nodes).map(|_| { node::Node::new().unwrap() }).collect();
    {
-      let origin = node::Node::new().unwrap();
-
+      let origin = nodes.front().unwrap();
       // Initial handshake pass
-      for node in nodes.iter() {
+      for node in nodes.iter().skip(1) {
          assert!(node.bootstrap_until(origin.local_info(), 1).is_ok());
       }
 
       // Actual bootstrapping
-      for node in nodes.iter() {
+      for node in nodes.iter().skip(1) {
          assert!(node.bootstrap(origin.local_info()).is_ok());
       }
    }
@@ -120,7 +122,7 @@ fn generating_a_conflict_causes_a_ping_to_the_evicted_node()
    let beta = node::Node::new().unwrap();
    alpha.resources.update_table(beta.local_info());
   
-   let index = alpha.resources.table.bucket_for_node(beta.id()).unwrap();
+   let index = alpha.resources.table.bucket_for_node(beta.id());
 
    // We fill the bucket corresponding to Beta until we are ready to cause a conflict.
    alpha.resources.table.fill_bucket(index, (routing::K_FACTOR -1) as u8);
@@ -200,24 +202,22 @@ fn remote_key_value_storage()
 fn node_probing_in_simulated_network()
 {
    let mut nodes = simulated_network(40);
-   // We manually collect the info tags of all nodes except for the tail.
-   let tail = nodes.pop_back().unwrap();
+   // We manually collect the info tags of all nodes.
    let mut info_nodes: Vec<routing::NodeInfo> = nodes
       .iter()
       .map(|ref node| node.local_info())
       .collect();
 
+   let head = nodes.pop_front().unwrap();
+   let tail = nodes.pop_back().unwrap();
+   let probe_results = head.resources.probe_node(tail.id()).unwrap();
 
    // We sort our manual collection by distance to the tail node.
    info_nodes.sort_by(|ref info_a, ref info_b| (&info_a.id ^ tail.id()).cmp(&(&info_b.id ^ tail.id())));
    info_nodes.truncate(routing::K_FACTOR); // This guarantees us the closest ids to the tail
-
-   let head = nodes.pop_front().unwrap();
-   let probe_results = head.resources.probe_node(tail.id()).unwrap();
    
    assert_eq!(info_nodes.len(), probe_results.len());
-   for (a, b) in info_nodes.iter().zip(probe_results.iter()) {
-      println!("{} vs {}", a.id, b.id);
+   for (a, b) in probe_results.iter().zip(info_nodes.iter()) {
       assert_eq!(a.id, b.id);
    }
 }

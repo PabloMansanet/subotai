@@ -66,7 +66,10 @@ fn lookup_for_a_stored_node() {
 fn lookup_for_self() {
    let parent_id = SubotaiHash::random();
    let table = Table::new(parent_id.clone());
-   assert_eq!(table.lookup(&parent_id, 20, None), LookupResult::Myself);
+   let node = node_info_no_net(parent_id.clone());
+   table.update_node(node.clone());
+
+   assert_eq!(table.lookup(&parent_id, 20, None), LookupResult::Found(node));
 }
 
 #[test]

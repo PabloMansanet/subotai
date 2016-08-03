@@ -138,7 +138,7 @@ mod tests {
        let beta = node::Node::new().unwrap();
        let table_size = alpha.bootstrap_until(beta.local_info(), 1).unwrap();
 
-       assert_eq!(table_size, 1);
+       assert_eq!(table_size, 2); // One for self, and one for beta
        let beta_receptions = 
           beta.receptions()
               .during(time::Duration::seconds(1))

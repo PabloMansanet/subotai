@@ -91,7 +91,7 @@ impl Rpc {
    pub fn found_node(&self, id: &SubotaiHash) -> bool {
       if let Kind::FindNodeResponse(ref payload) = self.kind {
          match payload.result {
-            routing::LookupResult::Myself | routing::LookupResult::Found(_) => return &payload.id_to_find == id,
+            routing::LookupResult::Found(_) => return &payload.id_to_find == id,
             _ => return false,
          }
       }

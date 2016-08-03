@@ -52,8 +52,6 @@ pub struct NodeInfo {
 /// Result of a table lookup. 
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
 pub enum LookupResult {
-   /// The requested ID is precisely the parent node.
-   Myself,
    /// The requested ID was found on the table.
    Found(NodeInfo), 
    /// The requested ID was not found, but here are the next
@@ -79,10 +77,10 @@ pub enum UpdateResult {
 impl Table {
    /// Constructs a routing table based on a parent node id. Other nodes
    /// will be stored in this table based on their distance to the node id provided.
-   pub fn new(parent_id: SubotaiHash) -> Table {
+   pub fn new(id: hash::SubotaiHash) -> Table {
       Table { 
          buckets   : (0..HASH_SIZE).map(|_| sync::RwLock::new(Bucket::new())).collect(),
-         parent_id : parent_id,
+         parent_id : id,
       }
    }
 
@@ -107,25 +105,25 @@ impl Table {
    /// cause conflicts until a given time period has elapsed.
    pub fn update_node(&self, info: NodeInfo) -> UpdateResult {
       let mut result = UpdateResult::AddedNode;
-      if let Some(index) = self.bucket_for_node(&info.id) {
-         let mut bucket = self.buckets[index].write().unwrap();
+      let index = self.bucket_for_node(&info.id);
+      let mut bucket = self.buckets[index].write().unwrap();
 
-         if bucket.entries.contains(&info) {
-            result = UpdateResult::UpdatedNode;
-         }
-
-         bucket.entries.retain(|ref stored_info| info.id != stored_info.id);
-         if bucket.entries.len() == K_FACTOR {
-            let conflict = EvictionConflict { 
-               evicted      : bucket.entries.pop_front().unwrap(),
-               evictor      : info.clone(),
-               times_pinged : 0,
-            };
-
-            result = UpdateResult::CausedConflict(conflict);
-         }
-         bucket.entries.push_back(info);
+      if bucket.entries.contains(&info) {
+         result = UpdateResult::UpdatedNode;
       }
+
+      bucket.entries.retain(|ref stored_info| info.id != stored_info.id);
+      if bucket.entries.len() == K_FACTOR {
+         let conflict = EvictionConflict { 
+            evicted      : bucket.entries.pop_front().unwrap(),
+            evictor      : info.clone(),
+            times_pinged : 0,
+         };
+
+         result = UpdateResult::CausedConflict(conflict);
+      }
+      bucket.entries.push_back(info);
+   
       result
    }
 
@@ -152,10 +150,6 @@ impl Table {
    /// splitting the buckets, reducing the amount of dynamic allocations
    /// needed. 
    pub fn lookup(&self, id: &SubotaiHash, n: usize, blacklist: Option<&Vec<SubotaiHash>>) -> LookupResult {
-      if id == &self.parent_id {
-         return LookupResult::Myself;
-      }
-
       match self.specific_node(id) {
          Some(info) => LookupResult::Found(info),
          None =>  {
@@ -217,28 +211,24 @@ impl Table {
 
    /// Returns a table entry for the specific node with a given hash.
    pub fn specific_node(&self, id: &SubotaiHash) -> Option<NodeInfo> {
-      if let Some(index) = self.bucket_for_node(id) {
-         let entries = &self.buckets[index].read().unwrap().entries;
-         return entries.iter().find(|ref info| *id == info.id).cloned();
-      }
-      None
+      let index = self.bucket_for_node(id);
+      let entries = &self.buckets[index].read().unwrap().entries;
+      entries.iter().find(|ref info| *id == info.id).cloned()
    }
 
    /// Returns the appropriate position for a node, by computing
-   /// the index where their prefix starts differing. If we are requesting
-   /// the bucket for this table's own parent node, it can't be stored.
-   pub fn bucket_for_node(&self, id: &SubotaiHash) -> Option<usize> {
-       (&self.parent_id ^ id).height()
+   /// the index where their prefix starts differing.
+   pub fn bucket_for_node(&self, id: &SubotaiHash) -> usize {
+       (&self.parent_id ^ id).height().unwrap_or(0)
    }
 
    pub fn revert_conflict(&self, conflict: EvictionConflict) {
-      if let Some(index) = self.bucket_for_node(&conflict.evictor.id) {
-         let bucket = &self.buckets[index];
-         let ref mut entries = bucket.write().unwrap().entries;
+      let index = self.bucket_for_node(&conflict.evictor.id);
+      let bucket = &self.buckets[index];
+      let ref mut entries = bucket.write().unwrap().entries;
 
-         if let Some(ref mut evictor) = entries.iter_mut().find(|ref info| conflict.evictor.id == info.id) {
-            mem::replace::<NodeInfo>(evictor, conflict.evicted);
-         }
+      if let Some(ref mut evictor) = entries.iter_mut().find(|ref info| conflict.evictor.id == info.id) {
+         mem::replace::<NodeInfo>(evictor, conflict.evicted);
       }
    }
 }
@@ -276,8 +266,8 @@ pub struct EvictionConflict {
 /// concurrent access to the table.
 #[derive(Debug)]
 struct Bucket {
-   entries     : VecDeque<NodeInfo>,
-   last_lookup : Option<time::SteadyTime>,
+   entries    : VecDeque<NodeInfo>,
+   last_probe : Option<time::SteadyTime>,
 }
 
 impl<'a, 'b> Iterator for ClosestNodesTo<'a, 'b> {
@@ -325,8 +315,8 @@ impl<'a> Iterator for AllNodes<'a> {
 impl Bucket {
    fn new() -> Bucket {
       Bucket{
-         entries     : VecDeque::with_capacity(K_FACTOR),
-         last_lookup : None,
+         entries    : VecDeque::with_capacity(K_FACTOR),
+         last_probe : None,
       }
    }
 }

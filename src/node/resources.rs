@@ -1,5 +1,5 @@
 use {node, routing, storage, rpc, bus, time, SubotaiError, SubotaiResult};
-use std::{net, sync};
+use std::{net, sync, cmp};
 use rpc::Rpc;
 use hash::SubotaiHash;
 use node::receptions;
@@ -117,7 +117,7 @@ impl Resources {
       while queried_ids.len() < routing::K_FACTOR && time::SteadyTime::now() < deadline {
          // We query the 'ALPHA' nodes closest to the target we haven't yet queried.
          let nodes_to_query: Vec<routing::NodeInfo> = self.table.closest_nodes_to(target)
-            .filter(|ref info| !queried_ids.contains(&info.id))
+            .filter(|ref info| !queried_ids.contains(&info.id) && &info.id != &self.id)
             .take(routing::ALPHA)
             .collect();
 
@@ -167,19 +167,24 @@ impl Resources {
       let mut queried_ids = Vec::<SubotaiHash>::with_capacity(routing::K_FACTOR);
 
       while queried_ids.len() < routing::K_FACTOR {
+
+         // Decide what nodes to query (The alpha closest we haven't queried yet)
+         let nodes_to_query: Vec<routing::NodeInfo> = closest.iter()
+            .filter(|info| !queried_ids.contains(&info.id) && &info.id != &self.id)
+            .take(routing::ALPHA)
+            .cloned()
+            .collect();
+
+         if nodes_to_query.is_empty() {
+            break;
+         }
+
          // We prepare for the probe responses, from the amount of nodes
          // we are contacting, minus the impatience factor.
          let mut responses = self.receptions()
             .of_kind(receptions::KindFilter::ProbeResponse)
             .during(time::Duration::seconds(node::NETWORK_TIMEOUT_S))
-            .take(usize::saturating_sub(routing::ALPHA, routing::IMPATIENCE));
-
-         // Decide what nodes to query (The alpha closest we haven't queried yet)
-         let nodes_to_query: Vec<routing::NodeInfo> = closest.iter()
-            .filter(|info| !queried_ids.contains(&info.id))
-            .take(routing::ALPHA)
-            .cloned()
-            .collect();
+            .take(cmp::max(1,usize::saturating_sub(nodes_to_query.len(), routing::IMPATIENCE)));
 
          // We probe these nodes.
          try!(self.probe_wave(target.clone(), &nodes_to_query, &mut queried_ids));
@@ -188,13 +193,13 @@ impl Resources {
          for response in responses {
             if let rpc::Kind::ProbeResponse(ref payload) = response.kind {
                let mut new_nodes = payload.nodes.clone();
+               new_nodes.retain(|ref new| closest.iter().all(|ref old| &old.id != &new.id));
                closest.append(&mut new_nodes);
             }
          }
          
          // We sort the vector again to keep the ordering up to date, and slim it down to K_FACTOR entries.
          closest.sort_by(|ref info_a, ref info_b| (&info_a.id ^ target).cmp(&(&info_b.id ^ target)));
-         closest.dedup();
          closest.truncate(routing::K_FACTOR);
 
          if time::SteadyTime::now() >= deadline {
@@ -202,7 +207,7 @@ impl Resources {
          }
       }
 
-      closest.shrink_to_fit();
+      //closest.shrink_to_fit();
       Ok(closest)
    }
    
@@ -328,7 +333,6 @@ impl Resources {
    fn handle_probe(&self, payload: sync::Arc<rpc::ProbePayload>, sender: routing::NodeInfo) -> SubotaiResult<()> {
       self.update_table(sender.clone());
       let closest: Vec<_> = self.table.closest_nodes_to(&payload.id_to_probe)
-         .filter(|ref info| &info.id != &payload.id_to_probe)
          .take(routing::K_FACTOR)
          .collect();
 

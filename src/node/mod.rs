@@ -81,7 +81,7 @@ impl Node {
    /// Constructs a node with a given inbound/outbound UDP port pair.
    pub fn with_ports(inbound_port: u16, outbound_port: u16) -> SubotaiResult<Node> {
       let id = SubotaiHash::random();
-
+      
       let resources = sync::Arc::new(resources::Resources {
          id        : id.clone(),
          table     : routing::Table::new(id),
@@ -92,6 +92,8 @@ impl Node {
          updates   : sync::Mutex::new(bus::Bus::new(UPDATE_BUS_SIZE_BYTES)),
          conflicts : sync::Mutex::new(Vec::with_capacity(routing::MAX_CONFLICTS)),
       });
+
+      resources.table.update_node(resources.local_info());
 
       try!(resources.inbound.set_read_timeout(Some(StdDuration::from_millis(SOCKET_TIMEOUT_MS))));
 
