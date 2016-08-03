@@ -282,8 +282,7 @@ impl Resources {
       if let Some((index, _)) = 
          self.conflicts.lock().unwrap().iter()
          .enumerate()
-         .filter(|&(_,&routing::EvictionConflict{ref evicted, ..})| sender_id == &evicted.id )
-         .next()
+         .find(|&(_,&routing::EvictionConflict{ref evicted, ..})| sender_id == &evicted.id )
       {
          let conflict = self.conflicts.lock().unwrap().remove(index);
          self.table.revert_conflict(conflict);
