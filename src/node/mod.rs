@@ -180,10 +180,6 @@ impl Node {
    #[allow(unused_must_use)]
    fn conflict_resolution_loop(resources: sync::Arc<resources::Resources>) {
       loop {
-         if let State::ShuttingDown = *resources.state.read().unwrap() {
-            break;
-         }
-         
          let conflicts_empty = { // Lock scope
             let mut conflicts = resources.conflicts.lock().unwrap();
             // Conflicts that weren't solved in five pings are removed.
@@ -201,18 +197,12 @@ impl Node {
          // We wait for responses from these nodes.
          thread::sleep(StdDuration::new(1u64,0));
          
-         let defensive = { // Lock scope
-            *resources.state.read().unwrap() == State::Defensive
-         };
-
-         if defensive && conflicts_empty {
-            // We stall the conflict resolution thread and leave defensive mode after a certain period.
-            thread::sleep(StdDuration::new(routing::DEFENSE_TIMEOUT_S, 0));
-            let mut state = resources.state.write().unwrap();
-            // Assuming we are still in defensive state.
-            if *state == State::Defensive {
-               *state = State::Alive;
-            }
+         let mut state = resources.state.write().unwrap();
+         match *state {
+            State::ShuttingDown => break,
+            // If all conflicts are resolved, we leave defensive mode.
+            State::Defensive if conflicts_empty => *state = State::Alive,
+            _ => (),
          }
       }
    }

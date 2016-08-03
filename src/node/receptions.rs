@@ -48,7 +48,7 @@ impl Receptions {
       Receptions {
          iter          : resources.updates.lock().unwrap().add_rx().into_iter(),
          timeout       : None,
-         kind_filter    : None,
+         kind_filter   : None,
          sender_filter : None,
          shutdown      : false,
       }

@@ -28,9 +28,6 @@ pub const K_FACTOR          : usize = 20;
 /// defensive mode. 
 pub const MAX_CONFLICTS     : usize = 3*K_FACTOR;
 
-/// Minimum time the node will spend in defensive mode.
-pub const DEFENSE_TIMEOUT_S : u64   = 30;
-
 /// Routing table with 160 buckets of `K_FACTOR` node
 /// identifiers each, constructed around a parent node ID.
 ///
