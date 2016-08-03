@@ -11,7 +11,7 @@
 //! * **Introduce nodes first, resolve conflicts later**: Subotai differs to the original Kademlia
 //!   implementation in that it gives temporary priority to newer contacts for full buckets. This
 //!   makes the network more dynamic and capable to adapt quickly, while still providing protection
-//!   against DDoS attacks in the form of a defensive state.
+//!   against basic `DDoS` attacks in the form of a defensive state.
 //!
 //! * ...
 //!

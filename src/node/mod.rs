@@ -144,13 +144,14 @@ impl Node {
       self.resources.find_node(id)
    }
 
-   /// Stores a key-value pair in the network.
-   pub fn store(&self, key: SubotaiHash, value: SubotaiHash) {
-   }
-   /// Retrieves a value from the network, given a key.
-   pub fn retrieve(&self, key: SubotaiHash) -> SubotaiHash {
-      SubotaiHash::random()
-   }
+   ///// Stores a key-value pair in the network.
+   //pub fn store(&self, key: SubotaiHash, value: SubotaiHash) {
+   //   unimplemented!();
+   //}
+   ///// Retrieves a value from the network, given a key.
+   //pub fn retrieve(&self, key: SubotaiHash) -> SubotaiHash {
+   //   unimplemented!();
+   //}
 
    /// Receives and processes data as long as the table is alive.
    fn reception_loop(resources: sync::Arc<resources::Resources>) {

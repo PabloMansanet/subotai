@@ -225,7 +225,7 @@ impl Table {
    pub fn revert_conflict(&self, conflict: EvictionConflict) {
       let index = self.bucket_for_node(&conflict.evictor.id);
       let bucket = &self.buckets[index];
-      let ref mut entries = bucket.write().unwrap().entries;
+      let entries = &mut bucket.write().unwrap().entries;
 
       if let Some(ref mut evictor) = entries.iter_mut().find(|ref info| conflict.evictor.id == info.id) {
          mem::replace::<NodeInfo>(evictor, conflict.evicted);
@@ -280,7 +280,7 @@ impl<'a, 'b> Iterator for ClosestNodesTo<'a, 'b> {
 
       while let Some(index) = self.lookup_order.next() {
          let mut new_bucket = { // Lock scope
-            let ref bucket = self.table.buckets[index].read().unwrap();
+            let bucket = &self.table.buckets[index].read().unwrap();
             if bucket.entries.is_empty() {
                continue;
             }

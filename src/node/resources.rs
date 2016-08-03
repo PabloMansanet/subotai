@@ -80,19 +80,16 @@ impl Resources {
          *self.state.read().unwrap() == node::State::Defensive
       };
 
-      match self.table.update_node(info) {
-         routing::UpdateResult::CausedConflict(conflict) => {
-            if defensive {
-               self.table.revert_conflict(conflict);
-            } else {
-               let mut conflicts = self.conflicts.lock().unwrap();
-               conflicts.push(conflict);
-               if conflicts.len() == routing::MAX_CONFLICTS {
-                  *self.state.write().unwrap() = node::State::Defensive;
-               }
+      if let routing::UpdateResult::CausedConflict(conflict) = self.table.update_node(info) {
+         if defensive {
+            self.table.revert_conflict(conflict);
+         } else {
+            let mut conflicts = self.conflicts.lock().unwrap();
+            conflicts.push(conflict);
+            if conflicts.len() == routing::MAX_CONFLICTS {
+               *self.state.write().unwrap() = node::State::Defensive;
             }
-         },
-         _ => (),
+         }
       }
    }
 
@@ -181,7 +178,7 @@ impl Resources {
 
          // We prepare for the probe responses, from the amount of nodes
          // we are contacting, minus the impatience factor.
-         let mut responses = self.receptions()
+         let responses = self.receptions()
             .of_kind(receptions::KindFilter::ProbeResponse)
             .during(time::Duration::seconds(node::NETWORK_TIMEOUT_S))
             .take(usize::saturating_sub(nodes_to_query.len(), routing::IMPATIENCE));
