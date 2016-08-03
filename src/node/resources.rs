@@ -416,7 +416,9 @@ impl Resources {
          rpc::Kind::ProbeResponse(ref payload)     => self.handle_probe_response(payload.clone(), sender),
          rpc::Kind::Store(ref payload)             => self.handle_store(payload.clone(), sender),
          rpc::Kind::StoreResponse(_)               => self.handle_store_response(sender),
-         _ => unimplemented!(),
+         rpc::Kind::FindValue(ref payload)         => self.handle_find_value(payload.clone(), sender),
+         // TODO Consider optimizing by taking the payload conditionally.
+         rpc::Kind::FindValueResponse(ref payload) => self.handle_find_value_response(payload.clone(), sender),
       };
       
       self.updates.lock().unwrap().broadcast(Update::RpcReceived(rpc));
@@ -493,6 +495,30 @@ impl Resources {
          routing::LookupResult::ClosestNodes(ref nodes) => for node in nodes { self.update_table(node.clone()); },
          routing::LookupResult::Found(ref node) => { self.update_table(node.clone()); },
          _ => (),
+      }
+      Ok(())
+   }
+
+   fn handle_find_value(&self, payload: sync::Arc<rpc::FindValuePayload>, sender: routing::NodeInfo) -> SubotaiResult<()> {
+      self.update_table(sender.clone());
+      let result = match self.storage.get(&payload.key_to_find) {
+         Some(value) => rpc::FindValueResult::Found(value),
+         None => rpc::FindValueResult::Closest (self.table.closest_nodes_to(&payload.key_to_find).take(routing::K_FACTOR).collect()),
+      };
+
+      let rpc = Rpc::find_value_response(self.id.clone(), 
+                                        self.inbound.local_addr().unwrap().port(),
+                                        payload.key_to_find.clone(),
+                                        result);
+      let packet = rpc.serialize();
+      try!(self.outbound.send_to(&packet, sender.address));
+      Ok(())
+   }
+
+   fn handle_find_value_response(&self, payload: sync::Arc<rpc::FindValueResponsePayload>, sender: routing::NodeInfo) -> SubotaiResult<()> {
+      self.update_table(sender);
+      if let rpc::FindValueResult::Found(ref value) = payload.result {
+         self.storage.store(payload.key_to_find.clone(), value.clone());
       }
       Ok(())
    }
