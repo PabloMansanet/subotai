@@ -222,6 +222,31 @@ fn node_probing_in_simulated_network()
    }
 }
 
+#[test]
+fn node_probing_in_simulated_unresponsive_network()
+{
+   let mut nodes = simulated_network(40);
+   // We manually collect the info tags of all nodes.
+   let mut info_nodes: Vec<routing::NodeInfo> = nodes
+      .iter()
+      .map(|ref node| node.local_info())
+      .collect();
+
+   nodes.drain(10..20);
+   let head = nodes.pop_front().unwrap();
+   let tail = nodes.pop_back().unwrap();
+   let probe_results = head.resources.probe_node(tail.id()).unwrap();
+
+   // We sort our manual collection by distance to the tail node.
+   info_nodes.sort_by(|ref info_a, ref info_b| (&info_a.id ^ tail.id()).cmp(&(&info_b.id ^ tail.id())));
+   info_nodes.truncate(routing::K_FACTOR); // This guarantees us the closest ids to the tail
+   
+   assert_eq!(info_nodes.len(), probe_results.len());
+   for (a, b) in probe_results.iter().zip(info_nodes.iter()) {
+      assert_eq!(a.id, b.id);
+   }
+}
+
 fn node_info_no_net(id : hash::SubotaiHash) -> routing::NodeInfo {
    routing::NodeInfo {
       id : id,
