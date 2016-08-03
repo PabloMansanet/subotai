@@ -151,6 +151,9 @@ impl Resources {
    /// It is possible that not all of these nodes will be stored in the routing table, so use
    /// the return value of this function rather than a subsequent call for table.closest_nodes_to().
    pub fn probe_node(&self, target: &SubotaiHash) -> SubotaiResult<Vec<routing::NodeInfo>> {
+      // We record the fact we attempted a probe for this bucket.
+      self.table.mark_bucket_as_probed(target);
+
       // We start with the closest K nodes we know about.
       let mut closest:Vec<routing::NodeInfo> = 
          self.table.closest_nodes_to(target)

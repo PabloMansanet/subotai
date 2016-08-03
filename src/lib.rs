@@ -30,11 +30,11 @@
 //!
 //! alpha.bootstrap_until(beta.local_info(), 1);
 //!
-//! let receptions = beta.receptions().during(time::Duration::seconds(1));
+//! let mut receptions = beta.receptions().during(time::Duration::seconds(1));
 //!
 //! alpha.ping(beta.id());
 //!  
-//! assert_eq!(receptions.count(), 1);
+//! assert!(receptions.next().is_some());
 //! # }
 //!
 //! ```

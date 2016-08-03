@@ -228,6 +228,12 @@ impl Table {
          mem::replace::<NodeInfo>(evictor, conflict.evicted);
       }
    }
+
+   pub fn mark_bucket_as_probed(&self, id: &SubotaiHash) {
+      let index = self.bucket_for_node(id);
+      let mut bucket = self.buckets[index].write().unwrap();
+      bucket.last_probe = Some(time::SteadyTime::now());
+   }
 }
 
 /// Produces copies of all known nodes, ordered in ascending
