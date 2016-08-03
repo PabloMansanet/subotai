@@ -10,7 +10,7 @@ mod tests;
 /// System-wide concurrency factor. It's used, for example, to decide the
 /// number of remote nodes to interrogate concurrently when performing a 
 /// network-wide lookup.
-pub const ALPHA: usize = 3;
+pub const ALPHA: usize = 5;
 
 /// Impatience factor, valid in the range [0..ALPHA). When performing "waves",
 /// the impatience factor denotes how many nodes we can give up waiting for, before
@@ -18,7 +18,7 @@ pub const ALPHA: usize = 3;
 ///
 /// If we send a request to ALPHA nodes during a lookup wave, we will start
 /// the next wave after we receive 'ALPHA - IMPATIENCE' responses.
-pub const IMPATIENCE: usize = 1;
+pub const IMPATIENCE: usize = 2;
 
 /// Data structure factor. It's used, among other places, to dictate the 
 /// size of a K-bucket.

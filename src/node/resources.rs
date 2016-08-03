@@ -8,9 +8,10 @@ use node::receptions;
 ///
 /// All methods on this module are synchronous, and will wait for any
 /// remote nodes queried to reply to the RPCs sent, up to the timeout
-/// defined at `node::node::NETWORK_TIMEOUT_S`. The node layer above is in 
-/// charge of parallelizing those operations by spawning threads when
-/// adequate.
+/// defined at `node::node::NETWORK_TIMEOUT_S`. Complex operations 
+/// involving multiple nodes have longer timeouts derived from that value.
+/// The node layer above is in charge of parallelizing those operations 
+/// by spawning threads when adequate.
 pub struct Resources {
    pub id        : SubotaiHash,
    pub table     : routing::Table,
@@ -208,17 +209,32 @@ impl Resources {
    }
    
    /// Locates a node in the network and instructs it to locate a key-value pair.
-   pub fn store_remotely(&self, id: &SubotaiHash, key: SubotaiHash, value: SubotaiHash) -> SubotaiResult<()> {
+   pub fn store_remotely(&self, id: &SubotaiHash, key: SubotaiHash, value: SubotaiHash) -> SubotaiResult<storage::StoreResult> {
       let node = try!(self.find_node(id));
       let rpc = Rpc::store(self.id.clone(), 
                            self.inbound.local_addr().unwrap().port(),
                            key,
                            value);
       let packet = rpc.serialize();
+      let mut responses = self.receptions()
+         .during(time::Duration::seconds(node::NETWORK_TIMEOUT_S))
+         .of_kind(receptions::KindFilter::StoreResponse)
+         .from(id.clone())
+         .take(1);
       try!(self.outbound.send_to(&packet, node.address));
-      Ok(())
+
+      if let Some(rpc) = responses.next() {
+         if let rpc::Kind::StoreResponse(ref payload) = rpc.kind {
+            return Ok(payload.result.clone());
+         }
+      }
+
+      Err(SubotaiError::NoResponse)
    }
 
+   /// Initiates a fast, greedy series of probes aimed at the node itself, until the network grows to a 
+   /// minimum size and the node can be considered alive. From this point onwards, the maintenance thread
+   /// should be capable of maintaining the node alive.
    pub fn bootstrap(&self, seed: routing::NodeInfo, network_size: Option<usize>) -> SubotaiResult<()>  {
       self.update_table(seed);
 
@@ -304,6 +320,7 @@ impl Resources {
          rpc::Kind::Probe(ref payload)             => self.handle_probe(payload.clone(), sender),
          rpc::Kind::ProbeResponse(ref payload)     => self.handle_probe_response(payload.clone(), sender),
          rpc::Kind::Store(ref payload)             => self.handle_store(payload.clone(), sender),
+         rpc::Kind::StoreResponse(_)               => self.handle_store_response(sender),
          _ => unimplemented!(),
       };
       
@@ -321,7 +338,11 @@ impl Resources {
 
    fn handle_store(&self, payload: sync::Arc<rpc::StorePayload>,  sender: routing::NodeInfo) -> SubotaiResult<()> {
       self.update_table(sender.clone());
-      self.storage.store(payload.key.clone(), payload.value.clone());
+      let store_result = self.storage.store(payload.key.clone(), payload.value.clone());
+      let rpc = Rpc::store_response(self.id.clone(), self.inbound.local_addr().unwrap().port(), payload.key.clone(), store_result);
+      let packet = rpc.serialize();
+      try!(self.outbound.send_to(&packet, sender.address));
+
       Ok(())
    }
 
@@ -350,6 +371,11 @@ impl Resources {
 
    fn handle_ping_response(&self, sender: routing::NodeInfo) -> SubotaiResult<()> {
       self.revert_conflicts_for_sender(&sender.id);
+      self.update_table(sender);
+      Ok(())
+   }
+
+   fn handle_store_response(&self, sender: routing::NodeInfo) -> SubotaiResult<()> {
       self.update_table(sender);
       Ok(())
    }

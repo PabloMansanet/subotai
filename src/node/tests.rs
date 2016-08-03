@@ -186,13 +186,19 @@ fn remote_key_value_storage()
   
    let key = hash::SubotaiHash::random();
    let value = hash::SubotaiHash::random();
-   let mut receptions = 
+   let mut beta_receptions = 
       beta.receptions()
           .of_kind(receptions::KindFilter::Store)
           .during(time::Duration::seconds(1));
 
+   let mut alpha_receptions =
+      alpha.receptions()
+           .of_kind(receptions::KindFilter::StoreResponse)
+           .during(time::Duration::seconds(1));
+
    alpha.resources.store_remotely(beta.id(), key.clone(), value.clone()).unwrap();
-   assert!(receptions.next().is_some());
+   assert!(alpha_receptions.next().is_some());
+   assert!(beta_receptions.next().is_some());
    
    let retrieved_value = beta.resources.storage.get(&key).unwrap();
    assert_eq!(value, retrieved_value);

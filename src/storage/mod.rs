@@ -8,10 +8,11 @@ pub struct Storage {
    values: RwLock<HashMap<SubotaiHash, SubotaiHash> >,
 }
 
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum StoreResult {
    Success,
    AlreadyPresent,
-   StorageFull
+   StorageFull,
 }
 
 impl Storage {

@@ -4,7 +4,7 @@
 //! contain information about the sender, as well as an optional payload.
 
 use bincode::serde;
-use {routing, bincode, node};
+use {routing, bincode, node, storage};
 use std::sync::Arc;
 use hash::SubotaiHash;
 
@@ -67,6 +67,12 @@ impl Rpc {
       Rpc { kind: Kind::Store(payload), sender_id: sender_id, reply_port: reply_port }
    }
 
+   /// Constructs a response to the store RPC, including the key and the operation result.
+   pub fn store_response(sender_id: SubotaiHash, reply_port: u16, key: SubotaiHash, result: storage::StoreResult) -> Rpc {
+      let payload = Arc::new(StoreResponsePayload { key: key, result: result });     
+      Rpc { kind: Kind::StoreResponse(payload), sender_id: sender_id, reply_port: reply_port }
+   }
+
    /// Serializes an RPC to be send over TCP. 
    pub fn serialize(&self) -> Vec<u8> {
        serde::serialize(&self, bincode::SizeLimit::Bounded(node::SOCKET_BUFFER_SIZE_BYTES as u64)).unwrap()
@@ -107,6 +113,7 @@ pub enum Kind {
    Ping,
    PingResponse,
    Store(Arc<StorePayload>),
+   StoreResponse(Arc<StoreResponsePayload>),
    FindNode(Arc<FindNodePayload>),
    FindNodeResponse(Arc<FindNodeResponsePayload>),
    FindValue(Arc<FindValuePayload>),
@@ -119,6 +126,12 @@ pub enum Kind {
 pub struct StorePayload {
    pub key   : SubotaiHash,
    pub value : SubotaiHash,
+}
+
+#[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
+pub struct StoreResponsePayload {
+   pub key    : SubotaiHash,
+   pub result : storage::StoreResult,
 }
 
 /// Includes the ID to find and the amount of nodes required.

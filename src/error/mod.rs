@@ -8,7 +8,6 @@ use std::error::Error;
 pub enum SubotaiError {
    NoResponse,
    NodeNotFound,
-   StorageFull,
    UnresponsiveNetwork,
    Io(io::Error),
    Deserialize(serde::DeserializeError),
@@ -22,7 +21,6 @@ impl fmt::Display for SubotaiError {
          SubotaiError::NoResponse => write!(f, "Timed out while waiting for node response."),
          SubotaiError::NodeNotFound => write!(f, "Could not find the node locally or in the network."),
          SubotaiError::UnresponsiveNetwork => write!(f, "Network too small or unresponsive."),
-         SubotaiError::StorageFull => write!(f, "The value storage area for this node is full."),
          SubotaiError::Io(ref err) => err.fmt(f),
          SubotaiError::Deserialize(ref err) => err.fmt(f),
       }
@@ -35,7 +33,6 @@ impl Error for SubotaiError {
          SubotaiError::NoResponse => "Timed out with no response",
          SubotaiError::NodeNotFound => "Could not find the node",
          SubotaiError::UnresponsiveNetwork => "Network too small or unresponsive.",
-         SubotaiError::StorageFull => "Storage is full",
          SubotaiError::Io(ref err) => err.description(),
          SubotaiError::Deserialize(ref err) => err.description(),
       }
