@@ -33,8 +33,8 @@ impl Rpc {
    }
 
    /// Constructs an RPC asking for a the results of a table node lookup.
-   pub fn find_node(sender_id: SubotaiHash, reply_port: u16, id_to_find: SubotaiHash, nodes_wanted: usize) -> Rpc {
-      let payload = Arc::new(FindNodePayload { id_to_find: id_to_find, nodes_wanted: nodes_wanted });
+   pub fn find_node(sender_id: SubotaiHash, reply_port: u16, id_to_find: SubotaiHash) -> Rpc {
+      let payload = Arc::new(FindNodePayload { id_to_find: id_to_find });
       Rpc { kind: Kind::FindNode(payload), sender_id: sender_id, reply_port: reply_port }
    }
 
@@ -42,6 +42,18 @@ impl Rpc {
    pub fn find_node_response(sender_id: SubotaiHash, reply_port: u16, id_to_find: SubotaiHash, result: routing::LookupResult) -> Rpc {
       let payload = Arc::new(FindNodeResponsePayload { id_to_find: id_to_find, result: result} );
       Rpc { kind: Kind::FindNodeResponse(payload), sender_id: sender_id, reply_port: reply_port }
+   }
+
+   /// Constructs an RPC asking for a the results of a storage lookup
+   pub fn find_value(sender_id: SubotaiHash, reply_port: u16, key_to_find: SubotaiHash) -> Rpc {
+      let payload = Arc::new(FindValuePayload { key_to_find: key_to_find });
+      Rpc { kind: Kind::FindValue(payload), sender_id: sender_id, reply_port: reply_port }
+   }
+
+   /// Constructs an RPC asking for a the results of a storage lookup
+   pub fn find_value_response(sender_id: SubotaiHash, reply_port: u16, key_to_find: SubotaiHash, result: FindValueResult) -> Rpc {
+      let payload = Arc::new(FindValueResponsePayload { key_to_find: key_to_find, result: result });
+      Rpc { kind: Kind::FindValueResponse(payload), sender_id: sender_id, reply_port: reply_port }
    }
 
    /// Constructs a probe RPC. It asks the receiving node to provide a list of
@@ -103,6 +115,27 @@ impl Rpc {
       }
       false
    }
+
+   /// Reports whether the RPC is a FindValueResponse looking
+   /// for a particular key
+   pub fn is_finding_value(&self, key: &SubotaiHash) -> bool {
+      match self.kind {
+         Kind::FindValueResponse( ref payload ) => &payload.key_to_find == key,
+         _ => false,
+      }
+   }
+
+   /// Reports whether the RPC is a FindValueResponse that found
+   /// a particular key
+   pub fn found_value(&self, key: &SubotaiHash) -> bool {
+      if let Kind::FindValueResponse(ref payload) = self.kind {
+         match payload.result {
+            FindValueResult::Found(_) => return &payload.key_to_find == key,
+            _ => return false,
+         }
+      }
+      false
+   }
 }
 
 /// Types of RPC contemplated by the standard, plus some unique to the Subotai
@@ -138,11 +171,23 @@ pub struct StoreResponsePayload {
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
 pub struct FindNodePayload {
    pub id_to_find    : SubotaiHash,
-   pub nodes_wanted  : usize,
 }
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
-pub struct FindValuePayload;
+pub enum FindValueResult {
+   Found(SubotaiHash),
+   Closest(Vec<routing::NodeInfo>),
+}
+
+#[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
+pub struct FindValuePayload {
+   pub key_to_find : SubotaiHash,
+}
+#[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
+pub struct FindValueResponsePayload {
+   pub key_to_find : SubotaiHash,
+   pub result      : FindValueResult,
+}
 
 /// Includes the ID to find and the results of the table lookup.
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
@@ -157,14 +202,13 @@ pub struct ProbePayload {
 }
 
 /// Includes a vector of up to 'K' nodes close to the id to probe.
+/// If the ID provided corresponded to the key in a key-value pair,
+/// the corresponding value is also included in the response.
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
 pub struct ProbeResponsePayload {
-   pub id_to_probe : SubotaiHash,
-   pub nodes       : Vec<routing::NodeInfo>,
+   pub id_to_probe  : SubotaiHash,
+   pub nodes        : Vec<routing::NodeInfo>,
 }
-
-#[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
-pub struct FindValueResponsePayload;
 
 #[cfg(test)]
 mod tests {

@@ -100,7 +100,7 @@ impl Resources {
    /// to size concerns.
    ///
    /// For a more thorough mapping of the surroundings of a node, or if you specifically 
-   /// need to know the K closest nodes to a given ID, use probe_node.
+   /// need to know the K closest nodes to a given ID, use probe.
    pub fn find_node(&self, target: &SubotaiHash) -> SubotaiResult<routing::NodeInfo> {
       // If the node is already present in our table, we are done early.
       if let Some(node) = self.table.specific_node(target) {
@@ -147,6 +147,74 @@ impl Resources {
       self.table.specific_node(target).ok_or(SubotaiError::NodeNotFound)
    }
 
+   pub fn find_value(&self, key: &SubotaiHash) -> SubotaiResult<SubotaiHash> {
+      // If the value is already present in our table, we are done early.
+      if let Some(value) = self.storage.get(key) {
+         return Ok(value);
+      }
+
+      let mut queried_ids = Vec::<SubotaiHash>::with_capacity(routing::K_FACTOR);
+      let all_receptions = self.receptions();
+      let loop_timeout = time::Duration::seconds(3 * node::NETWORK_TIMEOUT_S);
+      let deadline = time::SteadyTime::now() + loop_timeout;
+     
+      while queried_ids.len() < routing::K_FACTOR && time::SteadyTime::now() < deadline {
+         // We query the 'ALPHA' nodes closest to the key we haven't yet queried.
+         let nodes_to_query: Vec<routing::NodeInfo> = self.table.closest_nodes_to(key)
+            .filter(|ref info| !queried_ids.contains(&info.id) && &info.id != &self.id)
+            .take(routing::ALPHA)
+            .collect();
+
+         // We wait for the response from the same number of nodes, minus the 'IMPATIENCE' factor.
+         let responses = self.receptions()
+            .during(time::Duration::seconds(node::NETWORK_TIMEOUT_S))
+            .filter(|ref rpc| rpc.is_finding_value(key))
+            .take(usize::saturating_sub(nodes_to_query.len(), routing::IMPATIENCE));
+        
+         // We compose the RPCs and send the UDP packets.
+         try!(self.find_value_wave(key, &nodes_to_query, &mut queried_ids));
+  
+         // We check the responses and return if the value was found, while caching 
+         // the value in the closest node that didn't know about it.
+         for response in responses { 
+            if response.found_value(key) {
+               match self.storage.get(key) {
+                  Some(value) => {
+                     self.remote_cache(&queried_ids, &response.sender_id, key.clone(), value.clone());
+                     return Ok(value);
+                  },
+                  None => return Err(SubotaiError::StorageError),
+               }
+            }
+         }
+      }
+      
+      // One last wait until success or timeout, to compensate for impatience
+      // (It could be that the nodes we ignored earlier come back with the response)
+      all_receptions
+         .during(time::Duration::seconds(node::NETWORK_TIMEOUT_S))
+         .filter(|ref rpc| rpc.found_value(key))
+         .take(1)
+         .count();
+      self.storage.get(key).ok_or(SubotaiError::NoResponse)
+   }
+   
+   fn remote_cache(&self, queried: &[SubotaiHash], finder: &SubotaiHash, key: SubotaiHash, value: SubotaiHash) {
+      let cache_candidate = queried.iter()
+         .filter(|id| *id != finder)
+         .min_by_key(|id| *id ^ &key);
+
+      let cache_candidate_info = match cache_candidate{
+         None => return,
+         Some(id) => self.find_node(id),
+      };
+
+      match cache_candidate_info {
+         Err(_) => return,
+         Ok(info) => self.store_remotely(&info, key, value),
+      };
+   }
+
    /// Probes a random node in a bucket, refreshing it.
    pub fn refresh_bucket(&self, index: usize) -> SubotaiResult<()> {
       if index > hash::HASH_SIZE {
@@ -155,14 +223,14 @@ impl Resources {
       //TODO: Make it random
       let mut id = self.id.clone();
       id.flip_bit(index);
-      try!(self.probe_node(&id));
+      try!(self.probe(&id));
       Ok(())
    }
 
    /// Thoroughly searches for the nodes closest to a given ID, returning the 'K_FACTOR' closest.
    /// It is possible that not all of these nodes will be stored in the routing table, so use
    /// the return value of this function rather than a subsequent call for table.closest_nodes_to().
-   pub fn probe_node(&self, target: &SubotaiHash) -> SubotaiResult<Vec<routing::NodeInfo>> {
+   pub fn probe(&self, target: &SubotaiHash) -> SubotaiResult<Vec<routing::NodeInfo>> {
       // We record the fact we attempted a probe for this bucket.
       self.table.mark_bucket_as_probed(target);
 
@@ -223,9 +291,8 @@ impl Resources {
       Ok(closest)
    }
    
-   /// Locates a node in the network and instructs it to locate a key-value pair.
-   pub fn store_remotely(&self, id: &SubotaiHash, key: SubotaiHash, value: SubotaiHash) -> SubotaiResult<storage::StoreResult> {
-      let node = try!(self.find_node(id));
+   /// Instructs a node to store a key_value pair.
+   pub fn store_remotely(&self, node: &routing::NodeInfo, key: SubotaiHash, value: SubotaiHash) -> SubotaiResult<storage::StoreResult> {
       let rpc = Rpc::store(self.id.clone(), 
                            self.inbound.local_addr().unwrap().port(),
                            key,
@@ -234,7 +301,7 @@ impl Resources {
       let mut responses = self.receptions()
          .during(time::Duration::seconds(node::NETWORK_TIMEOUT_S))
          .of_kind(receptions::KindFilter::StoreResponse)
-         .from(id.clone())
+         .from(node.id.clone())
          .take(1);
       try!(self.outbound.send_to(&packet, node.address));
 
@@ -297,12 +364,25 @@ impl Resources {
       let rpc = Rpc::find_node(
          self.id.clone(), 
          self.inbound.local_addr().unwrap().port(),
-         id_to_find.clone(),
-         routing::K_FACTOR,
+         id_to_find.clone()
       );
       let packet = rpc.serialize(); 
       for node in nodes_to_query {
          println!("--> Sending to {}", node.id);
+         try!(self.outbound.send_to(&packet, node.address));
+         queried.push(node.id.clone());
+      }
+      Ok(())
+   }
+
+   fn find_value_wave(&self, key_to_find: &SubotaiHash, nodes_to_query: &[routing::NodeInfo], queried: &mut Vec<SubotaiHash>) -> SubotaiResult<()> {
+      let rpc = Rpc::find_value(
+         self.id.clone(), 
+         self.inbound.local_addr().unwrap().port(),
+         key_to_find.clone()
+      );
+      let packet = rpc.serialize(); 
+      for node in nodes_to_query {
          try!(self.outbound.send_to(&packet, node.address));
          queried.push(node.id.clone());
       }
@@ -397,7 +477,7 @@ impl Resources {
 
    fn handle_find_node(&self, payload: sync::Arc<rpc::FindNodePayload>, sender: routing::NodeInfo) -> SubotaiResult<()> {
       self.update_table(sender.clone());
-      let lookup_results = self.table.lookup(&payload.id_to_find, payload.nodes_wanted, None);
+      let lookup_results = self.table.lookup(&payload.id_to_find, routing::K_FACTOR, None);
       let rpc = Rpc::find_node_response(self.id.clone(), 
                                         self.inbound.local_addr().unwrap().port(),
                                         payload.id_to_find.clone(),

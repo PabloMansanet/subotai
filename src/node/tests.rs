@@ -196,7 +196,7 @@ fn remote_key_value_storage()
            .of_kind(receptions::KindFilter::StoreResponse)
            .during(time::Duration::seconds(1));
 
-   assert_eq!(alpha.resources.store_remotely(beta.id(), key.clone(), value.clone()).unwrap(),
+   assert_eq!(alpha.resources.store_remotely(&beta.local_info(), key.clone(), value.clone()).unwrap(),
               storage::StoreResult::Success);
    assert!(alpha_receptions.next().is_some());
    assert!(beta_receptions.next().is_some());

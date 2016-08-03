@@ -154,10 +154,14 @@ impl Node {
       self.resources.find_node(id)
    }
 
-   ///// Stores a key-value pair in the network.
-   //pub fn store(&self, key: SubotaiHash, value: SubotaiHash) {
-   //   unimplemented!();
-   //}
+   /// Stores a key-value pair in the network.
+   pub fn store(&self, key: SubotaiHash, value: SubotaiHash) -> SubotaiResult<()> {
+      let storage_candidates = try!(self.resources.probe(&key));
+      for candidate in &storage_candidates {
+         try!(self.resources.store_remotely(candidate, key.clone(), value.clone()));
+      }
+      Ok(())
+   }
    ///// Retrieves a value from the network, given a key.
    //pub fn retrieve(&self, key: SubotaiHash) -> SubotaiHash {
    //   unimplemented!();
