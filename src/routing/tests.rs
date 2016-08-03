@@ -202,6 +202,33 @@ fn efficient_bounce_lookup_on_a_randomized_table() {
    }
 }
 
+#[test]
+fn oldest_bucket_returns_the_first_bucket_that_never_got_probed() {
+   let table = Table::new(SubotaiHash::random());
+
+   // We mark a random bucket as probed.
+   table.mark_bucket_as_probed(&SubotaiHash::random());
+
+   assert_eq!(table.oldest_bucket(), (0, None));
+}
+
+#[test]
+fn oldest_bucket_when_all_buckets_were_probed() {
+   let id = SubotaiHash::random();
+   let table = Table::new(id.clone());
+
+   table.mark_bucket_as_probed(&id);
+   for i in 0..HASH_SIZE {
+      let mut id_for_bucket = id.clone();
+      id_for_bucket.flip_bit(i);
+      table.mark_bucket_as_probed(&id_for_bucket);
+   }
+
+   let (index, time) = table.oldest_bucket();
+   assert_eq!(index, 0);
+   assert!(time.is_some());
+}
+
 impl Table {
    pub fn fill_bucket(&self, bucket_index : usize, fill_quantity : u8) {
       // Otherwise this helper function becomes quite complex.

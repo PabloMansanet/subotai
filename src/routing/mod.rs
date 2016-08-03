@@ -234,6 +234,22 @@ impl Table {
       let mut bucket = self.buckets[index].write().unwrap();
       bucket.last_probe = Some(time::SteadyTime::now());
    }
+
+   /// Returns the bucket index and the time for the bucket that we haven't
+   /// probed for the longest. None on the second tuple value would mean the bucket
+   /// has never been probed.
+   pub fn oldest_bucket(&self) -> (usize, Option<time::SteadyTime>) {
+      let times: Vec<Option<time::SteadyTime>> = self.buckets.iter()
+         .map(|bucket| bucket.read().unwrap().last_probe.clone())
+         .collect();
+
+      if let Some(index) = times.iter().position(|ref option| option.is_none()) {
+         return (index, None);
+      }
+
+      let now = time::SteadyTime::now();
+      times.into_iter().enumerate().max_by_key(|&(_,time)| now - time.unwrap()).unwrap()
+   }
 }
 
 /// Produces copies of all known nodes, ordered in ascending
