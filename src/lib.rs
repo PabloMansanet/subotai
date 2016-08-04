@@ -23,6 +23,7 @@
 //! # extern crate time;
 //! # extern crate subotai;
 //! use subotai::node::Node;
+//! use subotai::hash::SubotaiHash;
 //! # fn main() {
 //!
 //! let alpha = Node::new().unwrap();
@@ -30,11 +31,10 @@
 //!
 //! alpha.bootstrap_until(beta.local_info(), 1);
 //!
-//! let mut receptions = beta.receptions().during(time::Duration::seconds(1));
+//! let (key, value) = (SubotaiHash::random(), SubotaiHash::random());
+//! alpha.store(key.clone(), value.clone());
 //!
-//! alpha.ping(beta.id());
-//!  
-//! assert!(receptions.next().is_some());
+//! assert_eq!(beta.retrieve(&key).unwrap(), value);
 //! # }
 //!
 //! ```

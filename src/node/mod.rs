@@ -123,17 +123,6 @@ impl Node {
       self.resources.receptions()
    }
 
-   /// Sends a ping RPC to a destination node. If the ID is unknown, this request is 
-   /// promoted into a find_node RPC followed by a ping to the node.
-   pub fn ping(&self, id: &SubotaiHash) -> SubotaiResult<()> {
-      self.resources.ping(id)
-   }
-
-   /// Produces an ID-Address pair, with the node's local inbound UDPv4 address.
-   pub fn local_info(&self) -> NodeInfo {
-      self.resources.local_info()
-   }
-
    /// Bootstraps the node from a seed, and returns the amount of nodes in the final table.
    pub fn bootstrap(&self, seed: NodeInfo) -> SubotaiResult<usize> {
        try!(self.resources.bootstrap(seed, None));
@@ -148,10 +137,8 @@ impl Node {
        Ok(self.resources.table.len())
    }
 
-   /// Recursive node lookup through the network. Will block until
-   /// finished and return the node information if succeful.
-   pub fn find_node(&self, id: &SubotaiHash) -> SubotaiResult<NodeInfo> {
-      self.resources.find_node(id)
+   pub fn local_info(&self) -> NodeInfo {
+      self.resources.local_info()
    }
 
    /// Stores a key-value pair in the network.

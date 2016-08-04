@@ -11,7 +11,7 @@ pub const TRIES: u8 = 5;
 fn node_ping() {
    let alpha = node::Node::new().unwrap();
    let beta  = node::Node::new().unwrap();
-   let beta_seed = beta.local_info();
+   let beta_seed = beta.resources.local_info();
    let span = time::Duration::seconds(1);
 
    // Bootstrapping alpha:
@@ -23,7 +23,7 @@ fn node_ping() {
       .of_kind(receptions::KindFilter::Ping);
 
    // Alpha pings beta.
-   assert!(alpha.ping(&beta.resources.id).is_ok());
+   assert!(alpha.resources.ping(&beta.resources.id).is_ok());
    assert_eq!(1, beta_receptions.count());
 }
 
@@ -53,7 +53,7 @@ fn bootstrapping_and_finding_on_simulated_network() {
    let head = nodes.pop_front().unwrap();
    let tail = nodes.pop_back().unwrap();
 
-   assert_eq!(head.find_node(tail.id()).unwrap().id, tail.local_info().id);
+   assert_eq!(head.resources.find_node(tail.id()).unwrap().id, tail.resources.local_info().id);
 }
 
 #[test]
@@ -67,7 +67,7 @@ fn finding_on_simulated_unresponsive_network() {
    let head = nodes.pop_front().unwrap();
    let tail = nodes.pop_back().unwrap();
 
-   assert_eq!(head.find_node(tail.id()).unwrap().id, tail.local_info().id);
+   assert_eq!(head.resources.find_node(tail.id()).unwrap().id, tail.resources.local_info().id);
 }
 
 #[test]
@@ -80,7 +80,7 @@ fn finding_a_nonexisting_node_in_a_simulated_network_times_out() {
    let head = nodes.pop_front().unwrap();
 
    let random_hash = hash::SubotaiHash::random();
-   assert!(head.find_node(&random_hash).is_err());
+   assert!(head.resources.find_node(&random_hash).is_err());
 }
 
 fn simulated_network(nodes: usize) -> VecDeque<node::Node> {
@@ -89,12 +89,12 @@ fn simulated_network(nodes: usize) -> VecDeque<node::Node> {
       let origin = nodes.front().unwrap();
       // Initial handshake pass
       for node in nodes.iter().skip(1) {
-         assert!(node.bootstrap_until(origin.local_info(), 1).is_ok());
+         assert!(node.bootstrap_until(origin.resources.local_info(), 1).is_ok());
       }
 
       // Actual bootstrapping
       for node in nodes.iter().skip(1) {
-         assert!(node.bootstrap(origin.local_info()).is_ok());
+         assert!(node.bootstrap(origin.resources.local_info()).is_ok());
       }
    }
    nodes
@@ -120,7 +120,7 @@ fn generating_a_conflict_causes_a_ping_to_the_evicted_node()
 {
    let alpha = node::Node::new().unwrap();
    let beta = node::Node::new().unwrap();
-   alpha.resources.update_table(beta.local_info());
+   alpha.resources.update_table(beta.resources.local_info());
   
    let index = alpha.resources.table.bucket_for_node(beta.id());
 
@@ -182,7 +182,7 @@ fn remote_key_value_storage()
    let alpha = node::Node::new().unwrap();
    let beta  = node::Node::new().unwrap();
    
-   assert!(alpha.bootstrap_until(beta.local_info(), 1).is_ok());
+   assert!(alpha.bootstrap_until(beta.resources.local_info(), 1).is_ok());
   
    let key = hash::SubotaiHash::random();
    let value = hash::SubotaiHash::random();
@@ -196,7 +196,7 @@ fn remote_key_value_storage()
            .of_kind(receptions::KindFilter::StoreResponse)
            .during(time::Duration::seconds(1));
 
-   assert_eq!(alpha.resources.store_remotely(&beta.local_info(), key.clone(), value.clone()).unwrap(),
+   assert_eq!(alpha.resources.store_remotely(&beta.resources.local_info(), key.clone(), value.clone()).unwrap(),
               storage::StoreResult::Success);
    assert!(alpha_receptions.next().is_some());
    assert!(beta_receptions.next().is_some());
@@ -212,7 +212,7 @@ fn node_probing_in_simulated_network()
    // We manually collect the info tags of all nodes.
    let mut info_nodes: Vec<routing::NodeInfo> = nodes
       .iter()
-      .map(|ref node| node.local_info())
+      .map(|ref node| node.resources.local_info())
       .collect();
 
    let head = nodes.pop_front().unwrap();
@@ -236,7 +236,7 @@ fn node_probing_in_simulated_unresponsive_network()
    // We manually collect the info tags of all nodes.
    let mut info_nodes: Vec<routing::NodeInfo> = nodes
       .iter()
-      .map(|ref node| node.local_info())
+      .map(|ref node| node.resources.local_info())
       .collect();
 
    nodes.drain(10..20);

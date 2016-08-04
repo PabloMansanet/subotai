@@ -138,7 +138,7 @@ mod tests {
     fn produces_rpcs_but_not_ticks() {
        let alpha = node::Node::new().unwrap();
        let beta = node::Node::new().unwrap();
-       let table_size = alpha.bootstrap_until(beta.local_info(), 1).unwrap();
+       let table_size = alpha.bootstrap_until(beta.resources.local_info(), 1).unwrap();
 
        assert_eq!(table_size, 2); // One for self, and one for beta
        let beta_receptions = 
@@ -146,8 +146,8 @@ mod tests {
               .during(time::Duration::seconds(1))
               .of_kind(KindFilter::Ping);
 
-       assert!(alpha.ping(beta.id()).is_ok());
-       assert!(alpha.ping(beta.id()).is_ok());
+       assert!(alpha.resources.ping(beta.id()).is_ok());
+       assert!(alpha.resources.ping(beta.id()).is_ok());
 
        assert_eq!(beta_receptions.count(),2);
     }
@@ -159,7 +159,7 @@ mod tests {
        let beta  = node::Node::new().unwrap();
        
        let mut allowed = Vec::new();
-       allowed.push(beta.local_info().id);
+       allowed.push(beta.resources.local_info().id);
       
        let receptions = 
           receiver.receptions()
@@ -167,11 +167,11 @@ mod tests {
                   .from_senders(allowed)
                   .of_kind(KindFilter::Ping);
 
-       assert!(alpha.bootstrap_until(receiver.local_info(), 1).is_ok());
-       assert!(beta.bootstrap_until(receiver.local_info(), 1).is_ok());
+       assert!(alpha.bootstrap_until(receiver.resources.local_info(), 1).is_ok());
+       assert!(beta.bootstrap_until(receiver.resources.local_info(), 1).is_ok());
 
-       assert!(alpha.ping(receiver.id()).is_ok());
-       assert!(beta.ping(receiver.id()).is_ok());
+       assert!(alpha.resources.ping(receiver.id()).is_ok());
+       assert!(beta.resources.ping(receiver.id()).is_ok());
 
        assert_eq!(receptions.count(),1);
     }
