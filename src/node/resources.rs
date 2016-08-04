@@ -130,7 +130,6 @@ impl Resources {
   
          // We check the responses and return if the node was found.
          for response in responses { 
-            println!("<-- Response from {}", response.sender_id);
             if response.found_node(target) {
                return self.table.specific_node(target).ok_or(SubotaiError::NodeNotFound);
             }
@@ -154,6 +153,7 @@ impl Resources {
       }
 
       let mut queried_ids = Vec::<SubotaiHash>::with_capacity(routing::K_FACTOR);
+      let mut cache_candidate: Option<hash::SubotaiHash> = None;
       let all_receptions = self.receptions();
       let loop_timeout = time::Duration::seconds(3 * node::NETWORK_TIMEOUT_S);
       let deadline = time::SteadyTime::now() + loop_timeout;
@@ -175,16 +175,18 @@ impl Resources {
          try!(self.find_value_wave(key, &nodes_to_query, &mut queried_ids));
   
          // We check the responses and return if the value was found, while caching 
-         // the value in the closest node that didn't know about it.
+         // the value in the closest unqueried node.
          for response in responses { 
             if response.found_value(key) {
                match self.storage.get(key) {
                   Some(value) => {
-                     self.remote_cache(&queried_ids, &response.sender_id, key.clone(), value.clone());
+                     self.remote_cache(&cache_candidate, key.clone(), value.clone());
                      return Ok(value);
                   },
                   None => return Err(SubotaiError::StorageError),
                }
+            } else {
+               cache_candidate = Some(response.sender_id);
             }
          }
       }
@@ -198,21 +200,16 @@ impl Resources {
          .count();
       self.storage.get(key).ok_or(SubotaiError::NoResponse)
    }
-   
-   fn remote_cache(&self, queried: &[SubotaiHash], finder: &SubotaiHash, key: SubotaiHash, value: SubotaiHash) {
-      let cache_candidate = queried.iter()
-         .filter(|id| *id != finder)
-         .min_by_key(|id| *id ^ &key);
-
-      let cache_candidate_info = match cache_candidate{
-         None => return,
-         Some(id) => self.find_node(id),
-      };
-
-      match cache_candidate_info {
-         Err(_) => return,
-         Ok(info) => self.store_remotely(&info, key, value),
-      };
+  
+   #[allow(unused_must_use)]
+   fn remote_cache(&self, target: &Option<SubotaiHash>, key: SubotaiHash, value: SubotaiHash) {
+      match *target {
+         Some(ref id) => match self.find_node(id) {
+            Ok(node) => {self.store_remotely(&node, key, value);},
+            Err(_) => (),
+         },
+         None => (),
+      }
    }
 
    /// Probes a random node in a bucket, refreshing it.
@@ -368,7 +365,6 @@ impl Resources {
       );
       let packet = rpc.serialize(); 
       for node in nodes_to_query {
-         println!("--> Sending to {}", node.id);
          try!(self.outbound.send_to(&packet, node.address));
          queried.push(node.id.clone());
       }

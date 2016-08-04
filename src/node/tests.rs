@@ -217,7 +217,7 @@ fn node_probing_in_simulated_network()
 
    let head = nodes.pop_front().unwrap();
    let tail = nodes.pop_back().unwrap();
-   let probe_results = head.resources.probe_node(tail.id()).unwrap();
+   let probe_results = head.resources.probe(tail.id()).unwrap();
 
    // We sort our manual collection by distance to the tail node.
    info_nodes.sort_by(|ref info_a, ref info_b| (&info_a.id ^ tail.id()).cmp(&(&info_b.id ^ tail.id())));
@@ -242,7 +242,7 @@ fn node_probing_in_simulated_unresponsive_network()
    nodes.drain(10..20);
    let head = nodes.pop_front().unwrap();
    let tail = nodes.pop_back().unwrap();
-   let probe_results = head.resources.probe_node(tail.id()).unwrap();
+   let probe_results = head.resources.probe(tail.id()).unwrap();
 
    // We sort our manual collection by distance to the tail node.
    info_nodes.sort_by(|ref info_a, ref info_b| (&info_a.id ^ tail.id()).cmp(&(&info_b.id ^ tail.id())));
@@ -252,6 +252,20 @@ fn node_probing_in_simulated_unresponsive_network()
    for (a, b) in probe_results.iter().zip(info_nodes.iter()) {
       assert_eq!(a.id, b.id);
    }
+}
+
+#[test]
+fn store_retrieve_in_simulated_network()
+{
+   let mut nodes = simulated_network(40);
+   let (key,value) = (hash::SubotaiHash::random(), hash::SubotaiHash::random());
+   let head = nodes.pop_front().unwrap();
+   let tail = nodes.pop_back().unwrap();
+
+   head.store(key.clone(), value.clone()).unwrap();
+   let retrieved_value = tail.retrieve(&key).unwrap();;
+
+   assert_eq!(value, retrieved_value);
 }
 
 fn node_info_no_net(id : hash::SubotaiHash) -> routing::NodeInfo {

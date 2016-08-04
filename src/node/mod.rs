@@ -162,10 +162,11 @@ impl Node {
       }
       Ok(())
    }
-   ///// Retrieves a value from the network, given a key.
-   //pub fn retrieve(&self, key: SubotaiHash) -> SubotaiHash {
-   //   unimplemented!();
-   //}
+
+   /// Retrieves a value from the network, given a key.
+   pub fn retrieve(&self, key: &SubotaiHash) -> SubotaiResult<SubotaiHash> {
+      self.resources.find_value(key)
+   }
 
    /// Receives and processes data as long as the node is alive.
    fn reception_loop(resources: sync::Arc<resources::Resources>) {
@@ -250,4 +251,3 @@ impl Drop for Node {
       *self.resources.state.write().unwrap() = State::ShuttingDown;
    }
 }
-
