@@ -126,7 +126,7 @@ impl Resources {
             .take(usize::saturating_sub(nodes_to_query.len(), routing::IMPATIENCE));
         
          // We compose the RPCs and send the UDP packets.
-         try!(self.lookup_wave(target, &nodes_to_query, &mut queried_ids));
+         try!(self.locate_wave(target, &nodes_to_query, &mut queried_ids));
   
          // We check the responses and return if the node was found.
          for response in responses { 
@@ -357,7 +357,7 @@ impl Resources {
       Ok(())
    }
 
-   fn lookup_wave(&self, id_to_find: &SubotaiHash, nodes_to_query: &[routing::NodeInfo], queried: &mut Vec<SubotaiHash>) -> SubotaiResult<()> {
+   fn locate_wave(&self, id_to_find: &SubotaiHash, nodes_to_query: &[routing::NodeInfo], queried: &mut Vec<SubotaiHash>) -> SubotaiResult<()> {
       let rpc = Rpc::locate(
          self.id.clone(), 
          self.inbound.local_addr().unwrap().port(),
@@ -487,6 +487,8 @@ impl Resources {
    fn handle_locate_response(&self, payload: sync::Arc<rpc::LocateResponsePayload>, sender: routing::NodeInfo) -> SubotaiResult<()> {
       self.update_table(sender);
       match payload.result {
+         // TODO Big mistake here and in similar places. Only update table for the sender node.
+         // The rest may not be alive at all!.
          routing::LookupResult::ClosestNodes(ref nodes) => for node in nodes { self.update_table(node.clone()); },
          routing::LookupResult::Found(ref node) => { self.update_table(node.clone()); },
          _ => (),
