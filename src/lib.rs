@@ -3,7 +3,7 @@
 //! Subotai is a Kademlia based distributed hash table. It's designed to be easy to use, safe
 //! and quick. Here are some of the ideas that differentiate it from other DHTs:
 //!
-//! * **Externally synchronous, internally concurrent**: I believe blocking calls make it easier
+//! * **Externally synchronous, internally concurrent**: I find blocking calls make it easier 
 //!   to reason about networking code than callbacks. All public methods are blocking and return
 //!   a sane result or an explicit timeout. Internally however, subotai is fully concurrent,
 //!   and parallel operations will often help each other complete!
@@ -32,7 +32,7 @@
 //! alpha.bootstrap_until(beta.local_info(), 1);
 //!
 //! let (key, value) = (SubotaiHash::random(), SubotaiHash::random());
-//! alpha.store(key.clone(), value.clone());
+//! alpha.store(&key, &value);
 //!
 //! assert_eq!(beta.retrieve(&key).unwrap(), value);
 //! # }
@@ -50,7 +50,7 @@ extern crate time;
 
 pub mod node;
 pub mod hash;
-pub mod routing;
+mod routing;
 mod storage;
 mod rpc;
 

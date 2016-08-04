@@ -142,7 +142,7 @@ impl Node {
    }
 
    /// Stores a key-value pair in the network.
-   pub fn store(&self, key: SubotaiHash, value: SubotaiHash) -> SubotaiResult<()> {
+   pub fn store(&self, key: &SubotaiHash, value: &SubotaiHash) -> SubotaiResult<()> {
       let storage_candidates = try!(self.resources.probe(&key));
       for candidate in &storage_candidates {
          try!(self.resources.store_remotely(candidate, key.clone(), value.clone()));
@@ -152,7 +152,7 @@ impl Node {
 
    /// Retrieves a value from the network, given a key.
    pub fn retrieve(&self, key: &SubotaiHash) -> SubotaiResult<SubotaiHash> {
-      self.resources.find_value(key)
+      self.resources.retrieve(key)
    }
 
    /// Receives and processes data as long as the node is alive.

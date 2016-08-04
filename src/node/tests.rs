@@ -53,7 +53,7 @@ fn bootstrapping_and_finding_on_simulated_network() {
    let head = nodes.pop_front().unwrap();
    let tail = nodes.pop_back().unwrap();
 
-   assert_eq!(head.resources.find_node(tail.id()).unwrap().id, tail.resources.local_info().id);
+   assert_eq!(head.resources.locate(tail.id()).unwrap().id, tail.resources.local_info().id);
 }
 
 #[test]
@@ -67,7 +67,7 @@ fn finding_on_simulated_unresponsive_network() {
    let head = nodes.pop_front().unwrap();
    let tail = nodes.pop_back().unwrap();
 
-   assert_eq!(head.resources.find_node(tail.id()).unwrap().id, tail.resources.local_info().id);
+   assert_eq!(head.resources.locate(tail.id()).unwrap().id, tail.resources.local_info().id);
 }
 
 #[test]
@@ -80,7 +80,7 @@ fn finding_a_nonexisting_node_in_a_simulated_network_times_out() {
    let head = nodes.pop_front().unwrap();
 
    let random_hash = hash::SubotaiHash::random();
-   assert!(head.resources.find_node(&random_hash).is_err());
+   assert!(head.resources.locate(&random_hash).is_err());
 }
 
 fn simulated_network(nodes: usize) -> VecDeque<node::Node> {
@@ -262,7 +262,7 @@ fn store_retrieve_in_simulated_network()
    let head = nodes.pop_front().unwrap();
    let tail = nodes.pop_back().unwrap();
 
-   head.store(key.clone(), value.clone()).unwrap();
+   head.store(&key, &value).unwrap();
    let retrieved_value = tail.retrieve(&key).unwrap();;
 
    assert_eq!(value, retrieved_value);

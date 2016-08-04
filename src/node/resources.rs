@@ -40,7 +40,7 @@ impl Resources {
 
    /// Pings a node, blocking until ping response.
    pub fn ping(&self, id: &SubotaiHash) -> SubotaiResult<()> {
-      let node = try!(self.find_node(id));
+      let node = try!(self.locate(id));
       let rpc = Rpc::ping(self.id.clone(), self.inbound.local_addr().unwrap().port());
       let packet = rpc.serialize();
       let responses = self.receptions()
@@ -58,7 +58,7 @@ impl Resources {
 
    /// Sends a ping and doesn't wait for a response. Used by the maintenance thread.
    pub fn ping_and_forget(&self, id: &SubotaiHash) -> SubotaiResult<()> {
-      let node = try!(self.find_node(id));
+      let node = try!(self.locate(id));
       let rpc = Rpc::ping(self.id.clone(), self.inbound.local_addr().unwrap().port());
       let packet = rpc.serialize();
       try!(self.outbound.send_to(&packet, node.address));
@@ -101,7 +101,7 @@ impl Resources {
    ///
    /// For a more thorough mapping of the surroundings of a node, or if you specifically 
    /// need to know the K closest nodes to a given ID, use probe.
-   pub fn find_node(&self, target: &SubotaiHash) -> SubotaiResult<routing::NodeInfo> {
+   pub fn locate(&self, target: &SubotaiHash) -> SubotaiResult<routing::NodeInfo> {
       // If the node is already present in our table, we are done early.
       if let Some(node) = self.table.specific_node(target) {
          return Ok(node);
@@ -146,7 +146,7 @@ impl Resources {
       self.table.specific_node(target).ok_or(SubotaiError::NodeNotFound)
    }
 
-   pub fn find_value(&self, key: &SubotaiHash) -> SubotaiResult<SubotaiHash> {
+   pub fn retrieve(&self, key: &SubotaiHash) -> SubotaiResult<SubotaiHash> {
       // If the value is already present in our table, we are done early.
       if let Some(value) = self.storage.get(key) {
          return Ok(value);
@@ -172,7 +172,7 @@ impl Resources {
             .take(usize::saturating_sub(nodes_to_query.len(), routing::IMPATIENCE));
         
          // We compose the RPCs and send the UDP packets.
-         try!(self.find_value_wave(key, &nodes_to_query, &mut queried_ids));
+         try!(self.retrieve_wave(key, &nodes_to_query, &mut queried_ids));
   
          // We check the responses and return if the value was found, while caching 
          // the value in the closest unqueried node.
@@ -204,7 +204,7 @@ impl Resources {
    #[allow(unused_must_use)]
    fn remote_cache(&self, target: &Option<SubotaiHash>, key: SubotaiHash, value: SubotaiHash) {
       match *target {
-         Some(ref id) => match self.find_node(id) {
+         Some(ref id) => match self.locate(id) {
             Ok(node) => {self.store_remotely(&node, key, value);},
             Err(_) => (),
          },
@@ -358,7 +358,7 @@ impl Resources {
    }
 
    fn lookup_wave(&self, id_to_find: &SubotaiHash, nodes_to_query: &[routing::NodeInfo], queried: &mut Vec<SubotaiHash>) -> SubotaiResult<()> {
-      let rpc = Rpc::find_node(
+      let rpc = Rpc::locate(
          self.id.clone(), 
          self.inbound.local_addr().unwrap().port(),
          id_to_find.clone()
@@ -371,8 +371,8 @@ impl Resources {
       Ok(())
    }
 
-   fn find_value_wave(&self, key_to_find: &SubotaiHash, nodes_to_query: &[routing::NodeInfo], queried: &mut Vec<SubotaiHash>) -> SubotaiResult<()> {
-      let rpc = Rpc::find_value(
+   fn retrieve_wave(&self, key_to_find: &SubotaiHash, nodes_to_query: &[routing::NodeInfo], queried: &mut Vec<SubotaiHash>) -> SubotaiResult<()> {
+      let rpc = Rpc::retrieve(
          self.id.clone(), 
          self.inbound.local_addr().unwrap().port(),
          key_to_find.clone()
@@ -406,15 +406,14 @@ impl Resources {
       let result = match rpc.kind {
          rpc::Kind::Ping                           => self.handle_ping(sender),
          rpc::Kind::PingResponse                   => self.handle_ping_response(sender),
-         rpc::Kind::FindNode(ref payload)          => self.handle_find_node(payload.clone(), sender),
-         rpc::Kind::FindNodeResponse(ref payload)  => self.handle_find_node_response(payload.clone(), sender),
+         rpc::Kind::Locate(ref payload)            => self.handle_locate(payload.clone(), sender),
+         rpc::Kind::LocateResponse(ref payload)    => self.handle_locate_response(payload.clone(), sender),
          rpc::Kind::Probe(ref payload)             => self.handle_probe(payload.clone(), sender),
          rpc::Kind::ProbeResponse(ref payload)     => self.handle_probe_response(payload.clone(), sender),
          rpc::Kind::Store(ref payload)             => self.handle_store(payload.clone(), sender),
          rpc::Kind::StoreResponse(_)               => self.handle_store_response(sender),
-         rpc::Kind::FindValue(ref payload)         => self.handle_find_value(payload.clone(), sender),
-         // TODO Consider optimizing by taking the payload conditionally.
-         rpc::Kind::FindValueResponse(ref payload) => self.handle_find_value_response(payload.clone(), sender),
+         rpc::Kind::Retrieve(ref payload)          => self.handle_retrieve(payload.clone(), sender),
+         rpc::Kind::RetrieveResponse(ref payload)  => self.handle_retrieve_response(payload.clone(), sender),
       };
       
       self.updates.lock().unwrap().broadcast(Update::RpcReceived(rpc));
@@ -473,10 +472,10 @@ impl Resources {
       Ok(())
    }
 
-   fn handle_find_node(&self, payload: sync::Arc<rpc::FindNodePayload>, sender: routing::NodeInfo) -> SubotaiResult<()> {
+   fn handle_locate(&self, payload: sync::Arc<rpc::LocatePayload>, sender: routing::NodeInfo) -> SubotaiResult<()> {
       self.update_table(sender.clone());
       let lookup_results = self.table.lookup(&payload.id_to_find, routing::K_FACTOR, None);
-      let rpc = Rpc::find_node_response(self.id.clone(), 
+      let rpc = Rpc::locate_response(self.id.clone(), 
                                         self.inbound.local_addr().unwrap().port(),
                                         payload.id_to_find.clone(),
                                         lookup_results);
@@ -485,7 +484,7 @@ impl Resources {
       Ok(())
    }
 
-   fn handle_find_node_response(&self, payload: sync::Arc<rpc::FindNodeResponsePayload>, sender: routing::NodeInfo) -> SubotaiResult<()> {
+   fn handle_locate_response(&self, payload: sync::Arc<rpc::LocateResponsePayload>, sender: routing::NodeInfo) -> SubotaiResult<()> {
       self.update_table(sender);
       match payload.result {
          routing::LookupResult::ClosestNodes(ref nodes) => for node in nodes { self.update_table(node.clone()); },
@@ -495,14 +494,14 @@ impl Resources {
       Ok(())
    }
 
-   fn handle_find_value(&self, payload: sync::Arc<rpc::FindValuePayload>, sender: routing::NodeInfo) -> SubotaiResult<()> {
+   fn handle_retrieve(&self, payload: sync::Arc<rpc::RetrievePayload>, sender: routing::NodeInfo) -> SubotaiResult<()> {
       self.update_table(sender.clone());
       let result = match self.storage.get(&payload.key_to_find) {
-         Some(value) => rpc::FindValueResult::Found(value),
-         None => rpc::FindValueResult::Closest (self.table.closest_nodes_to(&payload.key_to_find).take(routing::K_FACTOR).collect()),
+         Some(value) => rpc::RetrieveResult::Found(value),
+         None => rpc::RetrieveResult::Closest (self.table.closest_nodes_to(&payload.key_to_find).take(routing::K_FACTOR).collect()),
       };
 
-      let rpc = Rpc::find_value_response(self.id.clone(), 
+      let rpc = Rpc::retrieve_response(self.id.clone(), 
                                         self.inbound.local_addr().unwrap().port(),
                                         payload.key_to_find.clone(),
                                         result);
@@ -511,9 +510,9 @@ impl Resources {
       Ok(())
    }
 
-   fn handle_find_value_response(&self, payload: sync::Arc<rpc::FindValueResponsePayload>, sender: routing::NodeInfo) -> SubotaiResult<()> {
+   fn handle_retrieve_response(&self, payload: sync::Arc<rpc::RetrieveResponsePayload>, sender: routing::NodeInfo) -> SubotaiResult<()> {
       self.update_table(sender);
-      if let rpc::FindValueResult::Found(ref value) = payload.result {
+      if let rpc::RetrieveResult::Found(ref value) = payload.result {
          self.storage.store(payload.key_to_find.clone(), value.clone());
       }
       Ok(())

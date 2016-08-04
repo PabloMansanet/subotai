@@ -33,31 +33,31 @@ impl Rpc {
    }
 
    /// Constructs an RPC asking for a the results of a table node lookup.
-   pub fn find_node(sender_id: SubotaiHash, reply_port: u16, id_to_find: SubotaiHash) -> Rpc {
-      let payload = Arc::new(FindNodePayload { id_to_find: id_to_find });
-      Rpc { kind: Kind::FindNode(payload), sender_id: sender_id, reply_port: reply_port }
+   pub fn locate(sender_id: SubotaiHash, reply_port: u16, id_to_find: SubotaiHash) -> Rpc {
+      let payload = Arc::new(LocatePayload { id_to_find: id_to_find });
+      Rpc { kind: Kind::Locate(payload), sender_id: sender_id, reply_port: reply_port }
    }
 
-   /// Constructs an RPC with the response to a find_node RPC.
-   pub fn find_node_response(sender_id: SubotaiHash, reply_port: u16, id_to_find: SubotaiHash, result: routing::LookupResult) -> Rpc {
-      let payload = Arc::new(FindNodeResponsePayload { id_to_find: id_to_find, result: result} );
-      Rpc { kind: Kind::FindNodeResponse(payload), sender_id: sender_id, reply_port: reply_port }
-   }
-
-   /// Constructs an RPC asking for a the results of a storage lookup
-   pub fn find_value(sender_id: SubotaiHash, reply_port: u16, key_to_find: SubotaiHash) -> Rpc {
-      let payload = Arc::new(FindValuePayload { key_to_find: key_to_find });
-      Rpc { kind: Kind::FindValue(payload), sender_id: sender_id, reply_port: reply_port }
+   /// Constructs an RPC with the response to a locate RPC.
+   pub fn locate_response(sender_id: SubotaiHash, reply_port: u16, id_to_find: SubotaiHash, result: routing::LookupResult) -> Rpc {
+      let payload = Arc::new(LocateResponsePayload { id_to_find: id_to_find, result: result} );
+      Rpc { kind: Kind::LocateResponse(payload), sender_id: sender_id, reply_port: reply_port }
    }
 
    /// Constructs an RPC asking for a the results of a storage lookup
-   pub fn find_value_response(sender_id: SubotaiHash, reply_port: u16, key_to_find: SubotaiHash, result: FindValueResult) -> Rpc {
-      let payload = Arc::new(FindValueResponsePayload { key_to_find: key_to_find, result: result });
-      Rpc { kind: Kind::FindValueResponse(payload), sender_id: sender_id, reply_port: reply_port }
+   pub fn retrieve(sender_id: SubotaiHash, reply_port: u16, key_to_find: SubotaiHash) -> Rpc {
+      let payload = Arc::new(RetrievePayload { key_to_find: key_to_find });
+      Rpc { kind: Kind::Retrieve(payload), sender_id: sender_id, reply_port: reply_port }
+   }
+
+   /// Constructs an RPC asking for a the results of a storage lookup
+   pub fn retrieve_response(sender_id: SubotaiHash, reply_port: u16, key_to_find: SubotaiHash, result: RetrieveResult) -> Rpc {
+      let payload = Arc::new(RetrieveResponsePayload { key_to_find: key_to_find, result: result });
+      Rpc { kind: Kind::RetrieveResponse(payload), sender_id: sender_id, reply_port: reply_port }
    }
 
    /// Constructs a probe RPC. It asks the receiving node to provide a list of
-   /// K nodes close to a given node. It's a simpler version of the find_node 
+   /// K nodes close to a given node. It's a simpler version of the locate 
    /// RPC, that doesn't end early if the node is found.
    pub fn probe(sender_id: SubotaiHash, reply_port: u16, id_to_probe: SubotaiHash) -> Rpc {
       let payload = Arc::new(ProbePayload { id_to_probe: id_to_probe });
@@ -95,19 +95,19 @@ impl Rpc {
        serde::deserialize(serialized)
    }
 
-   /// Reports whether the RPC is a FindNodeResponse looking
+   /// Reports whether the RPC is a LocateResponse looking
    /// for a particular node
    pub fn is_finding_node(&self, id: &SubotaiHash) -> bool {
       match self.kind {
-         Kind::FindNodeResponse( ref payload ) => &payload.id_to_find == id,
+         Kind::LocateResponse( ref payload ) => &payload.id_to_find == id,
          _ => false,
       }
    }
 
-   /// Reports whether the RPC is a FindNodeResponse that found
+   /// Reports whether the RPC is a LocateResponse that found
    /// a particular node
    pub fn found_node(&self, id: &SubotaiHash) -> bool {
-      if let Kind::FindNodeResponse(ref payload) = self.kind {
+      if let Kind::LocateResponse(ref payload) = self.kind {
          match payload.result {
             routing::LookupResult::Found(_) => return &payload.id_to_find == id,
             _ => return false,
@@ -116,21 +116,21 @@ impl Rpc {
       false
    }
 
-   /// Reports whether the RPC is a FindValueResponse looking
+   /// Reports whether the RPC is a RetrieveResponse looking
    /// for a particular key
    pub fn is_finding_value(&self, key: &SubotaiHash) -> bool {
       match self.kind {
-         Kind::FindValueResponse( ref payload ) => &payload.key_to_find == key,
+         Kind::RetrieveResponse( ref payload ) => &payload.key_to_find == key,
          _ => false,
       }
    }
 
-   /// Reports whether the RPC is a FindValueResponse that found
+   /// Reports whether the RPC is a RetrieveResponse that found
    /// a particular key
    pub fn found_value(&self, key: &SubotaiHash) -> bool {
-      if let Kind::FindValueResponse(ref payload) = self.kind {
+      if let Kind::RetrieveResponse(ref payload) = self.kind {
          match payload.result {
-            FindValueResult::Found(_) => return &payload.key_to_find == key,
+            RetrieveResult::Found(_) => return &payload.key_to_find == key,
             _ => return false,
          }
       }
@@ -147,10 +147,10 @@ pub enum Kind {
    PingResponse,
    Store(Arc<StorePayload>),
    StoreResponse(Arc<StoreResponsePayload>),
-   FindNode(Arc<FindNodePayload>),
-   FindNodeResponse(Arc<FindNodeResponsePayload>),
-   FindValue(Arc<FindValuePayload>),
-   FindValueResponse(Arc<FindValueResponsePayload>),
+   Locate(Arc<LocatePayload>),
+   LocateResponse(Arc<LocateResponsePayload>),
+   Retrieve(Arc<RetrievePayload>),
+   RetrieveResponse(Arc<RetrieveResponsePayload>),
    Probe(Arc<ProbePayload>),
    ProbeResponse(Arc<ProbeResponsePayload>)
 }
@@ -169,31 +169,32 @@ pub struct StoreResponsePayload {
 
 /// Includes the ID to find and the amount of nodes required.
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
-pub struct FindNodePayload {
+pub struct LocatePayload {
    pub id_to_find    : SubotaiHash,
 }
 
+/// Includes the ID to find and the results of the table lookup.
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
-pub enum FindValueResult {
+pub struct LocateResponsePayload {
+   pub id_to_find : SubotaiHash,
+   pub result     : routing::LookupResult,
+}
+
+#[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
+pub enum RetrieveResult {
    Found(SubotaiHash),
    Closest(Vec<routing::NodeInfo>),
 }
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
-pub struct FindValuePayload {
+pub struct RetrievePayload {
    pub key_to_find : SubotaiHash,
-}
-#[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
-pub struct FindValueResponsePayload {
-   pub key_to_find : SubotaiHash,
-   pub result      : FindValueResult,
 }
 
-/// Includes the ID to find and the results of the table lookup.
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
-pub struct FindNodeResponsePayload {
-   pub id_to_find : SubotaiHash,
-   pub result     : routing::LookupResult,
+pub struct RetrieveResponsePayload {
+   pub key_to_find : SubotaiHash,
+   pub result      : RetrieveResult,
 }
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
