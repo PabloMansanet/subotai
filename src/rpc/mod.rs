@@ -32,7 +32,9 @@ impl Rpc {
       Rpc { kind: Kind::PingResponse, sender_id: sender_id, reply_port: reply_port }
    }
 
-   /// Constructs an RPC asking for a the results of a table node lookup.
+   /// Constructs an RPC asking for a the results of a table node lookup. The objective
+   /// of this RPC is to locate a particular node while minimizing network traffic. In other
+   /// words, the process short-circuits when the target node is found.
    pub fn locate(sender_id: SubotaiHash, reply_port: u16, id_to_find: SubotaiHash) -> Rpc {
       let payload = Arc::new(LocatePayload { id_to_find: id_to_find });
       Rpc { kind: Kind::Locate(payload), sender_id: sender_id, reply_port: reply_port }
@@ -44,13 +46,13 @@ impl Rpc {
       Rpc { kind: Kind::LocateResponse(payload), sender_id: sender_id, reply_port: reply_port }
    }
 
-   /// Constructs an RPC asking for a the results of a storage lookup
+   /// Constructs an RPC asking for a the results of a storage lookup.  
    pub fn retrieve(sender_id: SubotaiHash, reply_port: u16, key_to_find: SubotaiHash) -> Rpc {
       let payload = Arc::new(RetrievePayload { key_to_find: key_to_find });
       Rpc { kind: Kind::Retrieve(payload), sender_id: sender_id, reply_port: reply_port }
    }
 
-   /// Constructs an RPC asking for a the results of a storage lookup
+   /// Constructs an RPC asking for a the results of a storage lookup.
    pub fn retrieve_response(sender_id: SubotaiHash, reply_port: u16, key_to_find: SubotaiHash, result: RetrieveResult) -> Rpc {
       let payload = Arc::new(RetrieveResponsePayload { key_to_find: key_to_find, result: result });
       Rpc { kind: Kind::RetrieveResponse(payload), sender_id: sender_id, reply_port: reply_port }
@@ -138,9 +140,7 @@ impl Rpc {
    }
 }
 
-/// Types of RPC contemplated by the standard, plus some unique to the Subotai
-/// DHT (such as as a specialized Probe RPC). Some include reference
-/// counted payloads.
+/// Types of Subotai RPCs. Some of them contain reference counted payloads.
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
 pub enum Kind {
    Ping,
