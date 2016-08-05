@@ -94,6 +94,49 @@ impl Resources {
       }
    }
 
+   /// Wave operation. Contacts nodes from a list by sending a specific RPC. Then, it 
+   /// extracts new node candidates from their response by applying a strategy function.
+   ///
+   /// The strategy function takes a list of Rpc responses and the IDs contacted so far
+   /// in the wave, and outputs the next nodes to contact.
+   ///
+   /// The wave terminates when K_FACTOR nodes are contacted, when the strategy function
+   /// provides no new nodes, or when a global timeout is reached.
+   fn wave<S>(&self, seeds: &[routing::NodeInfo], strategy: S, rpc: rpc::Rpc, timeout: time::Duration) -> SubotaiResult<()>
+      where S: Fn(&[rpc::Rpc], &[hash::SubotaiHash]) -> Vec<routing::NodeInfo> {
+
+      let deadline = time::SteadyTime::now() + timeout;
+      let mut nodes_to_query: Vec<routing::NodeInfo> = seeds.iter().cloned().collect();
+      let mut queried_ids = Vec::<SubotaiHash>::new();
+      let packet = rpc.serialize();
+
+      // We loop as long as we haven't ran out of time and there is something to query.
+      while time::SteadyTime::now() < deadline && !nodes_to_query.is_empty() {
+
+         // Here, we only know who to listen to, for how long, and the number of 
+         // responses. Whether or not a response is interesting is down to the 
+         // Strategy function.
+         let senders: Vec<SubotaiHash> = nodes_to_query.iter().map(|info| &info.id).cloned().collect();
+         let responses = self.receptions()
+            .from_senders(senders)
+            .during(time::Duration::seconds(node::NETWORK_TIMEOUT_S))
+            .take(usize::saturating_sub(nodes_to_query.len(), routing::IMPATIENCE));
+      
+         // We query all the nodes with the wave RPC, and collect the responses, 
+         // ignoring any slackers based on the IMPATIENCE factor.
+         for node in nodes_to_query {
+            try!(self.outbound.send_to(&packet, node.address));
+            queried_ids.push(node.id.clone());
+         }
+         let responses: Vec<_> = responses.collect();
+
+         // The new nodes to query are decided based on the strategy function.
+         nodes_to_query = strategy(&responses, &queried_ids);
+      }
+
+      Ok(())
+   }
+
    /// Attempts to find a node through the network. This procedure will end as soon
    /// as the node is found, and will try to minimize network traffic while searching for it.
    /// It is also possible that the node will discard some of the intermediate nodes due
