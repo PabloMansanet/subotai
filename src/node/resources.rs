@@ -94,24 +94,29 @@ impl Resources {
       }
    }
 
-   //pub fn locate_v2(&self, target: &SubotaiHash) -> SubotaiResult<routing::NodeInfo> {
-   //   // If the node is already present in our table, we are done early.
-   //   if let Some(node) = self.table.specific_node(target) {
-   //      return Ok(node);
-   //   }
-   //   
-   //   let seed: Vec<_> = self.table.closest_nodes_to(target)
-   //      .filter(|info| &info.id != self.id)
-   //      .take(routing::ALPHA)
-   //      .collect();
+   pub fn locate_v2(&self, target: &SubotaiHash) -> SubotaiResult<routing::NodeInfo> {
+      // If the node is already present in our table, we are done early.
+      if let Some(node) = self.table.specific_node(target) {
+         return Ok(node);
+      }
+     
+      let closest_k = Vec<_> = self.table.closest_nodes_to(target)
+         .filter(|info| &info.id != self.id)
+         .take(routing::K_FACTOR)
+         .collect();
+      let closest_alpha: &closest_k[0..routing::ALPHA];
 
-   //   let strategy = |responses: &[rpc::Rpc], queried_ids: &[SubotaiHash]| {
-   //      let nodes_to_query = Vec<NodeInfo
 
-   //      for response in responses.filter(|ref rpc| rpc.is_finding_node(target)) {
-   //      }
-   //   };
-   //}
+      let strategy = |responses: &[rpc::Rpc], queried_ids: &[SubotaiHash]| {
+         let nodes_to_query = Vec<NodeInfo> = responses.iter()
+            .filter(|rpc| rpc.is_finding_node(target))
+            .map(|rpc| rpc.sender)
+            .collect();
+
+         for response in responses.filter(|ref rpc| rpc.is_finding_node(target)) {
+         }
+      };
+   }
 
 
    /// Wave operation. Contacts nodes from a list by sending a specific RPC. Then, it 
@@ -120,9 +125,13 @@ impl Resources {
    /// The strategy function takes a list of Rpc responses and the IDs contacted so far
    /// in the wave, and outputs the next nodes to contact.
    ///
+   /// The Halt function takes the same arguments, but returns Some(T) if the wave must
+   /// stop, returning an object of type T. If Halt returns None, the wave continues.
+   ///
    /// The wave terminates when K_FACTOR nodes are contacted, when the strategy function
    /// provides no new nodes, or when a global timeout is reached.
-   fn wave<S>(&self, seeds: &[routing::NodeInfo], strategy: S, rpc: rpc::Rpc, timeout: time::Duration) -> SubotaiResult<()>
+   fn wave<T, H, S>(&self, seeds: &[routing::NodeInfo], halt: H, strategy: S, rpc: rpc::Rpc, timeout: time::Duration) -> SubotaiResult<T>
+      where H: Fn(&[rpc::Rpc], &[hash::SubotaiHash]) -> Option<T> {
       where S: Fn(&[rpc::Rpc], &[hash::SubotaiHash]) -> Vec<routing::NodeInfo> {
 
       let deadline = time::SteadyTime::now() + timeout;
@@ -150,11 +159,15 @@ impl Resources {
          }
          let responses: Vec<_> = responses.collect();
 
-         // The new nodes to query are decided based on the strategy function.
-         nodes_to_query = strategy(&responses, &queried_ids);
+         // We return early if Halt produces a value. Otherwise, we calculate the next
+         // nodes to query and continue.
+         match halt(&responses, &queried_ids) {
+            Some(result) => return Ok(result),
+            None => nodes_to_query = strategy(&responses, &queried_ids),
+         }
       }
 
-      Ok(())
+      Err(SubotaiError::UnresponsiveNetwork)
    }
 
    /// Attempts to find a node through the network. This procedure will end as soon
