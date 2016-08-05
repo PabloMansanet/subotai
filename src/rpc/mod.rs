@@ -13,78 +13,75 @@ use hash::SubotaiHash;
 pub struct Rpc {
    /// Category of RPC.
    pub kind       : Kind,
-   /// Hash ID of the original sender.
-   pub sender_id  : SubotaiHash,
-   /// Port through which the original sender is listening for responses.
-   pub reply_port : u16,
+   /// Sender node info (IP address updated on reception).
+   pub sender     : routing::NodeInfo,
 }
 
 impl Rpc {
    /// Constructs a ping RPC. Pings simply carry information about the
    /// sender, and expect a response indicating that the receiving node
    /// is alive.
-   pub fn ping(sender_id: SubotaiHash, reply_port: u16) -> Rpc {
-      Rpc { kind: Kind::Ping, sender_id: sender_id, reply_port: reply_port }
+   pub fn ping(sender: routing::NodeInfo) -> Rpc {
+      Rpc { kind: Kind::Ping, sender: sender }
    }
 
    /// Constructs a ping response. 
-   pub fn ping_response(sender_id: SubotaiHash, reply_port: u16) -> Rpc {
-      Rpc { kind: Kind::PingResponse, sender_id: sender_id, reply_port: reply_port }
+   pub fn ping_response(sender: routing::NodeInfo) -> Rpc {
+      Rpc { kind: Kind::PingResponse, sender: sender }
    }
 
    /// Constructs an RPC asking for a the results of a table node lookup. The objective
    /// of this RPC is to locate a particular node while minimizing network traffic. In other
    /// words, the process short-circuits when the target node is found.
-   pub fn locate(sender_id: SubotaiHash, reply_port: u16, id_to_find: SubotaiHash) -> Rpc {
+   pub fn locate(sender: routing::NodeInfo, id_to_find: SubotaiHash) -> Rpc {
       let payload = Arc::new(LocatePayload { id_to_find: id_to_find });
-      Rpc { kind: Kind::Locate(payload), sender_id: sender_id, reply_port: reply_port }
+      Rpc { kind: Kind::Locate(payload), sender: sender }
    }
 
    /// Constructs an RPC with the response to a locate RPC.
-   pub fn locate_response(sender_id: SubotaiHash, reply_port: u16, id_to_find: SubotaiHash, result: routing::LookupResult) -> Rpc {
+   pub fn locate_response(sender: routing::NodeInfo, id_to_find: SubotaiHash, result: routing::LookupResult) -> Rpc {
       let payload = Arc::new(LocateResponsePayload { id_to_find: id_to_find, result: result} );
-      Rpc { kind: Kind::LocateResponse(payload), sender_id: sender_id, reply_port: reply_port }
+      Rpc { kind: Kind::LocateResponse(payload), sender: sender }
    }
 
    /// Constructs an RPC asking for a the results of a storage lookup.  
-   pub fn retrieve(sender_id: SubotaiHash, reply_port: u16, key_to_find: SubotaiHash) -> Rpc {
+   pub fn retrieve(sender: routing::NodeInfo, key_to_find: SubotaiHash) -> Rpc {
       let payload = Arc::new(RetrievePayload { key_to_find: key_to_find });
-      Rpc { kind: Kind::Retrieve(payload), sender_id: sender_id, reply_port: reply_port }
+      Rpc { kind: Kind::Retrieve(payload), sender: sender }
    }
 
    /// Constructs an RPC asking for a the results of a storage lookup.
-   pub fn retrieve_response(sender_id: SubotaiHash, reply_port: u16, key_to_find: SubotaiHash, result: RetrieveResult) -> Rpc {
+   pub fn retrieve_response(sender: routing::NodeInfo, key_to_find: SubotaiHash, result: RetrieveResult) -> Rpc {
       let payload = Arc::new(RetrieveResponsePayload { key_to_find: key_to_find, result: result });
-      Rpc { kind: Kind::RetrieveResponse(payload), sender_id: sender_id, reply_port: reply_port }
+      Rpc { kind: Kind::RetrieveResponse(payload), sender: sender }
    }
 
    /// Constructs a probe RPC. It asks the receiving node to provide a list of
    /// K nodes close to a given node. It's a simpler version of the locate 
    /// RPC, that doesn't end early if the node is found.
-   pub fn probe(sender_id: SubotaiHash, reply_port: u16, id_to_probe: SubotaiHash) -> Rpc {
+   pub fn probe(sender: routing::NodeInfo, id_to_probe: SubotaiHash) -> Rpc {
       let payload = Arc::new(ProbePayload { id_to_probe: id_to_probe });
-      Rpc { kind: Kind::Probe(payload), sender_id: sender_id, reply_port: reply_port }
+      Rpc { kind: Kind::Probe(payload), sender: sender }
    }
 
    /// Constructs the response to a probe RPC.
-   pub fn probe_response(sender_id: SubotaiHash, 
-                         reply_port: u16, 
+   pub fn probe_response(sender: routing::NodeInfo,
                          nodes: Vec<routing::NodeInfo>,
                          id_to_probe: SubotaiHash) -> Rpc {
       let payload = Arc::new(ProbeResponsePayload { id_to_probe: id_to_probe, nodes: nodes } );
-      Rpc { kind: Kind::ProbeResponse(payload), sender_id: sender_id, reply_port: reply_port }
+      Rpc { kind: Kind::ProbeResponse(payload), sender: sender }
    }
 
    /// Constructs a store RPC. It asks the receiving node to store a key->value pair.
-   pub fn store(sender_id: SubotaiHash, reply_port: u16, key: SubotaiHash, value: SubotaiHash) -> Rpc {
+   pub fn store(sender: routing::NodeInfo, key: SubotaiHash, value: SubotaiHash) -> Rpc {
       let payload = Arc::new(StorePayload { key: key, value: value });     
-      Rpc { kind: Kind::Store(payload), sender_id: sender_id, reply_port: reply_port }
+      Rpc { kind: Kind::Store(payload), sender: sender }
    }
 
    /// Constructs a response to the store RPC, including the key and the operation result.
-   pub fn store_response(sender_id: SubotaiHash, reply_port: u16, key: SubotaiHash, result: storage::StoreResult) -> Rpc {
+   pub fn store_response(sender: routing::NodeInfo, key: SubotaiHash, result: storage::StoreResult) -> Rpc {
       let payload = Arc::new(StoreResponsePayload { key: key, result: result });     
-      Rpc { kind: Kind::StoreResponse(payload), sender_id: sender_id, reply_port: reply_port }
+      Rpc { kind: Kind::StoreResponse(payload), sender: sender }
    }
 
    /// Serializes an RPC to be send over TCP. 
@@ -213,14 +210,24 @@ pub struct ProbeResponsePayload {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use hash::SubotaiHash;
+   use super::*;
+   use hash::SubotaiHash;
+   use std::net;
+   use std::str::FromStr;
+   use routing;
 
-    #[test]
-    fn serdes_for_ping() {
-       let ping = Rpc::ping(SubotaiHash::random(), 50000);
-       let serialized_ping = ping.serialize();
-       let deserialized_ping = Rpc::deserialize(&serialized_ping).unwrap();
-       assert_eq!(ping, deserialized_ping);
-    }
+   #[test]
+   fn serdes_for_ping() {
+      let ping = Rpc::ping(node_info_no_net(SubotaiHash::random()));
+      let serialized_ping = ping.serialize();
+      let deserialized_ping = Rpc::deserialize(&serialized_ping).unwrap();
+      assert_eq!(ping, deserialized_ping);
+   }
+
+   fn node_info_no_net(id : SubotaiHash) -> routing::NodeInfo {
+      routing::NodeInfo {
+         id : id,
+         address : net::SocketAddr::from_str("0.0.0.0:0").unwrap(),
+      }
+   }
 }

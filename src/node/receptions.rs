@@ -112,7 +112,7 @@ impl Iterator for Receptions {
                }
 
                if let Some(ref sender_filter) = self.sender_filter {
-                  if !sender_filter.contains(&rpc.sender_id) {
+                  if !sender_filter.contains(&rpc.sender.id) {
                      continue;
                   }
                }

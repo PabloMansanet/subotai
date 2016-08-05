@@ -41,7 +41,7 @@ impl Resources {
    /// Pings a node, blocking until ping response.
    pub fn ping(&self, id: &SubotaiHash) -> SubotaiResult<()> {
       let node = try!(self.locate(id));
-      let rpc = Rpc::ping(self.id.clone(), self.inbound.local_addr().unwrap().port());
+      let rpc = Rpc::ping(self.local_info());
       let packet = rpc.serialize();
       let responses = self.receptions()
          .during(time::Duration::seconds(node::NETWORK_TIMEOUT_S))
@@ -59,7 +59,7 @@ impl Resources {
    /// Sends a ping and doesn't wait for a response. Used by the maintenance thread.
    pub fn ping_and_forget(&self, id: &SubotaiHash) -> SubotaiResult<()> {
       let node = try!(self.locate(id));
-      let rpc = Rpc::ping(self.id.clone(), self.inbound.local_addr().unwrap().port());
+      let rpc = Rpc::ping(self.local_info());
       let packet = rpc.serialize();
       try!(self.outbound.send_to(&packet, node.address));
       Ok(())
@@ -68,7 +68,7 @@ impl Resources {
    /// Sends a ping to an evicted node not present in the routing table anymore. Used
    /// by the conflict resolution thread.
    pub fn ping_for_conflict(&self, evicted: &routing::NodeInfo) -> SubotaiResult<()> {
-      let rpc = Rpc::ping(self.id.clone(), self.inbound.local_addr().unwrap().port());
+      let rpc = Rpc::ping(self.local_info());
       let packet = rpc.serialize();
       try!(self.outbound.send_to(&packet, evicted.address));
       Ok(())
@@ -93,6 +93,26 @@ impl Resources {
          }
       }
    }
+
+   //pub fn locate_v2(&self, target: &SubotaiHash) -> SubotaiResult<routing::NodeInfo> {
+   //   // If the node is already present in our table, we are done early.
+   //   if let Some(node) = self.table.specific_node(target) {
+   //      return Ok(node);
+   //   }
+   //   
+   //   let seed: Vec<_> = self.table.closest_nodes_to(target)
+   //      .filter(|info| &info.id != self.id)
+   //      .take(routing::ALPHA)
+   //      .collect();
+
+   //   let strategy = |responses: &[rpc::Rpc], queried_ids: &[SubotaiHash]| {
+   //      let nodes_to_query = Vec<NodeInfo
+
+   //      for response in responses.filter(|ref rpc| rpc.is_finding_node(target)) {
+   //      }
+   //   };
+   //}
+
 
    /// Wave operation. Contacts nodes from a list by sending a specific RPC. Then, it 
    /// extracts new node candidates from their response by applying a strategy function.
@@ -229,7 +249,7 @@ impl Resources {
                   None => return Err(SubotaiError::StorageError),
                }
             } else {
-               cache_candidate = Some(response.sender_id);
+               cache_candidate = Some(response.sender.id);
             }
          }
       }
@@ -333,10 +353,7 @@ impl Resources {
    
    /// Instructs a node to store a key_value pair.
    pub fn store_remotely(&self, node: &routing::NodeInfo, key: SubotaiHash, value: SubotaiHash) -> SubotaiResult<storage::StoreResult> {
-      let rpc = Rpc::store(self.id.clone(), 
-                           self.inbound.local_addr().unwrap().port(),
-                           key,
-                           value);
+      let rpc = Rpc::store(self.local_info(), key, value);
       let packet = rpc.serialize();
       let mut responses = self.receptions()
          .during(time::Duration::seconds(node::NETWORK_TIMEOUT_S))
@@ -390,7 +407,7 @@ impl Resources {
    }
 
    fn probe_wave(&self, id_to_probe: SubotaiHash, nodes_to_query: &[routing::NodeInfo], queried: &mut Vec<SubotaiHash>) -> SubotaiResult<()> {
-      let rpc = Rpc::probe(self.id.clone(), self.inbound.local_addr().unwrap().port(), id_to_probe);
+      let rpc = Rpc::probe(self.local_info(), id_to_probe);
       let packet = rpc.serialize(); 
 
       for node in nodes_to_query {
@@ -401,11 +418,7 @@ impl Resources {
    }
 
    fn locate_wave(&self, id_to_find: &SubotaiHash, nodes_to_query: &[routing::NodeInfo], queried: &mut Vec<SubotaiHash>) -> SubotaiResult<()> {
-      let rpc = Rpc::locate(
-         self.id.clone(), 
-         self.inbound.local_addr().unwrap().port(),
-         id_to_find.clone()
-      );
+      let rpc = Rpc::locate(self.local_info(), id_to_find.clone());
       let packet = rpc.serialize(); 
       for node in nodes_to_query {
          try!(self.outbound.send_to(&packet, node.address));
@@ -415,11 +428,7 @@ impl Resources {
    }
 
    fn retrieve_wave(&self, key_to_find: &SubotaiHash, nodes_to_query: &[routing::NodeInfo], queried: &mut Vec<SubotaiHash>) -> SubotaiResult<()> {
-      let rpc = Rpc::retrieve(
-         self.id.clone(), 
-         self.inbound.local_addr().unwrap().port(),
-         key_to_find.clone()
-      );
+      let rpc = Rpc::retrieve(self.local_info(), key_to_find.clone());
       let packet = rpc.serialize(); 
       for node in nodes_to_query {
          try!(self.outbound.send_to(&packet, node.address));
@@ -439,12 +448,9 @@ impl Resources {
       }
    }
 
-   pub fn process_incoming_rpc(&self, rpc: Rpc, mut source: net::SocketAddr) -> SubotaiResult<()>{
-      source.set_port(rpc.reply_port);
-      let sender = routing::NodeInfo {
-         id      : rpc.sender_id.clone(),
-         address : source,
-      };
+   pub fn process_incoming_rpc(&self, mut rpc: Rpc, source: net::SocketAddr) -> SubotaiResult<()>{
+      rpc.sender.address.set_ip(source.ip());
+      let sender = rpc.sender.clone();
 
       let result = match rpc.kind {
          rpc::Kind::Ping                           => self.handle_ping(sender),
@@ -465,7 +471,7 @@ impl Resources {
 
    fn handle_ping(&self, sender: routing::NodeInfo) -> SubotaiResult<()> {
       self.update_table(sender.clone());
-      let rpc = Rpc::ping_response(self.id.clone(), self.inbound.local_addr().unwrap().port());
+      let rpc = Rpc::ping_response(self.local_info());
       let packet = rpc.serialize();
       try!(self.outbound.send_to(&packet, sender.address));
       Ok(())
@@ -474,7 +480,7 @@ impl Resources {
    fn handle_store(&self, payload: sync::Arc<rpc::StorePayload>,  sender: routing::NodeInfo) -> SubotaiResult<()> {
       self.update_table(sender.clone());
       let store_result = self.storage.store(payload.key.clone(), payload.value.clone());
-      let rpc = Rpc::store_response(self.id.clone(), self.inbound.local_addr().unwrap().port(), payload.key.clone(), store_result);
+      let rpc = Rpc::store_response(self.local_info(), payload.key.clone(), store_result);
       let packet = rpc.serialize();
       try!(self.outbound.send_to(&packet, sender.address));
 
@@ -487,8 +493,7 @@ impl Resources {
          .take(routing::K_FACTOR)
          .collect();
 
-      let rpc = Rpc::probe_response(self.id.clone(), 
-                                    self.inbound.local_addr().unwrap().port(),
+      let rpc = Rpc::probe_response(self.local_info(),
                                     closest, 
                                     payload.id_to_probe.clone());
       let packet = rpc.serialize();
@@ -518,10 +523,9 @@ impl Resources {
    fn handle_locate(&self, payload: sync::Arc<rpc::LocatePayload>, sender: routing::NodeInfo) -> SubotaiResult<()> {
       self.update_table(sender.clone());
       let lookup_results = self.table.lookup(&payload.id_to_find, routing::K_FACTOR, None);
-      let rpc = Rpc::locate_response(self.id.clone(), 
-                                        self.inbound.local_addr().unwrap().port(),
-                                        payload.id_to_find.clone(),
-                                        lookup_results);
+      let rpc = Rpc::locate_response(self.local_info(),
+                                     payload.id_to_find.clone(),
+                                     lookup_results);
       let packet = rpc.serialize();
       try!(self.outbound.send_to(&packet, sender.address));
       Ok(())
@@ -546,10 +550,9 @@ impl Resources {
          None => rpc::RetrieveResult::Closest (self.table.closest_nodes_to(&payload.key_to_find).take(routing::K_FACTOR).collect()),
       };
 
-      let rpc = Rpc::retrieve_response(self.id.clone(), 
-                                        self.inbound.local_addr().unwrap().port(),
-                                        payload.key_to_find.clone(),
-                                        result);
+      let rpc = Rpc::retrieve_response(self.local_info(),
+                                       payload.key_to_find.clone(),
+                                       result);
       let packet = rpc.serialize();
       try!(self.outbound.send_to(&packet, sender.address));
       Ok(())
