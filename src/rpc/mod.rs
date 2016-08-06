@@ -104,15 +104,27 @@ impl Rpc {
    }
 
    /// Reports whether the RPC is a LocateResponse that found
-   /// a particular node
-   pub fn found_node(&self, id: &SubotaiHash) -> bool {
+   /// a particular node. If it was, returns the node.
+   pub fn found_node(&self, id: &SubotaiHash) -> Option<routing::NodeInfo> {
       if let Kind::LocateResponse(ref payload) = self.kind {
          match payload.result {
-            routing::LookupResult::Found(_) => return &payload.id_to_find == id,
-            _ => return false,
+            routing::LookupResult::Found(ref node) if &payload.id_to_find == id => return Some(node.clone()),
+            _ => return None,
          }
       }
-      false
+      None
+   }
+
+   /// Reports whether the RPC is a LocateResponse that failed to locate.
+   /// If so, provides the closest nodes.
+   pub fn did_not_find_node(&self, id: &SubotaiHash) -> Option<Vec<routing::NodeInfo>> {
+      if let Kind::LocateResponse(ref payload) = self.kind {
+         match payload.result {
+            routing::LookupResult::ClosestNodes(ref nodes) if &payload.id_to_find == id => return Some(nodes.clone()),
+            _ => return None,
+         }
+      }
+      None
    }
 
    /// Reports whether the RPC is a RetrieveResponse looking
