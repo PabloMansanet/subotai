@@ -254,6 +254,20 @@ fn node_probing_in_simulated_unresponsive_network()
 }
 
 #[test]
+fn store_retrieve_in_tiny_network()
+{
+   let alpha = node::Node::new().unwrap();
+   let beta = node::Node::new().unwrap();
+
+   alpha.bootstrap_until(beta.local_info(), 1);
+
+   let (key, value) = (hash::SubotaiHash::random(), hash::SubotaiHash::random());
+
+   alpha.store(&key, &value).unwrap();
+   assert_eq!(beta.retrieve(&key).unwrap(), value);
+}
+
+#[test]
 fn store_retrieve_in_simulated_network()
 {
    let mut nodes = simulated_network(40);
@@ -262,7 +276,7 @@ fn store_retrieve_in_simulated_network()
    let tail = nodes.pop_back().unwrap();
 
    head.store(&key, &value).unwrap();
-   let retrieved_value = tail.retrieve(&key).unwrap();;
+   let retrieved_value = tail.retrieve(&key).unwrap();
 
    assert_eq!(value, retrieved_value);
 }
