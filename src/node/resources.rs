@@ -148,8 +148,8 @@ impl Resources {
 
 
    /// Thoroughly searches for the nodes closest to a given ID, returning the `K_FACTOR` closest.
-   /// It is possible that not all of these nodes will be stored in the routing table, so use
-   /// the return value of this function rather than a subsequent call for table.closest_nodes_to().
+   /// Returns the closest K we learned from, regardless of whether we have actually checked their
+   /// if they are alive.
    ///
    /// The probe will consult `depth` number of nodes to obtain that information.
    pub fn probe(&self, target: &SubotaiHash, depth: usize) -> SubotaiResult<Vec<routing::NodeInfo>> {
@@ -240,7 +240,6 @@ impl Resources {
             WaveStrategy::HaltWith(result) => return Ok(result),
          }
       }
-
       Err(SubotaiError::UnresponsiveNetwork)
    }
 
@@ -399,9 +398,11 @@ impl Resources {
    }
 
    fn handle_probe(&self, payload: sync::Arc<rpc::ProbePayload>, sender: routing::NodeInfo) -> SubotaiResult<()> {
+      // We respond with K_FACTOR nodes plus one, because we might be including the identity of
+      // the probing node, and the probing node is interested in K_FACTOR others.
       let closest: Vec<_> = self.table
          .closest_nodes_to(&payload.id_to_probe)
-         .take(routing::K_FACTOR)
+         .take(routing::K_FACTOR + 1)
          .collect();
 
       let rpc = Rpc::probe_response(self.local_info(),

@@ -46,7 +46,6 @@ fn reception_iterator_times_out_correctly() {
 
 #[test]
 fn bootstrapping_and_finding_on_simulated_network() {
-
    let mut nodes = simulated_network(30);
 
    // Head finds tail in a few steps.
@@ -83,8 +82,8 @@ fn finding_a_nonexisting_node_in_a_simulated_network_times_out() {
    assert!(head.resources.locate(&random_hash).is_err());
 }
 
-fn simulated_network(nodes: usize) -> VecDeque<node::Node> {
-   let nodes: VecDeque<node::Node> = (0..nodes).map(|_| { node::Node::new().unwrap() }).collect();
+fn simulated_network(network_size: usize) -> VecDeque<node::Node> {
+   let nodes: VecDeque<node::Node> = (0..network_size).map(|_| { node::Node::new().unwrap() }).collect();
    {
       let origin = nodes.front().unwrap();
       // Initial handshake pass
@@ -92,7 +91,6 @@ fn simulated_network(nodes: usize) -> VecDeque<node::Node> {
          assert!(node.bootstrap_until(origin.resources.local_info(), 1).is_ok());
       }
 
-      // Actual bootstrapping
       for node in nodes.iter().skip(1) {
          assert!(node.bootstrap(origin.resources.local_info()).is_ok());
       }
@@ -224,12 +222,7 @@ fn node_probing_in_simulated_network()
    info_nodes.truncate(routing::K_FACTOR); // This guarantees us the closest ids to the tail
    
    assert_eq!(info_nodes.len(), probe_results.len());
-   for (a, b) in probe_results.iter().zip(info_nodes.iter()) {
-      println!("{} vs {}",a.id, b.id);
-   }
-   for (a, b) in probe_results.iter().zip(info_nodes.iter()) {
-      println!("------> distance {} vs {}", &a.id ^ tail.id(), &b.id ^ tail.id());
-   }
+
    for (a, b) in probe_results.iter().zip(info_nodes.iter()) {
       assert_eq!(a.id, b.id);
    }
