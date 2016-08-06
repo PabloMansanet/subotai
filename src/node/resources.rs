@@ -94,17 +94,28 @@ impl Resources {
       }
    }
 
+   /// Attempts to find a node through the network. This procedure will end as soon
+   /// as the node is found, and will try to minimize network traffic while searching for it.
+   /// It is also possible that the node will discard some of the intermediate nodes due
+   /// to size concerns.
+   ///
+   /// For a more thorough mapping of the surroundings of a node, or if you specifically 
+   /// need to know the K closest nodes to a given ID, use probe.
    pub fn locate(&self, target: &SubotaiHash) -> SubotaiResult<routing::NodeInfo> {
       // If the node is already present in our table, we are done early.
       if let Some(node) = self.table.specific_node(target) {
          return Ok(node);
       }
+
+      // We use a wave operation to locate the node. We want to stop the wave if we
+      // found the node, and to always contact the closest ALPHA nodes we have knowledge
+      // of. We define seeds, halt and strategy methods for such a wave.
      
       let mut closest: Vec<_> = self.table.closest_nodes_to(target)
          .filter(|info| &info.id != &self.id)
          .take(routing::K_FACTOR)
          .collect();
-      let wave_seeds: Vec<_> = closest.iter().cloned().take(routing::ALPHA).collect();
+      let seeds: Vec<_> = closest.iter().cloned().take(routing::ALPHA).collect();
 
       // We halt the wave if we have found the node
       let halt = |responses: &[rpc::Rpc], _: &[SubotaiHash]| -> Option<routing::NodeInfo> {
@@ -115,15 +126,16 @@ impl Resources {
       let strategy = |responses: &[rpc::Rpc], queried_ids: &[SubotaiHash]| -> Vec<routing::NodeInfo> {
          // We are interested in the combination of the nodes we knew about, plus the ones
          // we just learned from the responses, as long as we haven't queried them already.
+         let former_closest: Vec<_> = closest.drain(..).collect();
          closest = responses
             .iter()
             .filter_map(|rpc| rpc.did_not_find_node(target))
             .flat_map(|vec| vec.into_iter())
-            .chain(closest.clone())
+            .chain(former_closest)
             .filter(|info| !queried_ids.contains(&info.id))
             .collect();
-        
-         // Of these nodes of interest, we care about the closest to the target.
+       
+         // We restore the order and remove duplicates, to finally return the closest ALPHA.
          closest.sort_by(|ref info_a, ref info_b| (&info_a.id ^ target).cmp(&(&info_b.id ^ target)));
          closest.dedup();
          closest.iter().cloned().take(routing::ALPHA).collect()
@@ -132,7 +144,7 @@ impl Resources {
       let rpc = Rpc::locate(self.local_info(), target.clone());
       let timeout = time::Duration::seconds(3*node::NETWORK_TIMEOUT_S);
 
-      self.wave(&wave_seeds, halt, strategy, rpc, timeout)
+      self.wave(&seeds, halt, strategy, rpc, timeout)
    }
 
 
@@ -146,7 +158,7 @@ impl Resources {
    /// stop, returning an object of type T. If Halt returns None, the wave continues.
    ///
    /// The wave terminates when K_FACTOR nodes are contacted, when the strategy function
-   /// provides no new nodes, or when a global timeout is reached.
+   /// provides no new nodes, when a global timeout is reached, or when halt returns Some(T).
    fn wave<T, H, S>(&self, seeds: &[routing::NodeInfo], mut halt: H, mut strategy: S, rpc: rpc::Rpc, timeout: time::Duration) -> SubotaiResult<T>
       where H: FnMut(&[rpc::Rpc], &[hash::SubotaiHash]) -> Option<T>,
             S: FnMut(&[rpc::Rpc], &[hash::SubotaiHash]) -> Vec<routing::NodeInfo> {
@@ -185,58 +197,6 @@ impl Resources {
       }
 
       Err(SubotaiError::UnresponsiveNetwork)
-   }
-
-   /// Attempts to find a node through the network. This procedure will end as soon
-   /// as the node is found, and will try to minimize network traffic while searching for it.
-   /// It is also possible that the node will discard some of the intermediate nodes due
-   /// to size concerns.
-   ///
-   /// For a more thorough mapping of the surroundings of a node, or if you specifically 
-   /// need to know the K closest nodes to a given ID, use probe.
-   pub fn locate_old(&self, target: &SubotaiHash) -> SubotaiResult<routing::NodeInfo> {
-      // If the node is already present in our table, we are done early.
-      if let Some(node) = self.table.specific_node(target) {
-         return Ok(node);
-      }
-
-      let mut queried_ids = Vec::<SubotaiHash>::with_capacity(routing::K_FACTOR);
-      let all_receptions = self.receptions();
-      let loop_timeout = time::Duration::seconds(3 * node::NETWORK_TIMEOUT_S);
-      let deadline = time::SteadyTime::now() + loop_timeout;
-     
-      while queried_ids.len() < routing::K_FACTOR && time::SteadyTime::now() < deadline {
-         // We query the 'ALPHA' nodes closest to the target we haven't yet queried.
-         let nodes_to_query: Vec<routing::NodeInfo> = self.table.closest_nodes_to(target)
-            .filter(|ref info| !queried_ids.contains(&info.id) && &info.id != &self.id)
-            .take(routing::ALPHA)
-            .collect();
-
-         // We wait for the response from the same number of nodes, minus the 'IMPATIENCE' factor.
-         let responses = self.receptions()
-            .during(time::Duration::seconds(node::NETWORK_TIMEOUT_S))
-            .filter(|ref rpc| rpc.is_finding_node(target))
-            .take(usize::saturating_sub(nodes_to_query.len(), routing::IMPATIENCE));
-        
-         // We compose the RPCs and send the UDP packets.
-         try!(self.locate_wave(target, &nodes_to_query, &mut queried_ids));
-  
-         // We check the responses and return if the node was found.
-         for response in responses { 
-            if response.found_node(target).is_some() {
-               return self.table.specific_node(target).ok_or(SubotaiError::NodeNotFound);
-            }
-         }
-      }
-      
-      // One last wait until success or timeout, to compensate for impatience
-      // (It could be that the nodes we ignored earlier come back with the response)
-      all_receptions
-         .during(time::Duration::seconds(node::NETWORK_TIMEOUT_S))
-         .filter(|ref rpc| rpc.found_node(target).is_some())
-         .take(1)
-         .count();
-      self.table.specific_node(target).ok_or(SubotaiError::NodeNotFound)
    }
 
    pub fn retrieve(&self, key: &SubotaiHash) -> SubotaiResult<SubotaiHash> {
@@ -447,16 +407,6 @@ impl Resources {
       Ok(())
    }
 
-   fn locate_wave(&self, id_to_find: &SubotaiHash, nodes_to_query: &[routing::NodeInfo], queried: &mut Vec<SubotaiHash>) -> SubotaiResult<()> {
-      let rpc = Rpc::locate(self.local_info(), id_to_find.clone());
-      let packet = rpc.serialize(); 
-      for node in nodes_to_query {
-         try!(self.outbound.send_to(&packet, node.address));
-         queried.push(node.id.clone());
-      }
-      Ok(())
-   }
-
    fn retrieve_wave(&self, key_to_find: &SubotaiHash, nodes_to_query: &[routing::NodeInfo], queried: &mut Vec<SubotaiHash>) -> SubotaiResult<()> {
       let rpc = Rpc::retrieve(self.local_info(), key_to_find.clone());
       let packet = rpc.serialize(); 
@@ -563,13 +513,6 @@ impl Resources {
 
    fn handle_locate_response(&self, payload: sync::Arc<rpc::LocateResponsePayload>, sender: routing::NodeInfo) -> SubotaiResult<()> {
       self.update_table(sender);
-      match payload.result {
-         // TODO Big mistake here and in similar places. Only update table for the sender node.
-         // The rest may not be alive at all!.
-         routing::LookupResult::ClosestNodes(ref nodes) => for node in nodes { self.update_table(node.clone()); },
-         routing::LookupResult::Found(ref node) => { self.update_table(node.clone()); },
-         _ => (),
-      }
       Ok(())
    }
 
