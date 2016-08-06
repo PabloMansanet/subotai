@@ -223,9 +223,12 @@ impl Resources {
          // The cache candidate is the closest node that hasn't found the value.
          cache_candidate = closest.first().cloned();
        
-         // If we found it, we're done.
-         if let Some(found) = responses.iter().filter_map(|rpc| rpc.successfully_retrieved(key)).next() {
-            return WaveStrategy::HaltWith(found);
+         // If we found it, we cache the value and we're done.
+         if let Some(retrieved) = responses.iter().filter_map(|rpc| rpc.successfully_retrieved(key)).next() {
+            if let Some(ref candidate) = cache_candidate {
+               self.store_remotely(&candidate, key.clone(), retrieved.clone());
+            }
+            return WaveStrategy::HaltWith(retrieved);
          }
 
          WaveStrategy::ContinueWith(closest
@@ -288,17 +291,6 @@ impl Resources {
          }
       }
       Err(SubotaiError::UnresponsiveNetwork)
-   }
-
-   #[allow(unused_must_use)]
-   fn remote_cache(&self, target: &Option<SubotaiHash>, key: SubotaiHash, value: SubotaiHash) {
-      match *target {
-         Some(ref id) => match self.locate(id) {
-            Ok(node) => {self.store_remotely(&node, key, value);},
-            Err(_) => (),
-         },
-         None => (),
-      }
    }
 
    /// Probes a random node in a bucket, refreshing it.
