@@ -107,73 +107,113 @@ impl Resources {
          return Ok(node);
       }
 
-      // We use a wave operation to locate the node. We want to stop the wave if we
-      // found the node, and to always contact the closest ALPHA nodes we have knowledge
-      // of. We define seeds, halt and strategy methods for such a wave.
-     
       let mut closest: Vec<_> = self.table.closest_nodes_to(target)
          .filter(|info| &info.id != &self.id)
          .take(routing::K_FACTOR)
          .collect();
       let seeds: Vec<_> = closest.iter().cloned().take(routing::ALPHA).collect();
 
-      // We halt the wave if we have found the node
-      let halt = |responses: &[rpc::Rpc], _: &[SubotaiHash]| -> Option<routing::NodeInfo> {
-         responses.iter().filter_map(|rpc| rpc.found_node(target)).next()
-      };
+      // We use a wave operation to locate the node. We want to stop the wave if we
+      // found the node, and to always contact the closest ALPHA nodes we have knowledge
+      // of. We define a strategy method for such a wave.
+      let strategy = |responses: &[rpc::Rpc], queried: &[routing::NodeInfo]| -> WaveStrategy<routing::NodeInfo> {
+         // If we found it, we're done.
+         if let Some(found) = responses.iter().filter_map(|rpc| rpc.found_node(target)).next() {
+            return WaveStrategy::HaltWith(found);
+         }
 
-      // We keep asking nodes we found about.
-      let strategy = |responses: &[rpc::Rpc], queried_ids: &[SubotaiHash]| -> Vec<routing::NodeInfo> {
          // We are interested in the combination of the nodes we knew about, plus the ones
          // we just learned from the responses, as long as we haven't queried them already.
-         let former_closest: Vec<_> = closest.drain(..).collect();
+         let mut former_closest = Vec::<routing::NodeInfo>::new();
+         former_closest.append(&mut closest);
          closest = responses
             .iter()
             .filter_map(|rpc| rpc.did_not_find_node(target))
             .flat_map(|vec| vec.into_iter())
             .chain(former_closest)
-            .filter(|info| !queried_ids.contains(&info.id))
+            .filter(|info| !queried.contains(&info) && &info.id != &self.id)
             .collect();
        
          // We restore the order and remove duplicates, to finally return the closest ALPHA.
          closest.sort_by(|ref info_a, ref info_b| (&info_a.id ^ target).cmp(&(&info_b.id ^ target)));
          closest.dedup();
-         closest.iter().cloned().take(routing::ALPHA).collect()
+         WaveStrategy::ContinueWith(closest.iter().cloned().take(routing::ALPHA).collect())
       };
 
       let rpc = Rpc::locate(self.local_info(), target.clone());
       let timeout = time::Duration::seconds(3*node::NETWORK_TIMEOUT_S);
 
-      self.wave(&seeds, halt, strategy, rpc, timeout)
+      self.wave(seeds, strategy, rpc, timeout)
    }
 
+
+   /// Thoroughly searches for the nodes closest to a given ID, returning the 'K_FACTOR' closest.
+   /// It is possible that not all of these nodes will be stored in the routing table, so use
+   /// the return value of this function rather than a subsequent call for table.closest_nodes_to().
+   pub fn probe(&self, target: &SubotaiHash) -> SubotaiResult<Vec<routing::NodeInfo>> {
+      // We record the fact we attempted a probe for this bucket.
+      self.table.mark_bucket_as_probed(target);
+
+      // We start with the closest K nodes we know about.
+      let mut closest: Vec<_> = self.table
+         .closest_nodes_to(target)
+         .filter(|info| &info.id != &self.id)
+         .take(routing::K_FACTOR)
+         .collect();
+      let seeds: Vec<_> = closest.iter().cloned().take(routing::ALPHA).collect();
+
+      // Strategy is similar to the `locate` wave. We keep probing the closest `ALPHA` nodes
+      // we are aware of as we continue probing. We only halt when we have queried `K_FACTOR`.
+      let strategy = |responses: &[rpc::Rpc], queried: &[routing::NodeInfo]| -> WaveStrategy<Vec<routing::NodeInfo>> {
+         let mut former_closest = Vec::<routing::NodeInfo>::new();
+         former_closest.append(&mut closest);
+         closest = responses
+            .iter()
+            .filter_map(|rpc| rpc.is_probe_response(target))
+            .flat_map(|vec| vec.into_iter())
+            .chain(former_closest)
+            .collect();
+       
+         // We restore the order and remove duplicates, to finally return the closest ALPHA.
+         closest.sort_by(|ref info_a, ref info_b| (&info_a.id ^ target).cmp(&(&info_b.id ^ target)));
+         closest.dedup();
+         println!("{} after sorting", closest.len());
+
+         if queried.len() >= routing::K_FACTOR {
+            WaveStrategy::HaltWith(closest.iter().cloned().take(routing::K_FACTOR).collect())
+         } else {
+            WaveStrategy::ContinueWith(closest.iter().filter(|info| !queried.contains(&info) && &info.id != &self.id).cloned().take(routing::ALPHA).collect())
+         }
+      };
+
+      let rpc = Rpc::probe(self.local_info(), target.clone());
+      let timeout = time::Duration::seconds(3*node::NETWORK_TIMEOUT_S);
+
+      self.wave(seeds, strategy, rpc, timeout)
+   }
 
    /// Wave operation. Contacts nodes from a list by sending a specific RPC. Then, it 
    /// extracts new node candidates from their response by applying a strategy function.
    ///
    /// The strategy function takes a list of Rpc responses and the IDs contacted so far
-   /// in the wave, and outputs the next nodes to contact.
-   ///
-   /// The Halt function takes the same arguments, but returns Some(T) if the wave must
-   /// stop, returning an object of type T. If Halt returns None, the wave continues.
+   /// in the wave, outputs the next nodes to contact, and decides whether to stop 
+   /// the wave by producing a Some(T) in its second return value.
    ///
    /// The wave terminates when K_FACTOR nodes are contacted, when the strategy function
    /// provides no new nodes, when a global timeout is reached, or when halt returns Some(T).
-   fn wave<T, H, S>(&self, seeds: &[routing::NodeInfo], mut halt: H, mut strategy: S, rpc: rpc::Rpc, timeout: time::Duration) -> SubotaiResult<T>
-      where H: FnMut(&[rpc::Rpc], &[hash::SubotaiHash]) -> Option<T>,
-            S: FnMut(&[rpc::Rpc], &[hash::SubotaiHash]) -> Vec<routing::NodeInfo> {
+   fn wave<T, S>(&self, seeds: Vec<routing::NodeInfo>, mut strategy: S, rpc: rpc::Rpc, timeout: time::Duration) -> SubotaiResult<T>
+      where S: FnMut(&[rpc::Rpc], &[routing::NodeInfo]) -> WaveStrategy<T> {
 
       let deadline = time::SteadyTime::now() + timeout;
-      let mut nodes_to_query: Vec<routing::NodeInfo> = seeds.iter().cloned().collect();
-      let mut queried_ids = Vec::<SubotaiHash>::new();
+      let mut nodes_to_query = seeds;
+      let mut queried = Vec::<routing::NodeInfo>::new();
       let packet = rpc.serialize();
 
       // We loop as long as we haven't ran out of time and there is something to query.
       while time::SteadyTime::now() < deadline && !nodes_to_query.is_empty() {
-
          // Here, we only know who to listen to, for how long, and the number of 
          // responses. Whether or not a response is interesting is down to the 
-         // Strategy and Halt functions.
+         // strategy function.
          let senders: Vec<SubotaiHash> = nodes_to_query.iter().map(|info| &info.id).cloned().collect();
          let responses = self.receptions()
             .from_senders(senders)
@@ -182,17 +222,18 @@ impl Resources {
       
          // We query all the nodes with the wave RPC, and collect the responses, 
          // ignoring any slackers based on the IMPATIENCE factor.
-         for node in nodes_to_query {
+         println!("Sending to {}", nodes_to_query.len());
+         for node in &nodes_to_query {
             try!(self.outbound.send_to(&packet, node.address));
-            queried_ids.push(node.id.clone());
          }
+         queried.append(&mut nodes_to_query);
          let responses: Vec<_> = responses.collect();
 
          // We return early if Halt produces a value. Otherwise, we calculate the next
          // nodes to query and continue.
-         match halt(&responses, &queried_ids) {
-            Some(result) => return Ok(result),
-            None => nodes_to_query = strategy(&responses, &queried_ids),
+         match strategy(&responses, &queried) {
+            WaveStrategy::ContinueWith(nodes) => nodes_to_query = nodes,
+            WaveStrategy::HaltWith(result) => return Ok(result),
          }
       }
 
@@ -280,7 +321,7 @@ impl Resources {
    /// Thoroughly searches for the nodes closest to a given ID, returning the 'K_FACTOR' closest.
    /// It is possible that not all of these nodes will be stored in the routing table, so use
    /// the return value of this function rather than a subsequent call for table.closest_nodes_to().
-   pub fn probe(&self, target: &SubotaiHash) -> SubotaiResult<Vec<routing::NodeInfo>> {
+   pub fn probe_old(&self, target: &SubotaiHash) -> SubotaiResult<Vec<routing::NodeInfo>> {
       // We record the fact we attempted a probe for this bucket.
       self.table.mark_bucket_as_probed(target);
 
@@ -538,4 +579,9 @@ impl Resources {
       }
       Ok(())
    }
+}
+
+enum WaveStrategy<T> {
+   ContinueWith(Vec<routing::NodeInfo>),
+   HaltWith(T),
 }

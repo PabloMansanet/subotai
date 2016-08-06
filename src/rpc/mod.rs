@@ -136,6 +136,15 @@ impl Rpc {
       }
    }
 
+   pub fn is_probe_response(&self, target: &SubotaiHash) -> Option<Vec<routing::NodeInfo>> {
+      if let Kind::ProbeResponse(ref payload) = self.kind {
+         if &payload.id_to_probe == target {
+            return Some(payload.nodes.clone());
+         }
+      }
+      None
+   }
+
    /// Reports whether the RPC is a RetrieveResponse that found
    /// a particular key
    pub fn found_value(&self, key: &SubotaiHash) -> bool {
