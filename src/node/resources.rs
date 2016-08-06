@@ -107,7 +107,7 @@ impl Resources {
       // of. We define a strategy method for such a wave.
       let strategy = |responses: &[rpc::Rpc], queried: &[routing::NodeInfo]| -> WaveStrategy<routing::NodeInfo> {
          // If we found it, we're done.
-         if let Some(found) = responses.iter().filter_map(|rpc| rpc.found_node(target)).next() {
+         if let Some(found) = responses.iter().filter_map(|rpc| rpc.successfuly_located(target)).next() {
             return WaveStrategy::HaltWith(found);
          }
 
@@ -117,16 +117,19 @@ impl Resources {
          former_closest.append(&mut closest);
          closest = responses
             .iter()
-            .filter_map(|rpc| rpc.did_not_find_node(target))
+            .filter_map(|rpc| rpc.is_helping_locate(target))
             .flat_map(|vec| vec.into_iter())
             .chain(former_closest)
-            .filter(|info| !queried.contains(&info) && &info.id != &self.id)
             .collect();
        
          // We restore the order and remove duplicates, to finally return the closest ALPHA.
          closest.sort_by(|ref info_a, ref info_b| (&info_a.id ^ target).cmp(&(&info_b.id ^ target)));
          closest.dedup();
-         WaveStrategy::ContinueWith(closest.iter().cloned().take(routing::ALPHA).collect())
+         WaveStrategy::ContinueWith(closest
+            .iter()
+            .filter(|info| !queried.contains(&info) && &info.id != &self.id)
+            .cloned().take(routing::ALPHA).collect()
+         )
       };
 
       let rpc = Rpc::locate(self.local_info(), target.clone());
@@ -186,6 +189,59 @@ impl Resources {
       self.wave(seeds, strategy, rpc, timeout)
    }
 
+   pub fn retrieve(&self, key: &SubotaiHash) -> SubotaiResult<SubotaiHash> {
+      // If the value is already present in our table, we are done early.
+      if let Some(value) = self.storage.get(key) {
+         return Ok(value);
+      }
+
+      // We start with the closest K nodes we know about.
+      let mut closest: Vec<_> = self.table
+         .closest_nodes_to(key)
+         .filter(|info| &info.id != &self.id)
+         .take(routing::K_FACTOR)
+         .collect();
+      let seeds: Vec<_> = closest.iter().cloned().take(routing::ALPHA).collect();
+      let mut cache_candidate: Option<routing::NodeInfo> = None;
+
+      let strategy = |responses: &[rpc::Rpc], queried: &[routing::NodeInfo]| -> WaveStrategy<SubotaiHash> {
+
+         // We are interested in the combination of the nodes we knew about, plus the ones
+         // we just learned from the responses, as long as we haven't queried them already.
+         let mut former_closest = Vec::<routing::NodeInfo>::new();
+         former_closest.append(&mut closest);
+         closest = responses
+            .iter()
+            .filter_map(|rpc| rpc.is_helping_locate(key))
+            .flat_map(|vec| vec.into_iter())
+            .chain(former_closest)
+            .filter(|info| !queried.contains(&info) && &info.id != &self.id)
+            .collect();
+         closest.sort_by(|ref info_a, ref info_b| (&info_a.id ^ key).cmp(&(&info_b.id ^ key)));
+         closest.dedup();
+
+         // The cache candidate is the closest node that hasn't found the value.
+         cache_candidate = closest.first().cloned();
+       
+         // If we found it, we're done.
+         if let Some(found) = responses.iter().filter_map(|rpc| rpc.successfully_retrieved(key)).next() {
+            return WaveStrategy::HaltWith(found);
+         }
+
+         WaveStrategy::ContinueWith(closest
+            .iter()
+            .filter(|info| !queried.contains(&info) && &info.id != &self.id)
+            .cloned().take(routing::ALPHA).collect()
+         )
+      };
+
+      let rpc = Rpc::retrieve(self.local_info(), key.clone());
+      let timeout = time::Duration::seconds(3*node::NETWORK_TIMEOUT_S);
+
+      self.wave(seeds, strategy, rpc, timeout)
+   }
+  
+
    /// Wave operation. Contacts nodes from a list by sending a specific RPC. Then, it 
    /// extracts new node candidates from their response by applying a strategy function.
    ///
@@ -204,7 +260,9 @@ impl Resources {
       let packet = rpc.serialize();
 
       // We loop as long as we haven't ran out of time and there is something to query.
-      while time::SteadyTime::now() < deadline && !nodes_to_query.is_empty() {
+      while time::SteadyTime::now() < deadline &&
+            !nodes_to_query.is_empty() &&
+            queried.len() < routing::K_FACTOR {
          // Here, we only know who to listen to, for how long, and the number of 
          // responses. Whether or not a response is interesting is down to the 
          // strategy function.
@@ -232,61 +290,6 @@ impl Resources {
       Err(SubotaiError::UnresponsiveNetwork)
    }
 
-   pub fn retrieve(&self, key: &SubotaiHash) -> SubotaiResult<SubotaiHash> {
-      // If the value is already present in our table, we are done early.
-      if let Some(value) = self.storage.get(key) {
-         return Ok(value);
-      }
-
-      let mut queried_ids = Vec::<SubotaiHash>::with_capacity(routing::K_FACTOR);
-      let mut cache_candidate: Option<hash::SubotaiHash> = None;
-      let all_receptions = self.receptions();
-      let loop_timeout = time::Duration::seconds(3 * node::NETWORK_TIMEOUT_S);
-      let deadline = time::SteadyTime::now() + loop_timeout;
-     
-      while queried_ids.len() < routing::K_FACTOR && time::SteadyTime::now() < deadline {
-         // We query the 'ALPHA' nodes closest to the key we haven't yet queried.
-         let nodes_to_query: Vec<routing::NodeInfo> = self.table.closest_nodes_to(key)
-            .filter(|ref info| !queried_ids.contains(&info.id) && &info.id != &self.id)
-            .take(routing::ALPHA)
-            .collect();
-
-         // We wait for the response from the same number of nodes, minus the 'IMPATIENCE' factor.
-         let responses = self.receptions()
-            .during(time::Duration::seconds(node::NETWORK_TIMEOUT_S))
-            .filter(|ref rpc| rpc.is_finding_value(key))
-            .take(usize::saturating_sub(nodes_to_query.len(), routing::IMPATIENCE));
-        
-         // We compose the RPCs and send the UDP packets.
-         try!(self.retrieve_wave(key, &nodes_to_query, &mut queried_ids));
-  
-         // We check the responses and return if the value was found, while caching 
-         // the value in the closest unqueried node.
-         for response in responses { 
-            if response.found_value(key) {
-               match self.storage.get(key) {
-                  Some(value) => {
-                     self.remote_cache(&cache_candidate, key.clone(), value.clone());
-                     return Ok(value);
-                  },
-                  None => return Err(SubotaiError::StorageError),
-               }
-            } else {
-               cache_candidate = Some(response.sender.id);
-            }
-         }
-      }
-      
-      // One last wait until success or timeout, to compensate for impatience
-      // (It could be that the nodes we ignored earlier come back with the response)
-      all_receptions
-         .during(time::Duration::seconds(node::NETWORK_TIMEOUT_S))
-         .filter(|ref rpc| rpc.found_value(key))
-         .take(1)
-         .count();
-      self.storage.get(key).ok_or(SubotaiError::NoResponse)
-   }
-  
    #[allow(unused_must_use)]
    fn remote_cache(&self, target: &Option<SubotaiHash>, key: SubotaiHash, value: SubotaiHash) {
       match *target {

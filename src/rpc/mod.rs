@@ -94,18 +94,9 @@ impl Rpc {
        serde::deserialize(serialized)
    }
 
-   /// Reports whether the RPC is a LocateResponse looking
-   /// for a particular node
-   pub fn is_finding_node(&self, id: &SubotaiHash) -> bool {
-      match self.kind {
-         Kind::LocateResponse( ref payload ) => &payload.id_to_find == id,
-         _ => false,
-      }
-   }
-
    /// Reports whether the RPC is a LocateResponse that found
    /// a particular node. If it was, returns the node.
-   pub fn found_node(&self, id: &SubotaiHash) -> Option<routing::NodeInfo> {
+   pub fn successfuly_located(&self, id: &SubotaiHash) -> Option<routing::NodeInfo> {
       if let Kind::LocateResponse(ref payload) = self.kind {
          match payload.result {
             routing::LookupResult::Found(ref node) if &payload.id_to_find == id => return Some(node.clone()),
@@ -117,7 +108,7 @@ impl Rpc {
 
    /// Reports whether the RPC is a LocateResponse that failed to locate.
    /// If so, provides the closest nodes.
-   pub fn did_not_find_node(&self, id: &SubotaiHash) -> Option<Vec<routing::NodeInfo>> {
+   pub fn is_helping_locate(&self, id: &SubotaiHash) -> Option<Vec<routing::NodeInfo>> {
       if let Kind::LocateResponse(ref payload) = self.kind {
          match payload.result {
             routing::LookupResult::ClosestNodes(ref nodes) if &payload.id_to_find == id => return Some(nodes.clone()),
@@ -127,13 +118,28 @@ impl Rpc {
       None
    }
 
+   /// Reports whether the RPC is a RetrieveResponse that found
+   /// a particular key.
+   pub fn successfully_retrieved(&self, key: &SubotaiHash) -> Option<SubotaiHash> {
+      if let Kind::RetrieveResponse(ref payload) = self.kind {
+         match payload.result {
+            RetrieveResult::Found(ref value) if &payload.key_to_find == key => return Some(value.clone()),
+            _ => return None,
+         }
+      }
+      None
+   }
+
    /// Reports whether the RPC is a RetrieveResponse looking
    /// for a particular key
-   pub fn is_finding_value(&self, key: &SubotaiHash) -> bool {
-      match self.kind {
-         Kind::RetrieveResponse( ref payload ) => &payload.key_to_find == key,
-         _ => false,
+   pub fn is_helping_retrieve(&self, key: &SubotaiHash) -> Option<Vec<routing::NodeInfo>> {
+      if let Kind::RetrieveResponse(ref payload) = self.kind {
+         match payload.result {
+            RetrieveResult::Closest(ref nodes) if &payload.key_to_find == key => return Some(nodes.clone()),
+            _ => return None,
+         }
       }
+      None
    }
 
    pub fn is_probe_response(&self, target: &SubotaiHash) -> Option<Vec<routing::NodeInfo>> {
@@ -143,18 +149,6 @@ impl Rpc {
          }
       }
       None
-   }
-
-   /// Reports whether the RPC is a RetrieveResponse that found
-   /// a particular key
-   pub fn found_value(&self, key: &SubotaiHash) -> bool {
-      if let Kind::RetrieveResponse(ref payload) = self.kind {
-         match payload.result {
-            RetrieveResult::Found(_) => return &payload.key_to_find == key,
-            _ => return false,
-         }
-      }
-      false
    }
 }
 
