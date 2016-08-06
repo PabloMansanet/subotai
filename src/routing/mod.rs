@@ -1,5 +1,6 @@
 use std::{net, mem, sync, iter};
 use {hash, time};
+use std::cmp::PartialEq;
 use hash::HASH_SIZE;
 use hash::SubotaiHash;
 use std::collections::VecDeque;
@@ -40,7 +41,7 @@ pub struct Table {
 }
 
 /// ID - Address pair that identifies a unique Subotai node in the network.
-#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, Eq)]
 pub struct NodeInfo {
    pub id      : SubotaiHash,
    pub address : net::SocketAddr,
@@ -287,6 +288,16 @@ pub struct EvictionConflict {
 struct Bucket {
    entries    : VecDeque<NodeInfo>,
    last_probe : Option<time::SteadyTime>,
+}
+
+impl PartialEq for NodeInfo {
+   fn eq(&self, other: &Self) -> bool {
+      self.id.eq(&other.id)
+   }
+
+   fn ne(&self, other: &Self) -> bool {
+      self.id.ne(&other.id)
+   }
 }
 
 impl<'a, 'b> Iterator for ClosestNodesTo<'a, 'b> {

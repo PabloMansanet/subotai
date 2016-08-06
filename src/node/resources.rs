@@ -1,5 +1,5 @@
 use {hash, node, routing, storage, rpc, bus, time, SubotaiError, SubotaiResult};
-use std::{net, sync};
+use std::{net, sync, cmp};
 use rpc::Rpc;
 use hash::SubotaiHash;
 use node::receptions;
@@ -147,10 +147,12 @@ impl Resources {
    }
 
 
-   /// Thoroughly searches for the nodes closest to a given ID, returning the 'K_FACTOR' closest.
+   /// Thoroughly searches for the nodes closest to a given ID, returning the `K_FACTOR` closest.
    /// It is possible that not all of these nodes will be stored in the routing table, so use
    /// the return value of this function rather than a subsequent call for table.closest_nodes_to().
-   pub fn probe(&self, target: &SubotaiHash) -> SubotaiResult<Vec<routing::NodeInfo>> {
+   ///
+   /// The probe will consult `depth` number of nodes to obtain that information.
+   pub fn probe(&self, target: &SubotaiHash, depth: usize) -> SubotaiResult<Vec<routing::NodeInfo>> {
       // We record the fact we attempted a probe for this bucket.
       self.table.mark_bucket_as_probed(target);
 
@@ -160,8 +162,8 @@ impl Resources {
          .filter(|info| &info.id != &self.id)
          .take(routing::K_FACTOR)
          .collect();
-      let seeds: Vec<_> = closest.iter().cloned().take(routing::ALPHA).collect();
 
+      let seeds: Vec<_> = closest.iter().cloned().take(routing::ALPHA).collect();
       // Strategy is similar to the `locate` wave. We keep probing the closest `ALPHA` nodes
       // we are aware of as we continue probing. We only halt when we have queried `K_FACTOR`.
       let strategy = |responses: &[rpc::Rpc], queried: &[routing::NodeInfo]| -> WaveStrategy<Vec<routing::NodeInfo>> {
@@ -177,12 +179,15 @@ impl Resources {
          // We restore the order and remove duplicates, to finally return the closest ALPHA.
          closest.sort_by(|ref info_a, ref info_b| (&info_a.id ^ target).cmp(&(&info_b.id ^ target)));
          closest.dedup();
-         println!("{} after sorting", closest.len());
 
-         if queried.len() >= routing::K_FACTOR {
+         if queried.len() >= depth {
             WaveStrategy::HaltWith(closest.iter().cloned().take(routing::K_FACTOR).collect())
          } else {
-            WaveStrategy::ContinueWith(closest.iter().filter(|info| !queried.contains(&info) && &info.id != &self.id).cloned().take(routing::ALPHA).collect())
+            WaveStrategy::ContinueWith(closest
+               .iter()
+               .filter(|info| !queried.contains(&info) && &info.id != &self.id)
+               .cloned().take(routing::ALPHA).collect()
+            )
          }
       };
 
@@ -218,11 +223,10 @@ impl Resources {
          let responses = self.receptions()
             .from_senders(senders)
             .during(time::Duration::seconds(node::NETWORK_TIMEOUT_S))
-            .take(usize::saturating_sub(nodes_to_query.len(), routing::IMPATIENCE));
+            .take(cmp::min(nodes_to_query.len(), usize::saturating_sub(routing::ALPHA, routing::IMPATIENCE)));
       
          // We query all the nodes with the wave RPC, and collect the responses, 
          // ignoring any slackers based on the IMPATIENCE factor.
-         println!("Sending to {}", nodes_to_query.len());
          for node in &nodes_to_query {
             try!(self.outbound.send_to(&packet, node.address));
          }
@@ -314,74 +318,10 @@ impl Resources {
       //TODO: Make it random
       let mut id = self.id.clone();
       id.flip_bit(index);
-      try!(self.probe(&id));
+      try!(self.probe(&id, routing::K_FACTOR));
       Ok(())
    }
 
-   /// Thoroughly searches for the nodes closest to a given ID, returning the 'K_FACTOR' closest.
-   /// It is possible that not all of these nodes will be stored in the routing table, so use
-   /// the return value of this function rather than a subsequent call for table.closest_nodes_to().
-   pub fn probe_old(&self, target: &SubotaiHash) -> SubotaiResult<Vec<routing::NodeInfo>> {
-      // We record the fact we attempted a probe for this bucket.
-      self.table.mark_bucket_as_probed(target);
-
-      // We start with the closest K nodes we know about.
-      let mut closest:Vec<routing::NodeInfo> = 
-         self.table.closest_nodes_to(target)
-                   .take(routing::K_FACTOR)
-                   .collect();
-
-      // We define a timeout for the entire operation.
-      let total_timeout = time::Duration::seconds(3 * node::NETWORK_TIMEOUT_S);
-      let deadline = time::SteadyTime::now() + total_timeout;
-
-      // We keep track of the nodes we have already queried to avoid spam.
-      let mut queried_ids = Vec::<SubotaiHash>::with_capacity(routing::K_FACTOR);
-
-      while queried_ids.len() < routing::K_FACTOR {
-
-         // Decide what nodes to query (The alpha closest we haven't queried yet).
-         let nodes_to_query: Vec<routing::NodeInfo> = closest.iter()
-            .filter(|info| !queried_ids.contains(&info.id) && &info.id != &self.id)
-            .take(routing::ALPHA)
-            .cloned()
-            .collect();
-         if nodes_to_query.is_empty() {
-            break;
-         }
-
-         // We prepare for the probe responses, from the amount of nodes
-         // we are contacting, minus the impatience factor.
-         let responses = self.receptions()
-            .of_kind(receptions::KindFilter::ProbeResponse)
-            .during(time::Duration::seconds(node::NETWORK_TIMEOUT_S))
-            .take(usize::saturating_sub(nodes_to_query.len(), routing::IMPATIENCE));
-
-         // We probe these nodes.
-         try!(self.probe_wave(target.clone(), &nodes_to_query, &mut queried_ids));
-
-         // We incorporate the nodes we receive as responses, making sure to avoid ID duplicates.
-         for response in responses {
-            if let rpc::Kind::ProbeResponse(ref payload) = response.kind {
-               let mut new_nodes = payload.nodes.clone();
-               new_nodes.retain(|ref new| closest.iter().all(|ref old| &old.id != &new.id));
-               closest.append(&mut new_nodes);
-            }
-         }
-         
-         // We sort the vector again to keep the ordering up to date, and slim it down to K_FACTOR entries.
-         closest.sort_by(|ref info_a, ref info_b| (&info_a.id ^ target).cmp(&(&info_b.id ^ target)));
-         closest.truncate(routing::K_FACTOR);
-
-         if time::SteadyTime::now() >= deadline {
-            return Err(SubotaiError::UnresponsiveNetwork);
-         }
-      }
-
-      closest.shrink_to_fit();
-      Ok(closest)
-   }
-   
    /// Instructs a node to store a key_value pair.
    pub fn store_remotely(&self, node: &routing::NodeInfo, key: SubotaiHash, value: SubotaiHash) -> SubotaiResult<storage::StoreResult> {
       let rpc = Rpc::store(self.local_info(), key, value);
@@ -400,52 +340,6 @@ impl Resources {
       }
 
       Err(SubotaiError::NoResponse)
-   }
-
-   /// Initiates a fast, greedy series of probes aimed at the node itself, until the network grows to a 
-   /// minimum size and the node can be considered alive. From this point onwards, the maintenance thread
-   /// should be capable of maintaining the node alive.
-   pub fn bootstrap(&self, seed: routing::NodeInfo, network_size: Option<usize>) -> SubotaiResult<()>  {
-      self.update_table(seed);
-
-      // Timeout for the entire operation.
-      let total_timeout = time::Duration::seconds(3 * node::NETWORK_TIMEOUT_S);
-      let deadline = time::SteadyTime::now() + total_timeout;
-      let mut responses = self.receptions()
-         .of_kind(receptions::KindFilter::ProbeResponse)
-         .during(total_timeout);
-       
-      // We want our network to be as big as the K factor, or the user supplied limit.
-      let expected_length = match network_size {
-         Some(size) => size,
-         None => routing::K_FACTOR,
-      };
-
-      let mut queried_ids = Vec::<SubotaiHash>::with_capacity(routing::K_FACTOR);
-      while queried_ids.len() < expected_length {
-         let nodes_to_query: Vec<routing::NodeInfo> = self.table.all_nodes()
-            .filter(|ref node_info| !queried_ids.contains(&node_info.id))
-            .collect();
-
-         try!(self.probe_wave(self.id.clone(), &nodes_to_query, &mut queried_ids));
-         responses.next();
-
-         if time::SteadyTime::now() >= deadline {
-            return Err(SubotaiError::UnresponsiveNetwork);
-         }
-      }
-      Ok(())
-   }
-
-   fn probe_wave(&self, id_to_probe: SubotaiHash, nodes_to_query: &[routing::NodeInfo], queried: &mut Vec<SubotaiHash>) -> SubotaiResult<()> {
-      let rpc = Rpc::probe(self.local_info(), id_to_probe);
-      let packet = rpc.serialize(); 
-
-      for node in nodes_to_query {
-         try!(self.outbound.send_to(&packet, node.address));
-         queried.push(node.id.clone());
-      }
-      Ok(())
    }
 
    fn retrieve_wave(&self, key_to_find: &SubotaiHash, nodes_to_query: &[routing::NodeInfo], queried: &mut Vec<SubotaiHash>) -> SubotaiResult<()> {
@@ -477,21 +371,18 @@ impl Resources {
          rpc::Kind::Ping                           => self.handle_ping(sender),
          rpc::Kind::PingResponse                   => self.handle_ping_response(sender),
          rpc::Kind::Locate(ref payload)            => self.handle_locate(payload.clone(), sender),
-         rpc::Kind::LocateResponse(ref payload)    => self.handle_locate_response(payload.clone(), sender),
          rpc::Kind::Probe(ref payload)             => self.handle_probe(payload.clone(), sender),
-         rpc::Kind::ProbeResponse(ref payload)     => self.handle_probe_response(payload.clone(), sender),
          rpc::Kind::Store(ref payload)             => self.handle_store(payload.clone(), sender),
-         rpc::Kind::StoreResponse(_)               => self.handle_store_response(sender),
          rpc::Kind::Retrieve(ref payload)          => self.handle_retrieve(payload.clone(), sender),
          rpc::Kind::RetrieveResponse(ref payload)  => self.handle_retrieve_response(payload.clone(), sender),
+         _ => Ok(()),
       };
-      
+      self.update_table(rpc.sender.clone());
       self.updates.lock().unwrap().broadcast(Update::RpcReceived(rpc));
       result
    }
 
    fn handle_ping(&self, sender: routing::NodeInfo) -> SubotaiResult<()> {
-      self.update_table(sender.clone());
       let rpc = Rpc::ping_response(self.local_info());
       let packet = rpc.serialize();
       try!(self.outbound.send_to(&packet, sender.address));
@@ -499,7 +390,6 @@ impl Resources {
    }
 
    fn handle_store(&self, payload: sync::Arc<rpc::StorePayload>,  sender: routing::NodeInfo) -> SubotaiResult<()> {
-      self.update_table(sender.clone());
       let store_result = self.storage.store(payload.key.clone(), payload.value.clone());
       let rpc = Rpc::store_response(self.local_info(), payload.key.clone(), store_result);
       let packet = rpc.serialize();
@@ -509,8 +399,8 @@ impl Resources {
    }
 
    fn handle_probe(&self, payload: sync::Arc<rpc::ProbePayload>, sender: routing::NodeInfo) -> SubotaiResult<()> {
-      self.update_table(sender.clone());
-      let closest: Vec<_> = self.table.closest_nodes_to(&payload.id_to_probe)
+      let closest: Vec<_> = self.table
+         .closest_nodes_to(&payload.id_to_probe)
          .take(routing::K_FACTOR)
          .collect();
 
@@ -522,27 +412,12 @@ impl Resources {
       Ok(())
    }
 
-   fn handle_probe_response(&self, payload: sync::Arc<rpc::ProbeResponsePayload>, sender: routing::NodeInfo) -> SubotaiResult<()> {
-      self.update_table(sender.clone());
-      for node in &payload.nodes {
-         self.update_table(node.clone());
-      }
-      Ok(())
-   }
-
    fn handle_ping_response(&self, sender: routing::NodeInfo) -> SubotaiResult<()> {
       self.revert_conflicts_for_sender(&sender.id);
-      self.update_table(sender);
-      Ok(())
-   }
-
-   fn handle_store_response(&self, sender: routing::NodeInfo) -> SubotaiResult<()> {
-      self.update_table(sender);
       Ok(())
    }
 
    fn handle_locate(&self, payload: sync::Arc<rpc::LocatePayload>, sender: routing::NodeInfo) -> SubotaiResult<()> {
-      self.update_table(sender.clone());
       let lookup_results = self.table.lookup(&payload.id_to_find, routing::K_FACTOR, None);
       let rpc = Rpc::locate_response(self.local_info(),
                                      payload.id_to_find.clone(),
@@ -552,13 +427,7 @@ impl Resources {
       Ok(())
    }
 
-   fn handle_locate_response(&self, payload: sync::Arc<rpc::LocateResponsePayload>, sender: routing::NodeInfo) -> SubotaiResult<()> {
-      self.update_table(sender);
-      Ok(())
-   }
-
    fn handle_retrieve(&self, payload: sync::Arc<rpc::RetrievePayload>, sender: routing::NodeInfo) -> SubotaiResult<()> {
-      self.update_table(sender.clone());
       let result = match self.storage.get(&payload.key_to_find) {
          Some(value) => rpc::RetrieveResult::Found(value),
          None => rpc::RetrieveResult::Closest (self.table.closest_nodes_to(&payload.key_to_find).take(routing::K_FACTOR).collect()),
@@ -573,7 +442,6 @@ impl Resources {
    }
 
    fn handle_retrieve_response(&self, payload: sync::Arc<rpc::RetrieveResponsePayload>, sender: routing::NodeInfo) -> SubotaiResult<()> {
-      self.update_table(sender);
       if let rpc::RetrieveResult::Found(ref value) = payload.result {
          self.storage.store(payload.key_to_find.clone(), value.clone());
       }

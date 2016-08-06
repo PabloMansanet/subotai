@@ -217,13 +217,19 @@ fn node_probing_in_simulated_network()
 
    let head = nodes.pop_front().unwrap();
    let tail = nodes.pop_back().unwrap();
-   let probe_results = head.resources.probe(tail.id()).unwrap();
+   let probe_results = head.resources.probe(tail.id(), routing::K_FACTOR).unwrap();
 
    // We sort our manual collection by distance to the tail node.
    info_nodes.sort_by(|ref info_a, ref info_b| (&info_a.id ^ tail.id()).cmp(&(&info_b.id ^ tail.id())));
    info_nodes.truncate(routing::K_FACTOR); // This guarantees us the closest ids to the tail
    
    assert_eq!(info_nodes.len(), probe_results.len());
+   for (a, b) in probe_results.iter().zip(info_nodes.iter()) {
+      println!("{} vs {}",a.id, b.id);
+   }
+   for (a, b) in probe_results.iter().zip(info_nodes.iter()) {
+      println!("------> distance {} vs {}", &a.id ^ tail.id(), &b.id ^ tail.id());
+   }
    for (a, b) in probe_results.iter().zip(info_nodes.iter()) {
       assert_eq!(a.id, b.id);
    }
@@ -242,7 +248,7 @@ fn node_probing_in_simulated_unresponsive_network()
    nodes.drain(10..20);
    let head = nodes.pop_front().unwrap();
    let tail = nodes.pop_back().unwrap();
-   let probe_results = head.resources.probe(tail.id()).unwrap();
+   let probe_results = head.resources.probe(tail.id(), routing::K_FACTOR).unwrap();
 
    // We sort our manual collection by distance to the tail node.
    info_nodes.sort_by(|ref info_a, ref info_b| (&info_a.id ^ tail.id()).cmp(&(&info_b.id ^ tail.id())));

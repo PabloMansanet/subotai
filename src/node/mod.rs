@@ -125,14 +125,16 @@ impl Node {
 
    /// Bootstraps the node from a seed, and returns the amount of nodes in the final table.
    pub fn bootstrap(&self, seed: NodeInfo) -> SubotaiResult<usize> {
-       try!(self.resources.bootstrap(seed, None));
+       self.resources.table.update_node(seed);
+       try!(self.resources.probe(&self.resources.id, routing::K_FACTOR));
        *self.resources.state.write().unwrap() = State::Alive;
        Ok(self.resources.table.len())
    }
 
    /// Bootstraps to a network with a limited number of nodes.
    pub fn bootstrap_until(&self, seed: NodeInfo, network_size: usize) -> SubotaiResult<usize> {
-       try!(self.resources.bootstrap(seed, Some(network_size)));
+       self.resources.table.update_node(seed);
+       try!(self.resources.probe(&self.resources.id, network_size));
        *self.resources.state.write().unwrap() = State::Alive;
        Ok(self.resources.table.len())
    }
@@ -143,7 +145,7 @@ impl Node {
 
    /// Stores a key-value pair in the network.
    pub fn store(&self, key: &SubotaiHash, value: &SubotaiHash) -> SubotaiResult<()> {
-      let storage_candidates = try!(self.resources.probe(&key));
+      let storage_candidates = try!(self.resources.probe(&key, routing::K_FACTOR));
       for candidate in &storage_candidates {
          try!(self.resources.store_remotely(candidate, key.clone(), value.clone()));
       }
