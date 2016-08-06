@@ -39,16 +39,15 @@ impl Resources {
    }
 
    /// Pings a node, blocking until ping response.
-   pub fn ping(&self, id: &SubotaiHash) -> SubotaiResult<()> {
-      let node = try!(self.locate(id));
+   pub fn ping(&self, target: &routing::NodeInfo) -> SubotaiResult<()> {
       let rpc = Rpc::ping(self.local_info());
       let packet = rpc.serialize();
       let responses = self.receptions()
          .during(time::Duration::seconds(node::NETWORK_TIMEOUT_S))
          .of_kind(receptions::KindFilter::PingResponse)
-         .from(id.clone())
+         .from(target.id.clone())
          .take(1);
-      try!(self.outbound.send_to(&packet, node.address));
+      try!(self.outbound.send_to(&packet, target.address));
 
       match responses.count() {
          1 => Ok(()),
@@ -56,21 +55,11 @@ impl Resources {
       }
    }
 
-   /// Sends a ping and doesn't wait for a response. Used by the maintenance thread.
-   pub fn ping_and_forget(&self, id: &SubotaiHash) -> SubotaiResult<()> {
-      let node = try!(self.locate(id));
+   /// Sends a ping and doesn't wait for a response. Used by the maintenance threads.
+   pub fn ping_and_forget(&self, target: &routing::NodeInfo) -> SubotaiResult<()> {
       let rpc = Rpc::ping(self.local_info());
       let packet = rpc.serialize();
-      try!(self.outbound.send_to(&packet, node.address));
-      Ok(())
-   }
-
-   /// Sends a ping to an evicted node not present in the routing table anymore. Used
-   /// by the conflict resolution thread.
-   pub fn ping_for_conflict(&self, evicted: &routing::NodeInfo) -> SubotaiResult<()> {
-      let rpc = Rpc::ping(self.local_info());
-      let packet = rpc.serialize();
-      try!(self.outbound.send_to(&packet, evicted.address));
+      try!(self.outbound.send_to(&packet, target.address));
       Ok(())
    }
 
@@ -373,7 +362,7 @@ impl Resources {
          rpc::Kind::Probe(ref payload)             => self.handle_probe(payload.clone(), sender),
          rpc::Kind::Store(ref payload)             => self.handle_store(payload.clone(), sender),
          rpc::Kind::Retrieve(ref payload)          => self.handle_retrieve(payload.clone(), sender),
-         rpc::Kind::RetrieveResponse(ref payload)  => self.handle_retrieve_response(payload.clone(), sender),
+         rpc::Kind::RetrieveResponse(ref payload)  => self.handle_retrieve_response(payload.clone()),
          _ => Ok(()),
       };
       self.update_table(rpc.sender.clone());
@@ -442,7 +431,7 @@ impl Resources {
       Ok(())
    }
 
-   fn handle_retrieve_response(&self, payload: sync::Arc<rpc::RetrieveResponsePayload>, sender: routing::NodeInfo) -> SubotaiResult<()> {
+   fn handle_retrieve_response(&self, payload: sync::Arc<rpc::RetrieveResponsePayload>) -> SubotaiResult<()> {
       if let rpc::RetrieveResult::Found(ref value) = payload.result {
          self.storage.store(payload.key_to_find.clone(), value.clone());
       }

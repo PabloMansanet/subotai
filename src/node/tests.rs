@@ -23,7 +23,7 @@ fn node_ping() {
       .of_kind(receptions::KindFilter::Ping);
 
    // Alpha pings beta.
-   assert!(alpha.resources.ping(&beta.resources.id).is_ok());
+   assert!(alpha.resources.ping(&beta.local_info()).is_ok());
    assert_eq!(1, beta_receptions.count());
 }
 

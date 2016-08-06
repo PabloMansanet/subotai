@@ -164,7 +164,6 @@ impl Node {
       loop {
          let message = resources.inbound.recv_from(&mut buffer);
          if let State::ShuttingDown = *resources.state.read().unwrap() {
-            resources.updates.lock().unwrap().broadcast(resources::Update::Shutdown);
             break;
          }
 
@@ -214,7 +213,7 @@ impl Node {
 
             // We ping the evicted nodes for all conflicts that remain.
             for conflict in conflicts.iter_mut() {
-               resources.ping_for_conflict(&conflict.evicted);
+               resources.ping_and_forget(&conflict.evicted);
                conflict.times_pinged += 1;
             }
             conflicts.is_empty()
@@ -238,5 +237,6 @@ impl Node {
 impl Drop for Node {
    fn drop(&mut self) {
       *self.resources.state.write().unwrap() = State::ShuttingDown;
+      self.resources.updates.lock().unwrap().broadcast(resources::Update::Shutdown);
    }
 }

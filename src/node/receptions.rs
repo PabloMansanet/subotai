@@ -140,13 +140,13 @@ mod tests {
        let table_size = alpha.bootstrap_until(beta.resources.local_info(), 1).unwrap();
 
        assert_eq!(table_size, 2); // One for self, and one for beta
-       let beta_receptions = 
-          beta.receptions()
-              .during(time::Duration::seconds(1))
-              .of_kind(KindFilter::Ping);
+       let beta_receptions = beta
+         .receptions()
+         .during(time::Duration::seconds(1))
+         .of_kind(KindFilter::Ping);
 
-       assert!(alpha.resources.ping(beta.id()).is_ok());
-       assert!(alpha.resources.ping(beta.id()).is_ok());
+       assert!(alpha.resources.ping(&beta.local_info()).is_ok());
+       assert!(alpha.resources.ping(&beta.local_info()).is_ok());
 
        assert_eq!(beta_receptions.count(),2);
     }
@@ -160,17 +160,17 @@ mod tests {
        let mut allowed = Vec::new();
        allowed.push(beta.resources.local_info().id);
       
-       let receptions = 
-          receiver.receptions()
-                  .during(time::Duration::seconds(1))
-                  .from_senders(allowed)
-                  .of_kind(KindFilter::Ping);
+       let receptions = receiver
+         .receptions()
+         .during(time::Duration::seconds(1))
+         .from_senders(allowed)
+         .of_kind(KindFilter::Ping);
 
        assert!(alpha.bootstrap_until(receiver.resources.local_info(), 1).is_ok());
        assert!(beta.bootstrap_until(receiver.resources.local_info(), 1).is_ok());
 
-       assert!(alpha.resources.ping(receiver.id()).is_ok());
-       assert!(beta.resources.ping(receiver.id()).is_ok());
+       assert!(alpha.resources.ping(&receiver.local_info()).is_ok());
+       assert!(beta.resources.ping(&receiver.local_info()).is_ok());
 
        assert_eq!(receptions.count(),1);
     }
