@@ -12,32 +12,6 @@
 //!   implementation in that it gives temporary priority to newer contacts for full buckets. This
 //!   makes the network more dynamic and capable to adapt quickly, while still providing protection
 //!   against basic `DDoS` attacks in the form of a defensive state.
-//!
-//! * ...
-//!
-//! # Examples
-//!
-//! Node ping:
-//!
-//! ```rust
-//! # extern crate time;
-//! # extern crate subotai;
-//! use subotai::node::Node;
-//! use subotai::hash::SubotaiHash;
-//! # fn main() {
-//!
-//! let alpha = Node::new().unwrap();
-//! let beta = Node::new().unwrap();
-//!
-//! alpha.bootstrap_until(beta.local_info(), 1);
-//!
-//! let (key, value) = (SubotaiHash::random(), SubotaiHash::random());
-//! alpha.store(&key, &value);
-//!
-//! assert_eq!(beta.retrieve(&key).unwrap(), value);
-//! # }
-//!
-//! ```
 #![allow(dead_code, unknown_lints, wrong_self_convention)]
 #![feature(custom_derive, plugin, vec_deque_contains)]
 #![plugin(serde_macros)]

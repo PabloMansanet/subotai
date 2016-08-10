@@ -15,7 +15,12 @@ fn node_ping() {
    let span = time::Duration::seconds(1);
 
    // Bootstrapping alpha:
-   assert!(alpha.bootstrap_until(beta_seed, 1).is_ok());
+   assert!(alpha.bootstrap(beta_seed).is_ok());
+   
+   match alpha.state() {
+      node::State::OffGrid => (), 
+      _ => panic!("Should be off grid with this few nodes"),
+   }
 
    let beta_receptions = beta.receptions()
       .during(span)
@@ -58,9 +63,9 @@ fn bootstrapping_and_finding_on_simulated_network() {
 #[test]
 fn finding_on_simulated_unresponsive_network() {
 
-   let mut nodes = simulated_network(30);
+   let mut nodes = simulated_network(35);
    nodes.drain(10..20);
-   assert_eq!(nodes.len(), 20);
+   assert_eq!(nodes.len(), 25);
    
    // Head finds tail in a few steps.
    let head = nodes.pop_front().unwrap();
@@ -83,16 +88,16 @@ fn finding_a_nonexisting_node_in_a_simulated_network_times_out() {
 }
 
 fn simulated_network(network_size: usize) -> VecDeque<node::Node> {
+   assert!(network_size > routing::K_FACTOR, "You can't build a network with so few nodes!");
+
    let nodes: VecDeque<node::Node> = (0..network_size).map(|_| { node::Node::new().unwrap() }).collect();
    {
       let origin = nodes.front().unwrap();
-      // Initial handshake pass
       for node in nodes.iter().skip(1) {
-         assert!(node.bootstrap_until(origin.resources.local_info(), 1).is_ok());
+         node.bootstrap(origin.resources.local_info()).unwrap();
       }
-
-      for node in nodes.iter().skip(1) {
-         assert!(node.bootstrap(origin.resources.local_info()).is_ok());
+      for node in nodes.iter() {
+         node.wait_for_state(node::State::OnGrid);
       }
    }
    nodes
@@ -180,7 +185,7 @@ fn remote_key_value_storage()
    let alpha = node::Node::new().unwrap();
    let beta  = node::Node::new().unwrap();
    
-   assert!(alpha.bootstrap_until(beta.resources.local_info(), 1).is_ok());
+   assert!(alpha.bootstrap(beta.resources.local_info()).is_ok());
   
    let key = hash::SubotaiHash::random();
    let value = hash::SubotaiHash::random();
@@ -251,20 +256,6 @@ fn node_probing_in_simulated_unresponsive_network()
    for (a, b) in probe_results.iter().zip(info_nodes.iter()) {
       assert_eq!(a.id, b.id);
    }
-}
-
-#[test]
-fn store_retrieve_in_tiny_network()
-{
-   let alpha = node::Node::new().unwrap();
-   let beta = node::Node::new().unwrap();
-
-   alpha.bootstrap_until(beta.local_info(), 1);
-
-   let (key, value) = (hash::SubotaiHash::random(), hash::SubotaiHash::random());
-
-   alpha.store(&key, &value).unwrap();
-   assert_eq!(beta.retrieve(&key).unwrap(), value);
 }
 
 #[test]

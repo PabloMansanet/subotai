@@ -9,7 +9,7 @@
 //!
 //! Nodes start in the `OffGrid` state by default, meaning they aren't associated to
 //! a network. You must bootstrap the node by providing the address of another node,
-//! at which point the state will change to `Alive`.
+//! at which point the state will change to `OnGrid`.
 //!
 //! Destroying a node automatically schedules all threads to terminate after finishing 
 //! any pending operations.
@@ -21,7 +21,7 @@ pub use routing::NodeInfo as NodeInfo;
 mod tests;
 mod resources;
 
-use {storage, routing, rpc, bus, SubotaiResult, time};
+use {storage, routing, rpc, bus, SubotaiResult, SubotaiError, time};
 use hash::SubotaiHash;
 use std::{net, thread, sync};
 use std::time::Duration as StdDuration;
@@ -37,6 +37,8 @@ const UPDATE_BUS_SIZE_BYTES : usize = 50;
 
 /// Maintenance thread sleep period.
 const MAINTENANCE_SLEEP_S : u64 = 5;
+
+const BOOTSTRAP_TRIES : u32 = 3;
 
 /// Subotai node. 
 ///
@@ -56,13 +58,11 @@ pub enum State {
    /// network. Needs to go through succesful bootstrapping.
    OffGrid,
    /// The node is online and connected to the network.
-   Alive,
+   OnGrid,
    /// The node is in defensive mode. Too many conflicts have 
    /// been generated recently, so the node gives preference
    /// to its older contacts until all conflicts are resolved.
    Defensive,
-   /// The node is in an error state.
-   Error,
    /// The node is in a process of shutting down;
    /// all of its resources will be deallocated after completion
    /// of any pending async operations.
@@ -116,27 +116,44 @@ impl Node {
       Ok( Node{ resources: resources } )
    }
 
-
    /// Produces an iterator over RPCs received by this node. The iterator will block
    /// indefinitely.
    pub fn receptions(&self) -> receptions::Receptions {
       self.resources.receptions()
    }
 
-   /// Bootstraps the node from a seed, and returns the amount of nodes in the final table.
-   pub fn bootstrap(&self, seed: NodeInfo) -> SubotaiResult<usize> {
-       self.resources.table.update_node(seed);
-       try!(self.resources.probe(&self.resources.id, routing::K_FACTOR));
-       *self.resources.state.write().unwrap() = State::Alive;
-       Ok(self.resources.table.len())
+   /// Bootstraps the node from a seed. Returns Ok(()) if the seed has
+   /// been reached and the asynchronous bootstrap process has started.
+   /// However, it might take a bit for the node to become alive (use 
+   /// node::wait_until_state to block until it's alive, if necessary).
+   pub fn bootstrap(&self, seed: NodeInfo) -> SubotaiResult<()> {
+      try!(self.resources.ping(&seed));
+      let bootstrap_resources = self.resources.clone();
+      thread::spawn(move || {
+         for _ in 0..BOOTSTRAP_TRIES {
+            match bootstrap_resources.probe(&bootstrap_resources.id, routing::K_FACTOR) {
+               Ok(_) => break,
+               _ => (),
+            }
+         }
+       });
+      Ok(())
    }
 
-   /// Bootstraps to a network with a limited number of nodes.
-   pub fn bootstrap_until(&self, seed: NodeInfo, network_size: usize) -> SubotaiResult<usize> {
-       self.resources.table.update_node(seed);
-       try!(self.resources.probe(&self.resources.id, network_size));
-       *self.resources.state.write().unwrap() = State::Alive;
-       Ok(self.resources.table.len())
+   pub fn wait_for_state(&self, state: State) {
+      let updates = self.resources.updates.lock().unwrap().add_rx().into_iter();
+      { // Lock scope
+         if *self.resources.state.read().unwrap() == state {
+            return;
+         }
+      }
+
+      for update in updates {
+         match update {
+            resources::Update::StateChange(new_state) if new_state == state => return,
+            _ => (),
+         }
+      }
    }
 
    pub fn local_info(&self) -> NodeInfo {
@@ -145,11 +162,27 @@ impl Node {
 
    /// Stores a key-value pair in the network.
    pub fn store(&self, key: &SubotaiHash, value: &SubotaiHash) -> SubotaiResult<()> {
-      let storage_candidates = try!(self.resources.probe(&key, routing::K_FACTOR));
-      for candidate in &storage_candidates {
-         try!(self.resources.store_remotely(candidate, key.clone(), value.clone()));
+      if let State::OffGrid = *self.resources.state.read().unwrap() {
+         return Err(SubotaiError::OffGridError);
       }
-      Ok(())
+
+      let storage_candidates = try!(self.resources.probe(&key, routing::K_FACTOR));
+      // At least one store RPC must succeed.
+      let mut response = self
+         .receptions()
+         .of_kind(receptions::KindFilter::StoreResponse)
+         .during(time::Duration::seconds(NETWORK_TIMEOUT_S))
+         .filter(|rpc| rpc.successfully_stored(key))
+         .take(1);
+
+      for candidate in &storage_candidates {
+         try!(self.resources.store_remotely_and_forget(candidate, key.clone(), value.clone()));
+      }
+
+      match response.next() {
+         Some(_) => Ok(()),
+         None    => Err(SubotaiError::UnresponsiveNetwork),
+      }
    }
 
    /// Retrieves a value from the network, given a key.
@@ -226,7 +259,10 @@ impl Node {
          match *state {
             State::ShuttingDown => break,
             // If all conflicts are resolved, we leave defensive mode.
-            State::Defensive if conflicts_empty => *state = State::Alive,
+            State::Defensive if conflicts_empty => { 
+               *state = State::OnGrid;
+               resources.updates.lock().unwrap().broadcast(resources::Update::StateChange(State::OnGrid));
+            }
             _ => (),
          }
       }
@@ -237,6 +273,6 @@ impl Node {
 impl Drop for Node {
    fn drop(&mut self) {
       *self.resources.state.write().unwrap() = State::ShuttingDown;
-      self.resources.updates.lock().unwrap().broadcast(resources::Update::Shutdown);
+      self.resources.updates.lock().unwrap().broadcast(resources::Update::StateChange(State::ShuttingDown));
    }
 }

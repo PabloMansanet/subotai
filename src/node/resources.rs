@@ -27,7 +27,7 @@ pub struct Resources {
 pub enum Update {
    RpcReceived(Rpc),
    Tick,
-   Shutdown,
+   StateChange(node::State),
 }
 
 impl Resources {
@@ -78,8 +78,19 @@ impl Resources {
             conflicts.push(conflict);
             if conflicts.len() == routing::MAX_CONFLICTS {
                *self.state.write().unwrap() = node::State::Defensive;
+               self.updates.lock().unwrap().broadcast(Update::StateChange(node::State::Defensive));
             }
          }
+      }
+
+      let off_grid = { // Lock scope
+         *self.state.read().unwrap() == node::State::OffGrid
+      };
+
+      // We go on grid as soon as the network is big enough.
+      if off_grid && self.table.len() > routing::K_FACTOR {
+         *self.state.write().unwrap() = node::State::OnGrid;
+         self.updates.lock().unwrap().broadcast(Update::StateChange(node::State::OnGrid));
       }
    }
 
@@ -226,7 +237,7 @@ impl Resources {
          // If we found it, we cache the value and we're done.
          if let Some(retrieved) = responses.iter().filter_map(|rpc| rpc.successfully_retrieved(key)).next() {
             if let Some(ref candidate) = cache_candidate {
-               self.store_remotely(&candidate, key.clone(), retrieved.clone());
+               let _ = self.store_remotely(&candidate, key.clone(), retrieved.clone());
             }
             return WaveStrategy::HaltWith(retrieved);
          }
@@ -252,8 +263,8 @@ impl Resources {
    /// in the wave, outputs the next nodes to contact, and decides whether to stop 
    /// the wave by producing a Some(T) in its second return value.
    ///
-   /// The wave terminates when K_FACTOR nodes are contacted, when the strategy function
-   /// provides no new nodes, when a global timeout is reached, or when halt returns Some(T).
+   /// The wave terminates when when the strategy function provides no new nodes, when a 
+   /// global timeout is reached, or when halt returns Some(T).
    fn wave<T, S>(&self, seeds: Vec<routing::NodeInfo>, mut strategy: S, rpc: rpc::Rpc, timeout: time::Duration) -> SubotaiResult<T>
       where S: FnMut(&[rpc::Rpc], &[routing::NodeInfo]) -> WaveStrategy<T> {
 
@@ -263,9 +274,7 @@ impl Resources {
       let packet = rpc.serialize();
 
       // We loop as long as we haven't ran out of time and there is something to query.
-      while time::SteadyTime::now() < deadline &&
-            !nodes_to_query.is_empty() &&
-            queried.len() < routing::K_FACTOR {
+      while time::SteadyTime::now() < deadline && !nodes_to_query.is_empty() {
          // Here, we only know who to listen to, for how long, and the number of 
          // responses. Whether or not a response is interesting is down to the 
          // strategy function.
@@ -306,15 +315,15 @@ impl Resources {
    }
 
    /// Instructs a node to store a key_value pair.
-   pub fn store_remotely(&self, node: &routing::NodeInfo, key: SubotaiHash, value: SubotaiHash) -> SubotaiResult<storage::StoreResult> {
+   pub fn store_remotely(&self, target: &routing::NodeInfo, key: SubotaiHash, value: SubotaiHash) -> SubotaiResult<storage::StoreResult> {
       let rpc = Rpc::store(self.local_info(), key, value);
       let packet = rpc.serialize();
       let mut responses = self.receptions()
          .during(time::Duration::seconds(node::NETWORK_TIMEOUT_S))
          .of_kind(receptions::KindFilter::StoreResponse)
-         .from(node.id.clone())
+         .from(target.id.clone())
          .take(1);
-      try!(self.outbound.send_to(&packet, node.address));
+      try!(self.outbound.send_to(&packet, target.address));
 
       if let Some(rpc) = responses.next() {
          if let rpc::Kind::StoreResponse(ref payload) = rpc.kind {
@@ -323,6 +332,13 @@ impl Resources {
       }
 
       Err(SubotaiError::NoResponse)
+   }
+
+   pub fn store_remotely_and_forget(&self, target: &routing::NodeInfo, key: SubotaiHash, value: SubotaiHash) -> SubotaiResult<()> {
+      let rpc = Rpc::store(self.local_info(), key, value);
+      let packet = rpc.serialize();
+      try!(self.outbound.send_to(&packet, target.address));
+      Ok(())
    }
 
    fn retrieve_wave(&self, key_to_find: &SubotaiHash, nodes_to_query: &[routing::NodeInfo], queried: &mut Vec<SubotaiHash>) -> SubotaiResult<()> {
@@ -415,7 +431,7 @@ impl Resources {
    fn handle_retrieve(&self, payload: sync::Arc<rpc::RetrievePayload>, sender: routing::NodeInfo) -> SubotaiResult<()> {
       let result = match self.storage.get(&payload.key_to_find) {
          Some(value) => rpc::RetrieveResult::Found(value),
-         None => rpc::RetrieveResult::Closest (self.table.closest_nodes_to(&payload.key_to_find).take(routing::K_FACTOR).collect()),
+         None => rpc::RetrieveResult::Closest(self.table.closest_nodes_to(&payload.key_to_find).take(routing::K_FACTOR).collect()),
       };
 
       let rpc = Rpc::retrieve_response(self.local_info(),

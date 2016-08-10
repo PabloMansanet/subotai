@@ -7,6 +7,7 @@ use std::error::Error;
 #[derive(Debug)]
 pub enum SubotaiError {
    NoResponse,
+   OffGridError,
    NodeNotFound,
    OutOfBounds,
    StorageError,
@@ -21,6 +22,7 @@ impl fmt::Display for SubotaiError {
    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
       match *self {
          SubotaiError::NoResponse => write!(f, "Timed out while waiting for node response."),
+         SubotaiError::OffGridError => write!(f, "The node is currently off-grid."),
          SubotaiError::NodeNotFound => write!(f, "Could not find the node locally or in the network."),
          SubotaiError::OutOfBounds => write!(f, "Index falls out of routing table."),
          SubotaiError::StorageError => write!(f, "Corrupted Storage."),
@@ -35,6 +37,7 @@ impl Error for SubotaiError {
    fn description(&self) -> &str {
       match *self {
          SubotaiError::NoResponse => "Timed out with no response",
+         SubotaiError::OffGridError => "The node is currently off-grid.",
          SubotaiError::NodeNotFound => "Could not find the node",
          SubotaiError::OutOfBounds => "Index outside routing table.",
          SubotaiError::StorageError => "Corrupted Storage.",

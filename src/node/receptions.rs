@@ -10,7 +10,7 @@
 //! It is also possible to filter the iterator so it only applies to particular
 //! senders or RPC kinds without resorting to iterator adapters.
 
-use {bus, rpc, time};
+use {bus, rpc, time, node};
 use node::resources;
 use hash::SubotaiHash;
 
@@ -119,7 +119,7 @@ impl Iterator for Receptions {
 
                return Some(rpc);
             },
-            Some(resources::Update::Shutdown) => self.shutdown = true,
+            Some(resources::Update::StateChange(node::State::ShuttingDown)) => self.shutdown = true,
             _ => (),
          }
       }
@@ -137,9 +137,9 @@ mod tests {
     fn produces_rpcs_but_not_ticks() {
        let alpha = node::Node::new().unwrap();
        let beta = node::Node::new().unwrap();
-       let table_size = alpha.bootstrap_until(beta.resources.local_info(), 1).unwrap();
+       alpha.bootstrap(beta.resources.local_info()).unwrap();
 
-       assert_eq!(table_size, 2); // One for self, and one for beta
+       assert_eq!(alpha.resources.table.len(), 2); // One for self, and one for beta
        let beta_receptions = beta
          .receptions()
          .during(time::Duration::seconds(1))
@@ -166,8 +166,8 @@ mod tests {
          .from_senders(allowed)
          .of_kind(KindFilter::Ping);
 
-       assert!(alpha.bootstrap_until(receiver.resources.local_info(), 1).is_ok());
-       assert!(beta.bootstrap_until(receiver.resources.local_info(), 1).is_ok());
+       assert!(receiver.bootstrap(alpha.resources.local_info()).is_ok());
+       assert!(receiver.bootstrap(beta.resources.local_info()).is_ok());
 
        assert!(alpha.resources.ping(&receiver.local_info()).is_ok());
        assert!(beta.resources.ping(&receiver.local_info()).is_ok());

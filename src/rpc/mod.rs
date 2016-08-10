@@ -130,6 +130,16 @@ impl Rpc {
       None
    }
 
+   pub fn successfully_stored(&self, key: &SubotaiHash) -> bool {
+      if let Kind::StoreResponse(ref payload) = self.kind {
+         match payload.result {
+            storage::StoreResult::Success if &payload.key == key => return true,
+            _ => return false,
+         }
+      }
+      false
+   }
+
    /// Reports whether the RPC is a RetrieveResponse looking
    /// for a particular key
    pub fn is_helping_retrieve(&self, key: &SubotaiHash) -> Option<Vec<routing::NodeInfo>> {
