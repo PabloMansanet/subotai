@@ -92,13 +92,22 @@ impl SubotaiHash {
    }
 
    /// Creates a random hash at a given XOR distance from another. (height of their XOR value)
-   fn random_at_distance(reference: &SubotaiHash, distance: usize) -> SubotaiHash {
+   pub fn random_at_distance(reference: &SubotaiHash, distance: usize) -> SubotaiHash {
       let mut random_hash = SubotaiHash::random();
-      for (index, (a, b)) in random_hash.raw.iter_mut().rev().zip(reference.raw.iter().rev()).enumerate() {
-         if index < distance {
-            *a = *b;
+      let distance_ones = (&random_hash ^ reference).into_ones();
+      for index in distance_ones.rev() {
+         random_hash.flip_bit(index);
+         if let Some(height) = (&random_hash ^ reference).height() {
+            if height == distance {
+               return random_hash;
+            } else if height < distance {
+               random_hash.flip_bit(distance);
+               return random_hash;
+            }
          }
       }
+       
+
       random_hash
    }
 }
@@ -377,13 +386,8 @@ mod tests {
    fn random_at_a_distance() {
       let test_hash = SubotaiHash::random();
       let distance = 30usize;
-      let random_at_30 = SubotaiHash::random_at_distance(&test_hash, distance);
-      println!("");
-      println!("A = {}", test_hash);
-      println!("B = {}", random_at_30);
-      let distance_hash = test_hash ^ random_at_30;
-      println!("at distance {}", distance_hash);
-
+      let new_hash = SubotaiHash::random_at_distance(&test_hash, distance);
+      let distance_hash = test_hash ^ new_hash;
       assert_eq!(distance, (distance_hash).height().unwrap());
    }
 }

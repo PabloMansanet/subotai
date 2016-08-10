@@ -307,9 +307,8 @@ impl Resources {
       if index > hash::HASH_SIZE {
          return Err(SubotaiError::OutOfBounds);
       }
-      //TODO: Make it random
-      let mut id = self.id.clone();
-      id.flip_bit(index);
+
+      let id = SubotaiHash::random_at_distance(&self.id, index);
       try!(self.probe(&id, routing::K_FACTOR));
       Ok(())
    }
