@@ -38,6 +38,7 @@ const UPDATE_BUS_SIZE_BYTES : usize = 50;
 /// Maintenance thread sleep period.
 const MAINTENANCE_SLEEP_S : u64 = 5;
 
+/// Attempts to probe self during the bootstrap process.
 const BOOTSTRAP_TRIES : u32 = 3;
 
 /// Subotai node. 
@@ -140,12 +141,12 @@ impl Node {
       Ok(())
    }
 
+   /// Returns if the node is already in the specified state, otherwise blocks indefinitely until
+   /// that state is reached.
    pub fn wait_for_state(&self, state: State) {
       let updates = self.resources.updates.lock().unwrap().add_rx().into_iter();
-      { // Lock scope
-         if *self.resources.state.read().unwrap() == state {
-            return;
-         }
+      if *self.resources.state.read().unwrap() == state {
+         return;
       }
 
       for update in updates {
@@ -156,6 +157,7 @@ impl Node {
       }
    }
 
+   /// Retrieves the node ID + address pair.
    pub fn local_info(&self) -> NodeInfo {
       self.resources.local_info()
    }

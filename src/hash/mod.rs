@@ -90,6 +90,17 @@ impl SubotaiHash {
       let byte = &mut self.raw[position / 8];
       *byte ^= 1 << (position % 8);
    }
+
+   /// Creates a random hash at a given XOR distance from another. (height of their XOR value)
+   fn random_at_distance(reference: &SubotaiHash, distance: usize) -> SubotaiHash {
+      let mut random_hash = SubotaiHash::random();
+      for (index, (a, b)) in random_hash.raw.iter_mut().rev().zip(reference.raw.iter().rev()).enumerate() {
+         if index < distance {
+            *a = *b;
+         }
+      }
+      random_hash
+   }
 }
 
 impl fmt::Display for SubotaiHash {
@@ -288,9 +299,8 @@ impl<'a, 'b> BitXor<&'b SubotaiHash> for &'a SubotaiHash {
 impl BitXor for SubotaiHash {
    type Output = SubotaiHash;
 
-   fn bitxor (self, rhs: Self) -> SubotaiHash {
-      let mut raw = self.raw;
-      for (a, b) in raw.iter_mut().zip(rhs.raw.iter()) {
+   fn bitxor (mut self, rhs: Self) -> SubotaiHash {
+      for (a, b) in self.raw.iter_mut().zip(rhs.raw.iter()) {
          *a ^= *b;
       }
       self
@@ -304,6 +314,22 @@ mod tests {
     #[test]
     fn random_generation() {
        assert!(SubotaiHash::random() != SubotaiHash::random());
+    }
+
+    #[test]
+    fn xor() {
+       let alpha = SubotaiHash::random();
+       let beta = SubotaiHash {
+          raw: alpha.raw,
+       };
+
+       let reference_xor = &alpha ^ &beta;
+       let value_xor = alpha ^ beta;
+
+       for (a, b) in reference_xor.raw.iter().zip(value_xor.raw.iter()) {
+          assert_eq!(*a, 0x00);
+          assert_eq!(*b, 0x00);
+       }
     }
 
     #[test]
@@ -346,4 +372,18 @@ mod tests {
           assert_eq!(actual, expected);
        }
     }
+
+   #[test]
+   fn random_at_a_distance() {
+      let test_hash = SubotaiHash::random();
+      let distance = 30usize;
+      let random_at_30 = SubotaiHash::random_at_distance(&test_hash, distance);
+      println!("");
+      println!("A = {}", test_hash);
+      println!("B = {}", random_at_30);
+      let distance_hash = test_hash ^ random_at_30;
+      println!("at distance {}", distance_hash);
+
+      assert_eq!(distance, (distance_hash).height().unwrap());
+   }
 }

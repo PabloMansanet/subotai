@@ -93,7 +93,6 @@ impl Iterator for Receptions {
             break;
          }
 
-         //if let Some(resources::Update::RpcReceived(rpc)) = self.iter.next() {
          match self.iter.next() {
             Some(resources::Update::RpcReceived(rpc)) => {
                if let Some(ref kind_filter) = self.kind_filter {
