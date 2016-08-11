@@ -22,7 +22,7 @@ pub use storage::StorageEntry as StorageEntry;
 mod tests;
 mod resources;
 
-use {storage, routing, rpc, bus, SubotaiResult, SubotaiError, time};
+use {storage, routing, rpc, bus, SubotaiResult, time};
 use hash::SubotaiHash;
 use std::{net, thread, sync};
 use std::time::Duration as StdDuration;
@@ -165,27 +165,7 @@ impl Node {
 
    /// Stores an entry in the network
    pub fn store(&self, key: &SubotaiHash, entry: &StorageEntry) -> SubotaiResult<()> {
-      if let State::OffGrid = *self.resources.state.read().unwrap() {
-         return Err(SubotaiError::OffGridError);
-      }
-
-      let storage_candidates = try!(self.resources.probe(&key, routing::K_FACTOR));
-      // At least one store RPC must succeed.
-      let mut response = self
-         .receptions()
-         .of_kind(receptions::KindFilter::StoreResponse)
-         .during(time::Duration::seconds(NETWORK_TIMEOUT_S))
-         .filter(|rpc| rpc.successfully_stored(key))
-         .take(1);
-
-      for candidate in &storage_candidates {
-         try!(self.resources.store_remotely_and_forget(candidate, key.clone(), entry.clone()));
-      }
-
-      match response.next() {
-         Some(_) => Ok(()),
-         None    => Err(SubotaiError::UnresponsiveNetwork),
-      }
+      self.resources.store(key, entry)
    }
 
    /// Retrieves a value from the network, given a key.
@@ -216,9 +196,13 @@ impl Node {
 
    /// Wakes up every `MAINTENANCE_SLEEP_S` seconds and refreshes the oldest bucket,
    /// unless they are all younger than 1 hour, in which case it goes back to sleep.
+   ///
+   /// This loop also republishes all entries each hour, provided we haven't received
+   /// a `store` rpc for said entry in the past hour. It also clears expired entries.
    #[allow(unused_must_use)]
    fn maintenance_loop(resources: sync::Arc<resources::Resources>) {
       let hour = time::Duration::hours(1);
+      let mut last_republish = time::SteadyTime::now();
       loop {
          thread::sleep(StdDuration::new(MAINTENANCE_SLEEP_S,0));
          if let State::ShuttingDown = *resources.state.read().unwrap() {
@@ -233,6 +217,15 @@ impl Node {
             (i, Some(time)) if (now - time) > hour => {resources.refresh_bucket(i);},
             _ => (),
          }
+
+      //   if now - last_republish > hour {
+      //      for (key, entry) in resources.storage.get_all_ready_entries() {
+      //         resources.store(&key, &entry);
+      //      }
+
+      //      last_republish = time::SteadyTime::now();
+      //      resources.storage.mark_all_as_ready();
+      //   }
       }
    }
 

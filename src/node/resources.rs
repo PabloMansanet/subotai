@@ -312,8 +312,32 @@ impl Resources {
       Ok(())
    }
 
+   pub fn store(&self, key: &SubotaiHash, entry: &storage::StorageEntry) ->SubotaiResult<()> {
+      if let node::State::OffGrid = *self.state.read().unwrap() {
+         return Err(SubotaiError::OffGridError);
+      }
+
+      let storage_candidates = try!(self.probe(&key, routing::K_FACTOR));
+      // At least one store RPC must succeed.
+      let mut response = self
+         .receptions()
+         .of_kind(receptions::KindFilter::StoreResponse)
+         .during(time::Duration::seconds(node::NETWORK_TIMEOUT_S))
+         .filter(|rpc| rpc.successfully_stored(key))
+         .take(1);
+
+      for candidate in &storage_candidates {
+         try!(self.store_remotely_and_forget(candidate, key.clone(), entry.clone()));
+      }
+
+      match response.next() {
+         Some(_) => Ok(()),
+         None    => Err(SubotaiError::UnresponsiveNetwork),
+      }
+   }
+
    /// Instructs a node to store a key_value pair.
-   pub fn store_remotely(&self, target: &routing::NodeInfo, key: SubotaiHash, entry: storage::StorageEntry) -> SubotaiResult<storage::StoreResult> {
+   fn store_remotely(&self, target: &routing::NodeInfo, key: SubotaiHash, entry: storage::StorageEntry) -> SubotaiResult<storage::StoreResult> {
       let rpc = Rpc::store(self.local_info(), key, entry);
       let packet = rpc.serialize();
       let mut responses = self.receptions()
@@ -332,7 +356,7 @@ impl Resources {
       Err(SubotaiError::NoResponse)
    }
 
-   pub fn store_remotely_and_forget(&self, target: &routing::NodeInfo, key: SubotaiHash, entry: storage::StorageEntry) -> SubotaiResult<()> {
+   fn store_remotely_and_forget(&self, target: &routing::NodeInfo, key: SubotaiHash, entry: storage::StorageEntry) -> SubotaiResult<()> {
       let rpc = Rpc::store(self.local_info(), key, entry);
       let packet = rpc.serialize();
       try!(self.outbound.send_to(&packet, target.address));

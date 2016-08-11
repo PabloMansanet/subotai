@@ -179,38 +179,6 @@ fn generating_too_many_conflicts_causes_the_node_to_enter_defensive_state()
 }
 
 #[test]
-fn remote_key_value_storage()
-{
-   let alpha = node::Node::new().unwrap();
-   let beta  = node::Node::new().unwrap();
-   
-   assert!(alpha.bootstrap(beta.resources.local_info()).is_ok());
-  
-   let key = hash::SubotaiHash::random();
-   let value = hash::SubotaiHash::random();
-   let entry = storage::StorageEntry::Value(value.clone());
-   let mut beta_receptions = 
-      beta.receptions()
-          .of_kind(receptions::KindFilter::Store)
-          .during(time::Duration::seconds(1));
-
-   let mut alpha_receptions =
-      alpha.receptions()
-           .of_kind(receptions::KindFilter::StoreResponse)
-           .during(time::Duration::seconds(1));
-
-   assert_eq!(alpha.resources.store_remotely(&beta.resources.local_info(), key.clone(), entry.clone()).unwrap(),
-              storage::StoreResult::Success);
-   assert!(alpha_receptions.next().is_some());
-   assert!(beta_receptions.next().is_some());
-   
-   match beta.resources.storage.retrieve(&key).unwrap() {
-      storage::StorageEntry::Value(retrieved) => assert_eq!(value, retrieved),
-      storage::StorageEntry::Blob(_) => panic!(),
-   }
-}
-
-#[test]
 fn node_probing_in_simulated_network()
 {
    let mut nodes = simulated_network(40);
@@ -269,16 +237,22 @@ fn store_retrieve_in_simulated_network()
    let head = nodes.pop_front().unwrap();
    let tail = nodes.pop_back().unwrap();
 
+   println!("Before first store");
    head.store(&key, &entry).unwrap();
+   println!("After first store");
    let retrieved_entry = tail.retrieve(&key).unwrap();
+   println!("After first retrieve");
    assert_eq!(entry, retrieved_entry);
 
    let key = hash::SubotaiHash::random();
    let blob: Vec<u8> = vec![0x00, 0x01, 0x02];
    let entry = storage::StorageEntry::Blob(blob.clone());
 
+   println!("Before second store");
    head.store(&key, &entry).unwrap();
+   println!("After second store");
    let retrieved_entry = tail.retrieve(&key).unwrap();
+   println!("After second retrieve");
    assert_eq!(entry, retrieved_entry);
 }
 

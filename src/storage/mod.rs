@@ -32,7 +32,6 @@ pub struct Storage {
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum StoreResult {
    Success,
-   AlreadyPresent,
    StorageFull,
 }
 
@@ -54,16 +53,21 @@ impl Storage {
 
    pub fn store(&self, key: SubotaiHash, entry: StorageEntry) -> StoreResult {
       let mut entries_and_times = self.entries_and_times.write().unwrap();
-      let expiration = self.calculate_expiration_date(&key);
 
-      let entry_and_expiration = EntryAndTimes { entry: entry, expiration: expiration, republish_ready: false };
+      // If the key was already present, the expiration time is kept.
+      let expiration = if let Some(old) = entries_and_times.remove(&key) {
+         old.expiration
+      } else {
+         self.calculate_expiration_date(&key)
+      };
+
+      let entry_and_times = EntryAndTimes { entry: entry, expiration: expiration, republish_ready: false };
+
       if entries_and_times.len() >= MAX_STORAGE {
          StoreResult::StorageFull
       } else {
-         match entries_and_times.insert(key, entry_and_expiration) {
-            None    => StoreResult::Success,
-            Some(_) => StoreResult::AlreadyPresent,
-         }
+         entries_and_times.insert(key.clone(), entry_and_times);
+         StoreResult::Success
       }
    }
 
