@@ -133,9 +133,8 @@ impl Node {
       let bootstrap_resources = self.resources.clone();
       thread::spawn(move || {
          for _ in 0..BOOTSTRAP_TRIES {
-            match bootstrap_resources.probe(&bootstrap_resources.id, routing::K_FACTOR) {
-               Ok(_) => break,
-               _ => (),
+            if let Ok(_) = bootstrap_resources.probe(&bootstrap_resources.id, routing::K_FACTOR) {
+               break;
             }
          }
        });
@@ -217,15 +216,17 @@ impl Node {
             (i, Some(time)) if (now - time) > hour => {resources.refresh_bucket(i);},
             _ => (),
          }
+         
+         resources.storage.clear_expired_entries();
 
-      //   if now - last_republish > hour {
-      //      for (key, entry) in resources.storage.get_all_ready_entries() {
-      //         resources.store(&key, &entry);
-      //      }
+         if now - last_republish > hour {
+            for (key, entry) in resources.storage.get_all_ready_entries() {
+               resources.store(&key, &entry);
+            }
 
-      //      last_republish = time::SteadyTime::now();
-      //      resources.storage.mark_all_as_ready();
-      //   }
+            last_republish = time::SteadyTime::now();
+            resources.storage.mark_all_as_ready();
+         }
       }
    }
 

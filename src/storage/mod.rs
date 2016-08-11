@@ -80,6 +80,20 @@ impl Storage {
       }
    }
 
+   pub fn clear_expired_entries(&self) {
+      let now = time::SteadyTime::now();
+      let mut entries_and_times = self.entries_and_times.write().unwrap();
+      let keys_to_remove: Vec<_>= entries_and_times
+         .iter()
+         .filter_map(|(key, &EntryAndTimes{ expiration, .. })| if expiration < now { Some(key) } else { None })
+         .cloned()
+         .collect();
+
+      for key in keys_to_remove {
+         entries_and_times.remove(&key);
+      }
+   }
+
    /// Marks all key-entry pairs as ready for republishing.
    pub fn mark_all_as_ready(&self) {
       for (_, &mut EntryAndTimes {ref mut republish_ready, ..})  in self.entries_and_times.write().unwrap().iter_mut() {
@@ -105,7 +119,7 @@ impl Storage {
    /// the expiration time drops substantially the further away the parent node is from the key, past
    /// a threshold.
    fn calculate_expiration_date(&self, key: &SubotaiHash) -> time::SteadyTime {
-      let distance = (&self.parent_id ^ &key).height().unwrap_or(0);
+      let distance = (&self.parent_id ^ key).height().unwrap_or(0);
       let adjusted_distance  = usize::saturating_sub(distance, EXPIRATION_DISTANCE_THRESHOLD) as u32;
       let clamped_distance = cmp::min(16, adjusted_distance);
       let expiration_factor = 2i64.pow(clamped_distance);

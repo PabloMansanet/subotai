@@ -241,7 +241,7 @@ impl Table {
    /// has never been probed.
    pub fn oldest_bucket(&self) -> (usize, Option<time::SteadyTime>) {
       let times: Vec<Option<time::SteadyTime>> = self.buckets.iter()
-         .map(|bucket| bucket.read().unwrap().last_probe.clone())
+         .map(|bucket| bucket.read().unwrap().last_probe)
          .collect();
 
       if let Some(index) = times.iter().position(|ref option| option.is_none()) {

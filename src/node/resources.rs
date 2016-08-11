@@ -119,7 +119,7 @@ impl Resources {
       let strategy = |responses: &[rpc::Rpc], queried: &[routing::NodeInfo]| -> WaveStrategy<routing::NodeInfo> {
          // If we found it, we're done.
          if let Some(found) = responses.iter().filter_map(|rpc| rpc.successfuly_located(target)).next() {
-            return WaveStrategy::HaltWith(found);
+            return WaveStrategy::Halt(found);
          }
 
          // We are interested in the combination of the nodes we knew about, plus the ones
@@ -136,9 +136,9 @@ impl Resources {
          // We restore the order and remove duplicates, to finally return the closest ALPHA.
          closest.sort_by(|ref info_a, ref info_b| (&info_a.id ^ target).cmp(&(&info_b.id ^ target)));
          closest.dedup();
-         WaveStrategy::ContinueWith(closest
+         WaveStrategy::Continue(closest
             .iter()
-            .filter(|info| !queried.contains(&info) && &info.id != &self.id)
+            .filter(|info| !queried.contains(info) && &info.id != &self.id)
             .cloned().take(routing::ALPHA).collect()
          )
       };
@@ -184,11 +184,11 @@ impl Resources {
          closest.dedup();
 
          if queried.len() >= depth {
-            WaveStrategy::HaltWith(closest.iter().cloned().take(routing::K_FACTOR).collect())
+            WaveStrategy::Halt(closest.iter().cloned().take(routing::K_FACTOR).collect())
          } else {
-            WaveStrategy::ContinueWith(closest
+            WaveStrategy::Continue(closest
                .iter()
-               .filter(|info| !queried.contains(&info) && &info.id != &self.id)
+               .filter(|info| !queried.contains(info) && &info.id != &self.id)
                .cloned().take(routing::ALPHA).collect()
             )
          }
@@ -225,7 +225,7 @@ impl Resources {
             .filter_map(|rpc| rpc.is_helping_locate(key))
             .flat_map(|vec| vec.into_iter())
             .chain(former_closest)
-            .filter(|info| !queried.contains(&info) && &info.id != &self.id)
+            .filter(|info| !queried.contains(info) && &info.id != &self.id)
             .collect();
          closest.sort_by(|ref info_a, ref info_b| (&info_a.id ^ key).cmp(&(&info_b.id ^ key)));
          closest.dedup();
@@ -236,14 +236,14 @@ impl Resources {
          // If we found it, we cache the value and we're done.
          if let Some(retrieved) = responses.iter().filter_map(|rpc| rpc.successfully_retrieved(key)).next() {
             if let Some(ref candidate) = cache_candidate {
-               let _ = self.store_remotely(&candidate, key.clone(), retrieved.clone());
+               let _ = self.store_remotely(candidate, key.clone(), retrieved.clone());
             }
-            return WaveStrategy::HaltWith(retrieved);
+            return WaveStrategy::Halt(retrieved);
          }
 
-         WaveStrategy::ContinueWith(closest
+         WaveStrategy::Continue(closest
             .iter()
-            .filter(|info| !queried.contains(&info) && &info.id != &self.id)
+            .filter(|info| !queried.contains(info) && &info.id != &self.id)
             .cloned().take(routing::ALPHA).collect()
          )
       };
@@ -294,8 +294,8 @@ impl Resources {
          // We return early if Halt produces a value. Otherwise, we calculate the next
          // nodes to query and continue.
          match strategy(&responses, &queried) {
-            WaveStrategy::ContinueWith(nodes) => nodes_to_query = nodes,
-            WaveStrategy::HaltWith(result) => return Ok(result),
+            WaveStrategy::Continue(nodes) => nodes_to_query = nodes,
+            WaveStrategy::Halt(result) => return Ok(result),
          }
       }
       Err(SubotaiError::UnresponsiveNetwork)
@@ -473,6 +473,6 @@ impl Resources {
 }
 
 enum WaveStrategy<T> {
-   ContinueWith(Vec<routing::NodeInfo>),
-   HaltWith(T),
+   Continue(Vec<routing::NodeInfo>),
+   Halt(T),
 }
