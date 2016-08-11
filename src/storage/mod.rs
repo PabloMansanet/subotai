@@ -2,13 +2,14 @@ use time;
 use hash::SubotaiHash;
 use std::collections::HashMap;
 use std::sync::RwLock;
+use std::cmp;
 
 pub const MAX_STORAGE: usize = 10000;
 
 /// Distance after which the expiration time for a particular key will begin
 /// to drop dramatically. Prevents over-caching.
 const BASE_EXPIRATION_TIME_HRS : i64 = 24;
-const EXPIRATION_DISTANCE_THRESHOLD : usize = 5;
+const EXPIRATION_DISTANCE_THRESHOLD : usize = 3;
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum StorageEntry {
@@ -52,7 +53,7 @@ impl Storage {
 
    pub fn store(&self, key: SubotaiHash, entry: StorageEntry) -> StoreResult {
       let mut entries_and_expirations = self.entries_and_expirations.write().unwrap();
-      let expiration = time::SteadyTime::now() + time::Duration::hours(BASE_EXPIRATION_TIME_HRS);
+      let expiration = self.calculate_expiration_date(&key);
 
       let entry_and_expiration = EntryAndExpiration { entry: entry, expiration: expiration, };
       if entries_and_expirations.len() >= MAX_STORAGE {
@@ -72,14 +73,21 @@ impl Storage {
          None
       }
    }
+
+   /// the expiration time drops substantially the further away the parent node is from the key, past
+   /// a threshold.
+   fn calculate_expiration_date(&self, key: &SubotaiHash) -> time::SteadyTime {
+      let distance = (&self.parent_id ^ &key).height().unwrap_or(0);
+      let clamped_distance = cmp::max(1, cmp::min(16, distance));
+      let expiration_factor = 2i64.pow(usize::saturating_sub(clamped_distance, EXPIRATION_DISTANCE_THRESHOLD) as u32);
+      time::SteadyTime::now() + time::Duration::minutes(60 * BASE_EXPIRATION_TIME_HRS / expiration_factor)
+   }
 }
 
 #[cfg(test)]
 mod tests {
    use super::*; 
-   use storage;
-   use hash;
-   use time;
+   use {storage, hash, time};
 
    #[test]
    fn expiration_date_calculation_below_distance_threshold() {
@@ -99,13 +107,33 @@ mod tests {
       let exp_alpha = storage.entries_and_expirations.read().unwrap().get(&key_at_1).unwrap().expiration.clone();
       let exp_beta  = storage.entries_and_expirations.read().unwrap().get(&key_at_expf).unwrap().expiration.clone();
 
-      let max_duration = time::Duration::hours(24);
-      let min_duration = time::Duration::hours(23);
+      let max_duration = time::Duration::hours(storage::BASE_EXPIRATION_TIME_HRS);
+      let min_duration = time::Duration::hours(storage::BASE_EXPIRATION_TIME_HRS) - time::Duration::minutes(1);
 
       assert!(exp_alpha <= time::SteadyTime::now() + max_duration);
       assert!(exp_alpha >= time::SteadyTime::now() + min_duration);
       assert!(exp_beta  <= time::SteadyTime::now() + max_duration);
       assert!(exp_beta  >= time::SteadyTime::now() + min_duration);
+   }
+
+   #[test]
+   fn expiration_date_calculation_over_distance_threshold() {
+      let id = hash::SubotaiHash::random();
+      let storage = Storage::new(id.clone());
+
+      // We create a key past the distance threshold;
+      let excess = 2usize;
+      let key = hash::SubotaiHash::random_at_distance(&id, storage::EXPIRATION_DISTANCE_THRESHOLD + excess);
+      let dummy_entry = StorageEntry::Value(hash::SubotaiHash::random());
+      storage.store(key.clone(), dummy_entry.clone());
+      let expiration = storage.entries_and_expirations.read().unwrap().get(&key).unwrap().expiration.clone();
+
+      let expiration_factor = 2i64.pow(excess as u32);
+      let max_duration = time::Duration::minutes(60 * storage::BASE_EXPIRATION_TIME_HRS / expiration_factor );
+      let min_duration = time::Duration::minutes(60 * storage::BASE_EXPIRATION_TIME_HRS / expiration_factor - 1);
+      assert!(expiration <= time::SteadyTime::now() + max_duration);
+      assert!(expiration >= time::SteadyTime::now() + min_duration);
+
    }
 
 }
