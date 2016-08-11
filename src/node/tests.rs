@@ -75,7 +75,6 @@ fn finding_on_simulated_unresponsive_network() {
 }
 
 #[test]
-#[ignore]
 fn finding_a_nonexisting_node_in_a_simulated_network_times_out() {
 
    let mut nodes = simulated_network(30);
@@ -189,6 +188,7 @@ fn remote_key_value_storage()
   
    let key = hash::SubotaiHash::random();
    let value = hash::SubotaiHash::random();
+   let entry = storage::StorageEntry::Value(value.clone());
    let mut beta_receptions = 
       beta.receptions()
           .of_kind(receptions::KindFilter::Store)
@@ -199,13 +199,15 @@ fn remote_key_value_storage()
            .of_kind(receptions::KindFilter::StoreResponse)
            .during(time::Duration::seconds(1));
 
-   assert_eq!(alpha.resources.store_remotely(&beta.resources.local_info(), key.clone(), value.clone()).unwrap(),
+   assert_eq!(alpha.resources.store_remotely(&beta.resources.local_info(), key.clone(), entry.clone()).unwrap(),
               storage::StoreResult::Success);
    assert!(alpha_receptions.next().is_some());
    assert!(beta_receptions.next().is_some());
    
-   let retrieved_value = beta.resources.storage.get(&key).unwrap();
-   assert_eq!(value, retrieved_value);
+   match beta.resources.storage.get(&key).unwrap() {
+      storage::StorageEntry::Value(retrieved) => assert_eq!(value, retrieved),
+      storage::StorageEntry::Blob(_) => panic!(),
+   }
 }
 
 #[test]
@@ -263,13 +265,14 @@ fn store_retrieve_in_simulated_network()
 {
    let mut nodes = simulated_network(40);
    let (key,value) = (hash::SubotaiHash::random(), hash::SubotaiHash::random());
+   let entry = storage::StorageEntry::Value(value);
    let head = nodes.pop_front().unwrap();
    let tail = nodes.pop_back().unwrap();
 
-   head.store(&key, &value).unwrap();
-   let retrieved_value = tail.retrieve(&key).unwrap();
+   head.store(&key, &entry).unwrap();
+   let retrieved_entry = tail.retrieve(&key).unwrap();
 
-   assert_eq!(value, retrieved_value);
+   assert_eq!(entry, retrieved_entry);
 }
 
 fn node_info_no_net(id : hash::SubotaiHash) -> routing::NodeInfo {

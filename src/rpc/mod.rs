@@ -73,8 +73,8 @@ impl Rpc {
    }
 
    /// Constructs a store RPC. It asks the receiving node to store a key->value pair.
-   pub fn store(sender: routing::NodeInfo, key: SubotaiHash, value: SubotaiHash) -> Rpc {
-      let payload = Arc::new(StorePayload { key: key, value: value });     
+   pub fn store(sender: routing::NodeInfo, key: SubotaiHash, entry: storage::StorageEntry) -> Rpc {
+      let payload = Arc::new(StorePayload { key: key, entry: entry });     
       Rpc { kind: Kind::Store(payload), sender: sender }
    }
 
@@ -120,10 +120,10 @@ impl Rpc {
 
    /// Reports whether the RPC is a RetrieveResponse that found
    /// a particular key.
-   pub fn successfully_retrieved(&self, key: &SubotaiHash) -> Option<SubotaiHash> {
+   pub fn successfully_retrieved(&self, key: &SubotaiHash) -> Option<storage::StorageEntry> {
       if let Kind::RetrieveResponse(ref payload) = self.kind {
          match payload.result {
-            RetrieveResult::Found(ref value) if &payload.key_to_find == key => return Some(value.clone()),
+            RetrieveResult::Found(ref entry) if &payload.key_to_find == key => return Some(entry.clone()),
             _ => return None,
          }
       }
@@ -180,7 +180,7 @@ pub enum Kind {
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
 pub struct StorePayload {
    pub key   : SubotaiHash,
-   pub value : SubotaiHash,
+   pub entry : storage::StorageEntry,
 }
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
@@ -204,7 +204,7 @@ pub struct LocateResponsePayload {
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
 pub enum RetrieveResult {
-   Found(SubotaiHash),
+   Found(storage::StorageEntry),
    Closest(Vec<routing::NodeInfo>),
 }
 

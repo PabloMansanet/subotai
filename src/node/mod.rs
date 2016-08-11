@@ -16,6 +16,7 @@
 
 pub mod receptions;
 pub use routing::NodeInfo as NodeInfo;
+pub use storage::StorageEntry as StorageEntry;
 
 #[cfg(test)]
 mod tests;
@@ -162,8 +163,8 @@ impl Node {
       self.resources.local_info()
    }
 
-   /// Stores a key-value pair in the network.
-   pub fn store(&self, key: &SubotaiHash, value: &SubotaiHash) -> SubotaiResult<()> {
+   /// Stores an entry in the network
+   pub fn store(&self, key: &SubotaiHash, entry: &StorageEntry) -> SubotaiResult<()> {
       if let State::OffGrid = *self.resources.state.read().unwrap() {
          return Err(SubotaiError::OffGridError);
       }
@@ -178,7 +179,7 @@ impl Node {
          .take(1);
 
       for candidate in &storage_candidates {
-         try!(self.resources.store_remotely_and_forget(candidate, key.clone(), value.clone()));
+         try!(self.resources.store_remotely_and_forget(candidate, key.clone(), entry.clone()));
       }
 
       match response.next() {
@@ -188,7 +189,7 @@ impl Node {
    }
 
    /// Retrieves a value from the network, given a key.
-   pub fn retrieve(&self, key: &SubotaiHash) -> SubotaiResult<SubotaiHash> {
+   pub fn retrieve(&self, key: &SubotaiHash) -> SubotaiResult<StorageEntry> {
       self.resources.retrieve(key)
    }
 
@@ -269,7 +270,6 @@ impl Node {
          }
       }
    }
-
 }
 
 impl Drop for Node {

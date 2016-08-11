@@ -2,10 +2,16 @@ use hash::SubotaiHash;
 use std::collections::HashMap;
 use std::sync::RwLock;
 
-pub const MAX_STORAGE: usize = 300;
+pub const MAX_STORAGE: usize = 10000;
+
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub enum StorageEntry {
+   Value(SubotaiHash),
+   Blob(Vec<u8>),
+}
 
 pub struct Storage {
-   values: RwLock<HashMap<SubotaiHash, SubotaiHash> >,
+   entries: RwLock<HashMap<SubotaiHash, StorageEntry> >,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
@@ -18,31 +24,31 @@ pub enum StoreResult {
 impl Storage {
    pub fn new() -> Storage {
       Storage {
-         values: RwLock::new(HashMap::with_capacity(MAX_STORAGE)),
+         entries: RwLock::new(HashMap::with_capacity(MAX_STORAGE)),
       }
    }
    
    pub fn len(&self) -> usize {
-      self.values.read().unwrap().len()
+      self.entries.read().unwrap().len()
    }
 
    pub fn is_empty(&self) -> bool {
-      self.values.read().unwrap().is_empty()
+      self.entries.read().unwrap().is_empty()
    }
 
-   pub fn store(&self, key: SubotaiHash, value: SubotaiHash) -> StoreResult {
-      let mut values = self.values.write().unwrap();
-      if values.len() >= MAX_STORAGE {
+   pub fn store(&self, key: SubotaiHash, entry: StorageEntry) -> StoreResult {
+      let mut entries = self.entries.write().unwrap();
+      if entries.len() >= MAX_STORAGE {
          StoreResult::StorageFull
       } else {
-         match values.insert(key, value) {
+         match entries.insert(key, entry) {
             None    => StoreResult::Success,
             Some(_) => StoreResult::AlreadyPresent,
          }
       }
    }
 
-   pub fn get(&self, key: &SubotaiHash) -> Option<SubotaiHash> {
-      self.values.read().unwrap().get(key).cloned()
+   pub fn get(&self, key: &SubotaiHash) -> Option<StorageEntry> {
+      self.entries.read().unwrap().get(key).cloned()
    }
 }

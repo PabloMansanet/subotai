@@ -200,10 +200,10 @@ impl Resources {
       self.wave(seeds, strategy, rpc, timeout)
    }
 
-   pub fn retrieve(&self, key: &SubotaiHash) -> SubotaiResult<SubotaiHash> {
+   pub fn retrieve(&self, key: &SubotaiHash) -> SubotaiResult<storage::StorageEntry> {
       // If the value is already present in our table, we are done early.
-      if let Some(value) = self.storage.get(key) {
-         return Ok(value);
+      if let Some(entry) = self.storage.get(key) {
+         return Ok(entry);
       }
 
       // We start with the closest K nodes we know about.
@@ -215,8 +215,7 @@ impl Resources {
       let seeds: Vec<_> = closest.iter().cloned().take(routing::ALPHA).collect();
       let mut cache_candidate: Option<routing::NodeInfo> = None;
 
-      let strategy = |responses: &[rpc::Rpc], queried: &[routing::NodeInfo]| -> WaveStrategy<SubotaiHash> {
-
+      let strategy = |responses: &[rpc::Rpc], queried: &[routing::NodeInfo]| -> WaveStrategy<storage::StorageEntry> {
          // We are interested in the combination of the nodes we knew about, plus the ones
          // we just learned from the responses, as long as we haven't queried them already.
          let mut former_closest = Vec::<routing::NodeInfo>::new();
@@ -314,8 +313,8 @@ impl Resources {
    }
 
    /// Instructs a node to store a key_value pair.
-   pub fn store_remotely(&self, target: &routing::NodeInfo, key: SubotaiHash, value: SubotaiHash) -> SubotaiResult<storage::StoreResult> {
-      let rpc = Rpc::store(self.local_info(), key, value);
+   pub fn store_remotely(&self, target: &routing::NodeInfo, key: SubotaiHash, entry: storage::StorageEntry) -> SubotaiResult<storage::StoreResult> {
+      let rpc = Rpc::store(self.local_info(), key, entry);
       let packet = rpc.serialize();
       let mut responses = self.receptions()
          .during(time::Duration::seconds(node::NETWORK_TIMEOUT_S))
@@ -333,8 +332,8 @@ impl Resources {
       Err(SubotaiError::NoResponse)
    }
 
-   pub fn store_remotely_and_forget(&self, target: &routing::NodeInfo, key: SubotaiHash, value: SubotaiHash) -> SubotaiResult<()> {
-      let rpc = Rpc::store(self.local_info(), key, value);
+   pub fn store_remotely_and_forget(&self, target: &routing::NodeInfo, key: SubotaiHash, entry: storage::StorageEntry) -> SubotaiResult<()> {
+      let rpc = Rpc::store(self.local_info(), key, entry);
       let packet = rpc.serialize();
       try!(self.outbound.send_to(&packet, target.address));
       Ok(())
@@ -388,7 +387,7 @@ impl Resources {
    }
 
    fn handle_store(&self, payload: sync::Arc<rpc::StorePayload>,  sender: routing::NodeInfo) -> SubotaiResult<()> {
-      let store_result = self.storage.store(payload.key.clone(), payload.value.clone());
+      let store_result = self.storage.store(payload.key.clone(), payload.entry.clone());
       let rpc = Rpc::store_response(self.local_info(), payload.key.clone(), store_result);
       let packet = rpc.serialize();
       try!(self.outbound.send_to(&packet, sender.address));
