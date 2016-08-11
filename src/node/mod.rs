@@ -93,8 +93,8 @@ impl Node {
       
       let resources = sync::Arc::new(resources::Resources {
          id        : id.clone(),
-         table     : routing::Table::new(id),
-         storage   : storage::Storage::new(),
+         table     : routing::Table::new(id.clone()),
+         storage   : storage::Storage::new(id),
          inbound   : try!(net::UdpSocket::bind(("0.0.0.0", inbound_port))),
          outbound  : try!(net::UdpSocket::bind(("0.0.0.0", outbound_port))),
          state     : sync::RwLock::new(State::OffGrid),

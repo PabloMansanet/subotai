@@ -264,16 +264,24 @@ fn node_probing_in_simulated_unresponsive_network()
 fn store_retrieve_in_simulated_network()
 {
    let mut nodes = simulated_network(40);
-   let (key,value) = (hash::SubotaiHash::random(), hash::SubotaiHash::random());
-   let entry = storage::StorageEntry::Value(value);
+   let key = hash::SubotaiHash::random();
+   let entry = storage::StorageEntry::Value(hash::SubotaiHash::random());
    let head = nodes.pop_front().unwrap();
    let tail = nodes.pop_back().unwrap();
 
    head.store(&key, &entry).unwrap();
    let retrieved_entry = tail.retrieve(&key).unwrap();
+   assert_eq!(entry, retrieved_entry);
 
+   let key = hash::SubotaiHash::random();
+   let blob: Vec<u8> = vec![0x00, 0x01, 0x02];
+   let entry = storage::StorageEntry::Blob(blob.clone());
+
+   head.store(&key, &entry).unwrap();
+   let retrieved_entry = tail.retrieve(&key).unwrap();
    assert_eq!(entry, retrieved_entry);
 }
+
 
 fn node_info_no_net(id : hash::SubotaiHash) -> routing::NodeInfo {
    routing::NodeInfo {
