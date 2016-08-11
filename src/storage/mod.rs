@@ -9,7 +9,7 @@ pub const MAX_STORAGE: usize = 10000;
 /// Distance after which the expiration time for a particular key will begin
 /// to drop dramatically. Prevents over-caching.
 const BASE_EXPIRATION_TIME_HRS : i64 = 24;
-const EXPIRATION_DISTANCE_THRESHOLD : usize = 3;
+const EXPIRATION_DISTANCE_THRESHOLD : usize = 8;
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum StorageEntry {
@@ -84,7 +84,7 @@ impl Storage {
    }
 
    /// Marks a particular key-entry pair as not ready for republishing.
-   pub fn mark_as_non_ready(&self, key: &SubotaiHash) {
+   pub fn mark_as_not_ready(&self, key: &SubotaiHash) {
       if let Some( &mut EntryAndTimes {ref mut republish_ready, ..}) = self.entries_and_times.write().unwrap().get_mut(key) {
          *republish_ready = false;
       }
@@ -102,8 +102,9 @@ impl Storage {
    /// a threshold.
    fn calculate_expiration_date(&self, key: &SubotaiHash) -> time::SteadyTime {
       let distance = (&self.parent_id ^ &key).height().unwrap_or(0);
-      let clamped_distance = cmp::max(1, cmp::min(16, distance));
-      let expiration_factor = 2i64.pow(usize::saturating_sub(clamped_distance, EXPIRATION_DISTANCE_THRESHOLD) as u32);
+      let adjusted_distance  = usize::saturating_sub(distance, EXPIRATION_DISTANCE_THRESHOLD) as u32;
+      let clamped_distance = cmp::min(16, adjusted_distance);
+      let expiration_factor = 2i64.pow(clamped_distance);
       time::SteadyTime::now() + time::Duration::minutes(60 * BASE_EXPIRATION_TIME_HRS / expiration_factor)
    }
 }
@@ -118,8 +119,7 @@ mod tests {
       let id = hash::SubotaiHash::random();
       let storage = Storage::new(id.clone());
 
-      // We create a key at distance 1 from our node, and another at distance
-      // `EXPIRATION_DISTANCE_FACTOR`
+      // We create a key at distance 1 from our node.
       let key_at_1 = hash::SubotaiHash::random_at_distance(&id, 1);
       let key_at_expf = hash::SubotaiHash::random_at_distance(&id, storage::EXPIRATION_DISTANCE_THRESHOLD);
       let dummy_entry = StorageEntry::Value(hash::SubotaiHash::random());
@@ -175,7 +175,7 @@ mod tests {
       storage.mark_all_as_ready();
       assert_eq!(number_of_keys, storage.get_all_ready_entries().len());
 
-      storage.mark_as_non_ready(dummy_keys.first().unwrap());
+      storage.mark_as_not_ready(dummy_keys.first().unwrap());
       assert_eq!(number_of_keys - 1, storage.get_all_ready_entries().len());
    }
 
