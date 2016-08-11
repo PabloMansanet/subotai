@@ -202,7 +202,7 @@ impl Resources {
 
    pub fn retrieve(&self, key: &SubotaiHash) -> SubotaiResult<storage::StorageEntry> {
       // If the value is already present in our table, we are done early.
-      if let Some(entry) = self.storage.get(key) {
+      if let Some(entry) = self.storage.retrieve(key) {
          return Ok(entry);
       }
 
@@ -427,7 +427,7 @@ impl Resources {
    }
 
    fn handle_retrieve(&self, payload: sync::Arc<rpc::RetrievePayload>, sender: routing::NodeInfo) -> SubotaiResult<()> {
-      let result = match self.storage.get(&payload.key_to_find) {
+      let result = match self.storage.retrieve(&payload.key_to_find) {
          Some(value) => rpc::RetrieveResult::Found(value),
          None => rpc::RetrieveResult::Closest(self.table.closest_nodes_to(&payload.key_to_find).take(routing::K_FACTOR).collect()),
       };

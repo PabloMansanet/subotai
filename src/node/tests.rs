@@ -204,7 +204,7 @@ fn remote_key_value_storage()
    assert!(alpha_receptions.next().is_some());
    assert!(beta_receptions.next().is_some());
    
-   match beta.resources.storage.get(&key).unwrap() {
+   match beta.resources.storage.retrieve(&key).unwrap() {
       storage::StorageEntry::Value(retrieved) => assert_eq!(value, retrieved),
       storage::StorageEntry::Blob(_) => panic!(),
    }
