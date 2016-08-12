@@ -15,14 +15,14 @@ fn node_info_no_net(id : SubotaiHash) -> NodeInfo {
 #[test]
 fn inserting_and_retrieving_specific_node() {
    let node_info = node_info_no_net(SubotaiHash::random());
-   let table = Table::new(SubotaiHash::random());
+   let table = Table::new(SubotaiHash::random(), Default::default());
    table.update_node(node_info.clone());
    assert_eq!(table.specific_node(&node_info.id), Some(node_info));
 }
 
 #[test]
 fn measuring_table_length() {
-   let table = Table::new(SubotaiHash::random());
+   let table = Table::new(SubotaiHash::random(), Default::default());
    let mut conflicts = 0usize;
    for _ in 0..50 {
       match table.update_node(node_info_no_net(SubotaiHash::random())) {
@@ -39,9 +39,9 @@ fn inserting_in_a_full_bucket_causes_eviction_conflict() {
    let mut parent_id = SubotaiHash::blank();
    parent_id.raw[1] = 1; // This will guarantee all nodes will fall on the same bucket.
 
-   let table = Table::new(parent_id);
+   let table = Table::new(parent_id, Default::default());
 
-   table.fill_bucket(8, super::K_FACTOR as u8);
+   table.fill_bucket(8, table.configuration.k_factor as u8);
 
    // When we add another node to the same bucket, we cause a conflict.
    let mut id = SubotaiHash::blank();
@@ -55,7 +55,7 @@ fn inserting_in_a_full_bucket_causes_eviction_conflict() {
 
 #[test]
 fn lookup_for_a_stored_node() { 
-   let table = Table::new(SubotaiHash::random());
+   let table = Table::new(SubotaiHash::random(), Default::default());
    let node = node_info_no_net(SubotaiHash::random());
    table.update_node(node.clone());
 
@@ -65,7 +65,7 @@ fn lookup_for_a_stored_node() {
 #[test]
 fn lookup_for_self() {
    let parent_id = SubotaiHash::random();
-   let table = Table::new(parent_id.clone());
+   let table = Table::new(parent_id.clone(), Default::default());
    let node = node_info_no_net(parent_id.clone());
    table.update_node(node.clone());
 
@@ -75,7 +75,7 @@ fn lookup_for_self() {
 #[test]
 fn ascending_lookup_on_a_sparse_table() {
    let parent_id = SubotaiHash::random();
-   let table = Table::new(parent_id.clone());
+   let table = Table::new(parent_id.clone(), Default::default());
    for i in (10..50).filter(|x| x%2 == 0) {
      table.fill_bucket(i, 2);
    }
@@ -97,7 +97,7 @@ fn ascending_lookup_on_a_sparse_table() {
 #[test]
 fn descending_lookup_on_a_sparse_table() {
    let parent_id = SubotaiHash::random();
-   let table = Table::new(parent_id.clone());
+   let table = Table::new(parent_id.clone(), Default::default());
    for i in (10..50).filter(|x| x%2 == 0) {
      table.fill_bucket(i, 2);
    }
@@ -120,7 +120,7 @@ fn descending_lookup_on_a_sparse_table() {
 #[test]
 fn lookup_on_a_sparse_table() {
    let parent_id = SubotaiHash::random();
-   let table = Table::new(parent_id.clone());
+   let table = Table::new(parent_id.clone(), Default::default());
    for i in (10..50).filter(|x| x%2 == 0) {
      table.fill_bucket(i, 2);
    }
@@ -142,7 +142,7 @@ fn lookup_on_a_sparse_table() {
 
 #[test]
 fn lookup_with_blacklist() {
-   let table = Table::new(SubotaiHash::random());
+   let table = Table::new(SubotaiHash::random(), Default::default());
    let blacklist = vec![node_info_no_net(SubotaiHash::random()); 5];
    let normal_node = node_info_no_net(SubotaiHash::random());
 
@@ -165,7 +165,7 @@ fn lookup_with_blacklist() {
 #[test]
 fn efficient_bounce_lookup_on_a_randomized_table() {
    let parent_id = SubotaiHash::random();
-   let table = Table::new(parent_id.clone());
+   let table = Table::new(parent_id.clone(), Default::default());
    for _ in 0..300 {
       // We create ids that will distribute more or less uniformly over the buckets.
       let mut id = parent_id.clone();
@@ -204,7 +204,7 @@ fn efficient_bounce_lookup_on_a_randomized_table() {
 
 #[test]
 fn oldest_bucket_returns_the_first_bucket_that_never_got_probed() {
-   let table = Table::new(SubotaiHash::random());
+   let table = Table::new(SubotaiHash::random(), Default::default());
 
    // We mark a random bucket as probed.
    table.mark_bucket_as_probed(&SubotaiHash::random());
@@ -215,7 +215,7 @@ fn oldest_bucket_returns_the_first_bucket_that_never_got_probed() {
 #[test]
 fn oldest_bucket_when_all_buckets_were_probed() {
    let id = SubotaiHash::random();
-   let table = Table::new(id.clone());
+   let table = Table::new(id.clone(), Default::default());
 
    table.mark_bucket_as_probed(&id);
    for i in 0..HASH_SIZE {

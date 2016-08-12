@@ -27,6 +27,7 @@ pub mod hash;
 mod routing;
 mod storage;
 mod rpc;
+mod factory;
 
 mod error;
 pub use error::SubotaiError as SubotaiError;

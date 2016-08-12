@@ -1,5 +1,5 @@
 use std::{net, mem, sync, iter};
-use {hash, time};
+use {hash, time, factory};
 use std::cmp::PartialEq;
 use hash::HASH_SIZE;
 use hash::SubotaiHash;
@@ -8,27 +8,6 @@ use std::collections::VecDeque;
 #[cfg(test)]
 mod tests;
 
-/// System-wide concurrency factor. It's used, for example, to decide the
-/// number of remote nodes to interrogate concurrently when performing a 
-/// network-wide lookup.
-pub const ALPHA: usize = 5;
-
-/// Impatience factor, valid in the range [0..ALPHA). When performing "waves",
-/// the impatience factor denotes how many nodes we can give up waiting for, before
-/// starting the next wave. 
-///
-/// If we send a request to ALPHA nodes during a lookup wave, we will start
-/// the next wave after we receive 'ALPHA - IMPATIENCE' responses.
-pub const IMPATIENCE: usize = 2;
-
-/// Data structure factor. It's used, among other places, to dictate the 
-/// size of a K-bucket.
-pub const K_FACTOR          : usize = 20;
-
-/// Maximum amount of eviction conflicts allowed before the node goes into
-/// defensive mode. 
-pub const MAX_CONFLICTS     : usize = 3*K_FACTOR;
-
 /// Routing table with 160 buckets of `K_FACTOR` node
 /// identifiers each, constructed around a parent node ID.
 ///
@@ -36,8 +15,9 @@ pub const MAX_CONFLICTS     : usize = 3*K_FACTOR;
 /// by evicting a node by inserting a newer one remain tracked, so they can
 /// be resolved later.
 pub struct Table {
-   buckets   : Vec<sync::RwLock<Bucket> >,
-   parent_id : SubotaiHash,
+   buckets       : Vec<sync::RwLock<Bucket> >,
+   parent_id     : SubotaiHash,
+   configuration : factory::Configuration
 }
 
 /// ID - Address pair that identifies a unique Subotai node in the network.
@@ -75,10 +55,11 @@ pub enum UpdateResult {
 impl Table {
    /// Constructs a routing table based on a parent node id. Other nodes
    /// will be stored in this table based on their distance to the node id provided.
-   pub fn new(id: hash::SubotaiHash) -> Table {
+   pub fn new(id: hash::SubotaiHash, configuration: factory::Configuration) -> Table {
       Table { 
-         buckets   : (0..HASH_SIZE).map(|_| sync::RwLock::new(Bucket::new())).collect(),
-         parent_id : id,
+         buckets       : (0..HASH_SIZE).map(|_| sync::RwLock::new(Bucket::with_capacity(configuration.k_factor))).collect(),
+         parent_id     : id,
+         configuration : configuration,
       }
    }
 
@@ -111,7 +92,7 @@ impl Table {
       }
 
       bucket.entries.retain(|ref stored_info| info.id != stored_info.id);
-      if bucket.entries.len() == K_FACTOR {
+      if bucket.entries.len() == self.configuration.k_factor {
          let conflict = EvictionConflict { 
             evicted      : bucket.entries.pop_front().unwrap(),
             evictor      : info.clone(),
@@ -182,7 +163,7 @@ impl Table {
    pub fn all_nodes(&self) -> AllNodes {
       AllNodes {
          table          : self,
-         current_bucket : Vec::with_capacity(K_FACTOR),
+         current_bucket : Vec::with_capacity(self.configuration.k_factor),
          bucket_index   : 0,
       }
    }
@@ -203,7 +184,7 @@ impl Table {
          table          : self,
          reference      : id,
          lookup_order   : lookup_order,
-         current_bucket : Vec::with_capacity(K_FACTOR),
+         current_bucket : Vec::with_capacity(self.configuration.k_factor),
       }
    }
 
@@ -343,9 +324,9 @@ impl<'a> Iterator for AllNodes<'a> {
 }
 
 impl Bucket {
-   fn new() -> Bucket {
+   fn with_capacity(capacity: usize) -> Bucket {
       Bucket{
-         entries    : VecDeque::with_capacity(K_FACTOR),
+         entries    : VecDeque::with_capacity(capacity),
          last_probe : None,
       }
    }

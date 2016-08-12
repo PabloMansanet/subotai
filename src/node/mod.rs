@@ -22,7 +22,7 @@ pub use storage::StorageEntry as StorageEntry;
 mod tests;
 mod resources;
 
-use {storage, routing, rpc, bus, SubotaiResult, time};
+use {storage, routing, rpc, bus, SubotaiResult, time, factory};
 use hash::SubotaiHash;
 use std::{net, thread, sync};
 use std::time::Duration as StdDuration;
@@ -90,16 +90,18 @@ impl Node {
    /// Constructs a node with a given inbound/outbound UDP port pair.
    pub fn with_ports(inbound_port: u16, outbound_port: u16) -> SubotaiResult<Node> {
       let id = SubotaiHash::random();
+      let configuration: factory::Configuration = Default::default();
       
       let resources = sync::Arc::new(resources::Resources {
-         id        : id.clone(),
-         table     : routing::Table::new(id.clone()),
-         storage   : storage::Storage::new(id),
-         inbound   : try!(net::UdpSocket::bind(("0.0.0.0", inbound_port))),
-         outbound  : try!(net::UdpSocket::bind(("0.0.0.0", outbound_port))),
-         state     : sync::RwLock::new(State::OffGrid),
-         updates   : sync::Mutex::new(bus::Bus::new(UPDATE_BUS_SIZE_BYTES)),
-         conflicts : sync::Mutex::new(Vec::with_capacity(routing::MAX_CONFLICTS)),
+         id            : id.clone(),
+         table         : routing::Table::new(id.clone(), configuration.clone()),
+         storage       : storage::Storage::new(id),
+         inbound       : try!(net::UdpSocket::bind(("0.0.0.0", inbound_port))),
+         outbound      : try!(net::UdpSocket::bind(("0.0.0.0", outbound_port))),
+         state         : sync::RwLock::new(State::OffGrid),
+         updates       : sync::Mutex::new(bus::Bus::new(UPDATE_BUS_SIZE_BYTES)),
+         conflicts     : sync::Mutex::new(Vec::with_capacity(configuration.max_conflicts)),
+         configuration : configuration,
       });
 
       resources.table.update_node(resources.local_info());
@@ -133,7 +135,7 @@ impl Node {
       let bootstrap_resources = self.resources.clone();
       thread::spawn(move || {
          for _ in 0..BOOTSTRAP_TRIES {
-            if let Ok(_) = bootstrap_resources.probe(&bootstrap_resources.id, routing::K_FACTOR) {
+            if let Ok(_) = bootstrap_resources.probe(&bootstrap_resources.id, bootstrap_resources.configuration.k_factor) {
                break;
             }
          }

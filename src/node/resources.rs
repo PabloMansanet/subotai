@@ -1,4 +1,4 @@
-use {hash, node, routing, storage, rpc, bus, time, SubotaiError, SubotaiResult};
+use {factory, hash, node, routing, storage, rpc, bus, time, SubotaiError, SubotaiResult};
 use std::{net, sync, cmp};
 use rpc::Rpc;
 use hash::SubotaiHash;
@@ -13,14 +13,15 @@ use node::receptions;
 /// The node layer above is in charge of parallelizing those operations 
 /// by spawning threads when adequate.
 pub struct Resources {
-   pub id        : SubotaiHash,
-   pub table     : routing::Table,
-   pub storage   : storage::Storage,
-   pub outbound  : net::UdpSocket,
-   pub inbound   : net::UdpSocket,
-   pub state     : sync::RwLock<node::State>,
-   pub updates   : sync::Mutex<bus::Bus<Update>>,
-   pub conflicts : sync::Mutex<Vec<routing::EvictionConflict>>,
+   pub id            : SubotaiHash,
+   pub table         : routing::Table,
+   pub storage       : storage::Storage,
+   pub outbound      : net::UdpSocket,
+   pub inbound       : net::UdpSocket,
+   pub state         : sync::RwLock<node::State>,
+   pub updates       : sync::Mutex<bus::Bus<Update>>,
+   pub conflicts     : sync::Mutex<Vec<routing::EvictionConflict>>,
+   pub configuration : factory::Configuration,
 }
 
 #[derive(Clone)]
@@ -76,7 +77,7 @@ impl Resources {
          } else {
             let mut conflicts = self.conflicts.lock().unwrap();
             conflicts.push(conflict);
-            if conflicts.len() == routing::MAX_CONFLICTS {
+            if conflicts.len() == self.configuration.max_conflicts {
                *self.state.write().unwrap() = node::State::Defensive;
                self.updates.lock().unwrap().broadcast(Update::StateChange(node::State::Defensive));
             }
@@ -88,7 +89,7 @@ impl Resources {
       };
 
       // We go on grid as soon as the network is big enough.
-      if off_grid && self.table.len() > routing::K_FACTOR {
+      if off_grid && self.table.len() > self.configuration.k_factor {
          *self.state.write().unwrap() = node::State::OnGrid;
          self.updates.lock().unwrap().broadcast(Update::StateChange(node::State::OnGrid));
       }
@@ -109,9 +110,9 @@ impl Resources {
 
       let mut closest: Vec<_> = self.table.closest_nodes_to(target)
          .filter(|info| &info.id != &self.id)
-         .take(routing::K_FACTOR)
+         .take(self.configuration.k_factor)
          .collect();
-      let seeds: Vec<_> = closest.iter().cloned().take(routing::ALPHA).collect();
+      let seeds: Vec<_> = closest.iter().cloned().take(self.configuration.alpha).collect();
 
       // We use a wave operation to locate the node. We want to stop the wave if we
       // found the node, and to always contact the closest ALPHA nodes we have knowledge
@@ -139,7 +140,7 @@ impl Resources {
          WaveStrategy::Continue(closest
             .iter()
             .filter(|info| !queried.contains(info) && &info.id != &self.id)
-            .cloned().take(routing::ALPHA).collect()
+            .cloned().take(self.configuration.alpha).collect()
          )
       };
 
@@ -163,10 +164,10 @@ impl Resources {
       let mut closest: Vec<_> = self.table
          .closest_nodes_to(target)
          .filter(|info| &info.id != &self.id)
-         .take(routing::K_FACTOR)
+         .take(self.configuration.k_factor)
          .collect();
 
-      let seeds: Vec<_> = closest.iter().cloned().take(routing::ALPHA).collect();
+      let seeds: Vec<_> = closest.iter().cloned().take(self.configuration.alpha).collect();
       // Strategy is similar to the `locate` wave. We keep probing the closest `ALPHA` nodes
       // we are aware of as we continue probing. We only halt when we have queried `K_FACTOR`.
       let strategy = |responses: &[rpc::Rpc], queried: &[routing::NodeInfo]| -> WaveStrategy<Vec<routing::NodeInfo>> {
@@ -184,12 +185,12 @@ impl Resources {
          closest.dedup();
 
          if queried.len() >= depth {
-            WaveStrategy::Halt(closest.iter().cloned().take(routing::K_FACTOR).collect())
+            WaveStrategy::Halt(closest.iter().cloned().take(self.configuration.k_factor).collect())
          } else {
             WaveStrategy::Continue(closest
                .iter()
                .filter(|info| !queried.contains(info) && &info.id != &self.id)
-               .cloned().take(routing::ALPHA).collect()
+               .cloned().take(self.configuration.alpha).collect()
             )
          }
       };
@@ -210,9 +211,9 @@ impl Resources {
       let mut closest: Vec<_> = self.table
          .closest_nodes_to(key)
          .filter(|info| &info.id != &self.id)
-         .take(routing::K_FACTOR)
+         .take(self.configuration.k_factor)
          .collect();
-      let seeds: Vec<_> = closest.iter().cloned().take(routing::ALPHA).collect();
+      let seeds: Vec<_> = closest.iter().cloned().take(self.configuration.alpha).collect();
       let mut cache_candidate: Option<routing::NodeInfo> = None;
 
       let strategy = |responses: &[rpc::Rpc], queried: &[routing::NodeInfo]| -> WaveStrategy<storage::StorageEntry> {
@@ -244,7 +245,7 @@ impl Resources {
          WaveStrategy::Continue(closest
             .iter()
             .filter(|info| !queried.contains(info) && &info.id != &self.id)
-            .cloned().take(routing::ALPHA).collect()
+            .cloned().take(self.configuration.alpha).collect()
          )
       };
 
@@ -281,7 +282,7 @@ impl Resources {
          let responses = self.receptions()
             .from_senders(senders)
             .during(time::Duration::seconds(node::NETWORK_TIMEOUT_S))
-            .take(cmp::min(nodes_to_query.len(), usize::saturating_sub(routing::ALPHA, routing::IMPATIENCE)));
+            .take(cmp::min(nodes_to_query.len(), usize::saturating_sub(self.configuration.alpha, self.configuration.impatience)));
       
          // We query all the nodes with the wave RPC, and collect the responses, 
          // ignoring any slackers based on the IMPATIENCE factor.
@@ -308,7 +309,7 @@ impl Resources {
       }
 
       let id = SubotaiHash::random_at_distance(&self.id, index);
-      try!(self.probe(&id, routing::K_FACTOR));
+      try!(self.probe(&id, self.configuration.k_factor));
       Ok(())
    }
 
@@ -317,7 +318,7 @@ impl Resources {
          return Err(SubotaiError::OffGridError);
       }
 
-      let storage_candidates = try!(self.probe(&key, routing::K_FACTOR));
+      let storage_candidates = try!(self.probe(&key, self.configuration.k_factor));
       // At least one store RPC must succeed.
       let mut response = self
          .receptions()
@@ -424,7 +425,7 @@ impl Resources {
       // the probing node, and the probing node is interested in K_FACTOR others.
       let closest: Vec<_> = self.table
          .closest_nodes_to(&payload.id_to_probe)
-         .take(routing::K_FACTOR + 1)
+         .take(self.configuration.k_factor + 1)
          .collect();
 
       let rpc = Rpc::probe_response(self.local_info(),
@@ -441,7 +442,7 @@ impl Resources {
    }
 
    fn handle_locate(&self, payload: sync::Arc<rpc::LocatePayload>, sender: routing::NodeInfo) -> SubotaiResult<()> {
-      let lookup_results = self.table.lookup(&payload.id_to_find, routing::K_FACTOR, None);
+      let lookup_results = self.table.lookup(&payload.id_to_find, self.configuration.k_factor, None);
       let rpc = Rpc::locate_response(self.local_info(),
                                      payload.id_to_find.clone(),
                                      lookup_results);
@@ -453,7 +454,7 @@ impl Resources {
    fn handle_retrieve(&self, payload: sync::Arc<rpc::RetrievePayload>, sender: routing::NodeInfo) -> SubotaiResult<()> {
       let result = match self.storage.retrieve(&payload.key_to_find) {
          Some(value) => rpc::RetrieveResult::Found(value),
-         None => rpc::RetrieveResult::Closest(self.table.closest_nodes_to(&payload.key_to_find).take(routing::K_FACTOR).collect()),
+         None => rpc::RetrieveResult::Closest(self.table.closest_nodes_to(&payload.key_to_find).take(self.configuration.k_factor).collect()),
       };
 
       let rpc = Rpc::retrieve_response(self.local_info(),
@@ -476,3 +477,4 @@ enum WaveStrategy<T> {
    Continue(Vec<routing::NodeInfo>),
    Halt(T),
 }
+

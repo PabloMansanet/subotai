@@ -1,4 +1,4 @@
-use {node, routing, time, hash, storage};
+use {node, routing, time, hash, storage, factory};
 use std::collections::VecDeque;
 use std::str::FromStr;
 use std::net;
@@ -87,7 +87,8 @@ fn finding_a_nonexisting_node_in_a_simulated_network_times_out() {
 }
 
 fn simulated_network(network_size: usize) -> VecDeque<node::Node> {
-   assert!(network_size > routing::K_FACTOR, "You can't build a network with so few nodes!");
+   let cfg: factory::Configuration = Default::default();
+   assert!(network_size > cfg.k_factor, "You can't build a network with so few nodes!");
 
    let nodes: VecDeque<node::Node> = (0..network_size).map(|_| { node::Node::new().unwrap() }).collect();
    {
@@ -106,7 +107,9 @@ fn simulated_network(network_size: usize) -> VecDeque<node::Node> {
 fn updating_table_with_full_bucket_starts_the_conflict_resolution_mechanism()
 {
    let node = node::Node::new().unwrap();
-   node.resources.table.fill_bucket(8, routing::K_FACTOR as u8); // Bucket completely full
+   let cfg  = &node.resources.configuration;
+
+   node.resources.table.fill_bucket(8, cfg.k_factor as u8); // Bucket completely full
 
    let mut id = node.id().clone();
    id.flip_bit(8);
@@ -122,12 +125,13 @@ fn generating_a_conflict_causes_a_ping_to_the_evicted_node()
 {
    let alpha = node::Node::new().unwrap();
    let beta = node::Node::new().unwrap();
+   let cfg  = &alpha.resources.configuration;
    alpha.resources.update_table(beta.resources.local_info());
   
    let index = alpha.resources.table.bucket_for_node(beta.id());
 
    // We fill the bucket corresponding to Beta until we are ready to cause a conflict.
-   alpha.resources.table.fill_bucket(index, (routing::K_FACTOR -1) as u8);
+   alpha.resources.table.fill_bucket(index, (cfg.k_factor -1) as u8);
 
    // We expect a ping to beta
    let pings = beta.receptions()
@@ -147,8 +151,9 @@ fn generating_a_conflict_causes_a_ping_to_the_evicted_node()
 fn generating_too_many_conflicts_causes_the_node_to_enter_defensive_state()
 {
    let node = node::Node::new().unwrap();
+   let cfg  = &node.resources.configuration;
 
-   for index in 0..(routing::K_FACTOR + routing::MAX_CONFLICTS) {
+   for index in 0..(cfg.k_factor + cfg.max_conflicts) {
       let mut id = node.id().clone();
       id.flip_bit(140); // Arbitrary bucket
       id.raw[0] = index as u8;
@@ -181,6 +186,7 @@ fn generating_too_many_conflicts_causes_the_node_to_enter_defensive_state()
 #[test]
 fn node_probing_in_simulated_network()
 {
+   let cfg: factory::Configuration = Default::default();
    let mut nodes = simulated_network(40);
    // We manually collect the info tags of all nodes.
    let mut info_nodes: Vec<routing::NodeInfo> = nodes
@@ -190,11 +196,11 @@ fn node_probing_in_simulated_network()
 
    let head = nodes.pop_front().unwrap();
    let tail = nodes.pop_back().unwrap();
-   let probe_results = head.resources.probe(tail.id(), routing::K_FACTOR).unwrap();
+   let probe_results = head.resources.probe(tail.id(), cfg.k_factor).unwrap();
 
    // We sort our manual collection by distance to the tail node.
    info_nodes.sort_by(|ref info_a, ref info_b| (&info_a.id ^ tail.id()).cmp(&(&info_b.id ^ tail.id())));
-   info_nodes.truncate(routing::K_FACTOR); // This guarantees us the closest ids to the tail
+   info_nodes.truncate(cfg.k_factor); // This guarantees us the closest ids to the tail
    
    assert_eq!(info_nodes.len(), probe_results.len());
 
@@ -206,6 +212,7 @@ fn node_probing_in_simulated_network()
 #[test]
 fn node_probing_in_simulated_unresponsive_network()
 {
+   let cfg: factory::Configuration = Default::default();
    let mut nodes = simulated_network(40);
    // We manually collect the info tags of all nodes.
    let mut info_nodes: Vec<routing::NodeInfo> = nodes
@@ -216,11 +223,11 @@ fn node_probing_in_simulated_unresponsive_network()
    nodes.drain(10..20);
    let head = nodes.pop_front().unwrap();
    let tail = nodes.pop_back().unwrap();
-   let probe_results = head.resources.probe(tail.id(), routing::K_FACTOR).unwrap();
+   let probe_results = head.resources.probe(tail.id(), cfg.k_factor).unwrap();
 
    // We sort our manual collection by distance to the tail node.
    info_nodes.sort_by(|ref info_a, ref info_b| (&info_a.id ^ tail.id()).cmp(&(&info_b.id ^ tail.id())));
-   info_nodes.truncate(routing::K_FACTOR); // This guarantees us the closest ids to the tail
+   info_nodes.truncate(cfg.k_factor); // This guarantees us the closest ids to the tail
    
    assert_eq!(info_nodes.len(), probe_results.len());
    for (a, b) in probe_results.iter().zip(info_nodes.iter()) {
