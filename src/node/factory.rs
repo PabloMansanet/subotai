@@ -17,7 +17,7 @@ impl Factory {
    }
 
    pub fn create_node(&self) -> SubotaiResult<node::Node> {
-      node::Node::with_ports_and_configuration(self.inbound_port, self.outbound_port, self.configuration.clone())
+      node::Node::with_configuration(self.inbound_port, self.outbound_port, self.configuration.clone())
    }
 
    pub fn inbound_port(mut self, port: u16) -> Self {

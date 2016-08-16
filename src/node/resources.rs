@@ -123,6 +123,11 @@ impl Resources {
             return WaveStrategy::Halt(found);
          }
 
+         // If we didn't find it in this wave, but a parallel process or a slow response did, we are done.
+         if let Some(found) = self.table.specific_node(target) {
+            return WaveStrategy::Halt(found);
+         }
+
          // We are interested in the combination of the nodes we knew about, plus the ones
          // we just learned from the responses, as long as we haven't queried them already.
          let mut former_closest = Vec::<routing::NodeInfo>::new();
@@ -217,13 +222,18 @@ impl Resources {
       let mut cache_candidate: Option<routing::NodeInfo> = None;
 
       let strategy = |responses: &[rpc::Rpc], queried: &[routing::NodeInfo]| -> WaveStrategy<storage::StorageEntry> {
+         // If any parallel process, or the response from a slow node has retrieved the key,
+         // we need to break out early
+         if let Some(retrieved) = self.storage.retrieve(key) {
+            return WaveStrategy::Halt(retrieved);
+         }
          // We are interested in the combination of the nodes we knew about, plus the ones
          // we just learned from the responses, as long as we haven't queried them already.
          let mut former_closest = Vec::<routing::NodeInfo>::new();
          former_closest.append(&mut closest);
          closest = responses
             .iter()
-            .filter_map(|rpc| rpc.is_helping_locate(key))
+            .filter_map(|rpc| rpc.is_helping_retrieve(key))
             .flat_map(|vec| vec.into_iter())
             .chain(former_closest)
             .filter(|info| !queried.contains(info) && &info.id != &self.id)
@@ -364,16 +374,6 @@ impl Resources {
       Ok(())
    }
 
-   fn retrieve_wave(&self, key_to_find: &SubotaiHash, nodes_to_query: &[routing::NodeInfo], queried: &mut Vec<SubotaiHash>) -> SubotaiResult<()> {
-      let rpc = Rpc::retrieve(self.local_info(), key_to_find.clone());
-      let packet = rpc.serialize(); 
-      for node in nodes_to_query {
-         try!(self.outbound.send_to(&packet, node.address));
-         queried.push(node.id.clone());
-      }
-      Ok(())
-   }
-
    pub fn revert_conflicts_for_sender(&self, sender_id: &SubotaiHash) {
       if let Some((index, _)) = 
          self.conflicts.lock().unwrap().iter()
@@ -393,6 +393,7 @@ impl Resources {
          rpc::Kind::Ping                           => self.handle_ping(sender),
          rpc::Kind::PingResponse                   => self.handle_ping_response(sender),
          rpc::Kind::Locate(ref payload)            => self.handle_locate(payload.clone(), sender),
+         rpc::Kind::LocateResponse(ref payload)    => self.handle_locate_response(payload.clone()),
          rpc::Kind::Probe(ref payload)             => self.handle_probe(payload.clone(), sender),
          rpc::Kind::Store(ref payload)             => self.handle_store(payload.clone(), sender),
          rpc::Kind::Retrieve(ref payload)          => self.handle_retrieve(payload.clone(), sender),
@@ -462,6 +463,16 @@ impl Resources {
                                        result);
       let packet = rpc.serialize();
       try!(self.outbound.send_to(&packet, sender.address));
+      Ok(())
+   }
+
+   fn handle_locate_response(&self, payload: sync::Arc<rpc::LocateResponsePayload>) -> SubotaiResult<()> {
+      if let routing::LookupResult::Found(ref node) = payload.result {
+         // This is an exception to the otherwise enforced rule of only introducing live nodes to
+         // the table. Nodes we learn from through a locate query must always be inserted in the routing
+         // table, so they can be picked up by other locate waves running in parallel.
+         self.update_table(node.clone());
+      }
       Ok(())
    }
 

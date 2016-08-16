@@ -8,7 +8,7 @@ use std::collections::VecDeque;
 #[cfg(test)]
 mod tests;
 
-/// Routing table with 160 buckets of `K_FACTOR` node
+/// Routing table with `HASH_SIZE` buckets of `K_FACTOR` node
 /// identifiers each, constructed around a parent node ID.
 ///
 /// The structure employs least-recently seen eviction. Conflicts generated

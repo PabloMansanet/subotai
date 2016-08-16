@@ -56,26 +56,28 @@ pub enum State {
    /// The node is initialized but disconnected from the 
    /// network. Needs to go through succesful bootstrapping.
    OffGrid,
+
    /// The node is online and connected to the network.
    OnGrid,
+
    /// The node is in defensive mode. Too many conflicts have 
    /// been generated recently, so the node gives preference
    /// to its older contacts until all conflicts are resolved.
    Defensive,
+
    /// The node is in a process of shutting down;
    /// all of its resources will be deallocated after completion
    /// of any pending async operations.
    ShuttingDown,
 }
 
-
-/// Network configuration constants. Note that for the network to function
-/// optimally, the `alpha`, `impatience`, `expiration_distance_threshold` and
-/// `base_expiration_time_hrs` must be identical for all nodes.
+/// Network configuration constants. Do not set these values directly, as there 
+/// is no way to initialize a node from a `Configuration` struct. Instead, use 
+/// `node::Factory` if you want your application to use non-default network constants.
 ///
-/// Do not set these values directly, as there is no way to initialize a node
-/// from a `Configuration` struct. Instead, use node::Factory if you want your
-/// application to use non-default network constants.
+/// Note that for the network to function optimally, the `alpha`, `impatience`, 
+/// `expiration_distance_threshold` and  `base_expiration_time_hrs` must be identical 
+/// for all nodes.
 #[derive(Clone, Debug)]
 pub struct Configuration {
    /// Network-wide concurrency factor. It's used, for example, to decide the
@@ -139,9 +141,11 @@ impl Default for Configuration {
 }
 
 impl Node {
-   /// Constructs a node with OS allocated random ports.
+   /// Constructs a node with OS allocated random ports and default network constants.
+   /// 
+   /// If you need more control over ports and network configuration, use `node::Factory`.
    pub fn new() -> SubotaiResult<Node> {
-      Node::with_ports(0, 0)
+      Node::with_configuration(0, 0, Default::default())
    }
 
    /// Returns the hash used to identify this node in the network.
@@ -157,42 +161,6 @@ impl Node {
    /// Returns the current state of the node.
    pub fn state(&self)-> State {
       *self.resources.state.read().unwrap()
-   }
-
-   /// Constructs a node with a given inbound/outbound UDP port pair.
-   pub fn with_ports(inbound_port: u16, outbound_port: u16) -> SubotaiResult<Node> {
-      Node::with_ports_and_configuration(inbound_port, outbound_port, Default::default())
-   }
-
-   pub fn with_ports_and_configuration(inbound_port: u16, outbound_port: u16, configuration: Configuration) -> SubotaiResult<Node> {
-      let id = SubotaiHash::random();
-      
-      let resources = sync::Arc::new(resources::Resources {
-         id            : id.clone(),
-         table         : routing::Table::new(id.clone(), configuration.clone()),
-         storage       : storage::Storage::new(id, configuration.clone()),
-         inbound       : try!(net::UdpSocket::bind(("0.0.0.0", inbound_port))),
-         outbound      : try!(net::UdpSocket::bind(("0.0.0.0", outbound_port))),
-         state         : sync::RwLock::new(State::OffGrid),
-         updates       : sync::Mutex::new(bus::Bus::new(UPDATE_BUS_SIZE_BYTES)),
-         conflicts     : sync::Mutex::new(Vec::with_capacity(configuration.max_conflicts)),
-         configuration : configuration,
-      });
-
-      resources.table.update_node(resources.local_info());
-
-      try!(resources.inbound.set_read_timeout(Some(StdDuration::from_millis(SOCKET_TIMEOUT_MS))));
-
-      let reception_resources = resources.clone();
-      thread::spawn(move || { Node::reception_loop(reception_resources) });
-
-      let conflict_resolution_resources = resources.clone();
-      thread::spawn(move || { Node::conflict_resolution_loop(conflict_resolution_resources) });
-
-      let maintenance_resources = resources.clone();
-      thread::spawn(move || { Node::maintenance_loop(maintenance_resources) });
-
-      Ok( Node{ resources: resources } )
    }
 
    /// Produces an iterator over RPCs received by this node. The iterator will block
@@ -249,6 +217,37 @@ impl Node {
       self.resources.retrieve(key)
    }
 
+   fn with_configuration(inbound_port: u16, outbound_port: u16, configuration: Configuration) -> SubotaiResult<Node> {
+      let id = SubotaiHash::random();
+      
+      let resources = sync::Arc::new(resources::Resources {
+         id            : id.clone(),
+         table         : routing::Table::new(id.clone(), configuration.clone()),
+         storage       : storage::Storage::new(id, configuration.clone()),
+         inbound       : try!(net::UdpSocket::bind(("0.0.0.0", inbound_port))),
+         outbound      : try!(net::UdpSocket::bind(("0.0.0.0", outbound_port))),
+         state         : sync::RwLock::new(State::OffGrid),
+         updates       : sync::Mutex::new(bus::Bus::new(UPDATE_BUS_SIZE_BYTES)),
+         conflicts     : sync::Mutex::new(Vec::with_capacity(configuration.max_conflicts)),
+         configuration : configuration,
+      });
+
+      resources.table.update_node(resources.local_info());
+
+      try!(resources.inbound.set_read_timeout(Some(StdDuration::from_millis(SOCKET_TIMEOUT_MS))));
+
+      let reception_resources = resources.clone();
+      thread::spawn(move || { Node::reception_loop(reception_resources) });
+
+      let conflict_resolution_resources = resources.clone();
+      thread::spawn(move || { Node::conflict_resolution_loop(conflict_resolution_resources) });
+
+      let maintenance_resources = resources.clone();
+      thread::spawn(move || { Node::maintenance_loop(maintenance_resources) });
+
+      Ok( Node{ resources: resources } )
+   }
+
    /// Receives and processes data as long as the node is alive.
    fn reception_loop(resources: sync::Arc<resources::Resources>) {
       let mut buffer = [0u8; SOCKET_BUFFER_SIZE_BYTES];
@@ -279,6 +278,7 @@ impl Node {
    fn maintenance_loop(resources: sync::Arc<resources::Resources>) {
       let hour = time::Duration::hours(1);
       let mut last_republish = time::SteadyTime::now();
+
       loop {
          thread::sleep(StdDuration::new(MAINTENANCE_SLEEP_S,0));
          if let State::ShuttingDown = *resources.state.read().unwrap() {
@@ -334,9 +334,14 @@ impl Node {
             State::ShuttingDown => break,
             // If all conflicts are resolved, we leave defensive mode.
             State::Defensive if conflicts_empty => { 
-               *state = State::OnGrid;
-               resources.updates.lock().unwrap().broadcast(resources::Update::StateChange(State::OnGrid));
-            }
+               *state = if resources.table.len() > resources.configuration.k_factor { 
+                     State::OnGrid 
+                  } else {
+                     State::OffGrid
+                  };
+                  
+               resources.updates.lock().unwrap().broadcast(resources::Update::StateChange(*state));
+            },
             _ => (),
          }
       }
