@@ -4,7 +4,7 @@
 //! contain information about the sender, as well as an optional payload.
 
 use bincode::serde;
-use {routing, bincode, node, storage};
+use {routing, bincode, node, storage, time};
 use std::sync::Arc;
 use hash::SubotaiHash;
 
@@ -73,8 +73,8 @@ impl Rpc {
    }
 
    /// Constructs a store RPC. It asks the receiving node to store a key->value pair.
-   pub fn store(sender: routing::NodeInfo, key: SubotaiHash, entry: storage::StorageEntry) -> Rpc {
-      let payload = Arc::new(StorePayload { key: key, entry: entry });     
+   pub fn store(sender: routing::NodeInfo, key: SubotaiHash, entry: storage::StorageEntry, expiration: SerializableTime) -> Rpc {
+      let payload = Arc::new(StorePayload { key: key, entry: entry, expiration: expiration });     
       Rpc { kind: Kind::Store(payload), sender: sender }
    }
 
@@ -179,8 +179,9 @@ pub enum Kind {
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
 pub struct StorePayload {
-   pub key   : SubotaiHash,
-   pub entry : storage::StorageEntry,
+   pub key        : SubotaiHash,
+   pub entry      : storage::StorageEntry,
+   pub expiration : SerializableTime,
 }
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
@@ -233,13 +234,64 @@ pub struct ProbeResponsePayload {
    pub nodes        : Vec<routing::NodeInfo>,
 }
 
+#[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
+pub struct SerializableTime {
+   pub tm_sec: i32,
+   pub tm_min: i32,
+   pub tm_hour: i32,
+   pub tm_mday: i32,
+   pub tm_mon: i32,
+   pub tm_year: i32,
+   pub tm_wday: i32,
+   pub tm_yday: i32,
+   pub tm_isdst: i32,
+   pub tm_utcoff: i32,
+   pub tm_nsec: i32,
+}
+
+impl From<time::Tm> for SerializableTime {
+   fn from(time: time::Tm) -> Self {
+      SerializableTime {
+         tm_sec: time.tm_sec,
+         tm_min: time.tm_min,
+         tm_hour: time.tm_hour,
+         tm_mday: time.tm_mday,
+         tm_mon: time.tm_mon,
+         tm_year: time.tm_year,
+         tm_wday: time.tm_wday,
+         tm_yday: time.tm_yday,
+         tm_isdst: time.tm_isdst,
+         tm_utcoff: time.tm_utcoff,
+         tm_nsec: time.tm_nsec,
+      }
+   }
+}
+
+impl From<SerializableTime> for time::Tm {
+   fn from(time: SerializableTime) -> Self {
+      time::Tm {
+         tm_sec: time.tm_sec,
+         tm_min: time.tm_min,
+         tm_hour: time.tm_hour,
+         tm_mday: time.tm_mday,
+         tm_mon: time.tm_mon,
+         tm_year: time.tm_year,
+         tm_wday: time.tm_wday,
+         tm_yday: time.tm_yday,
+         tm_isdst: time.tm_isdst,
+         tm_utcoff: time.tm_utcoff,
+         tm_nsec: time.tm_nsec,
+      }
+   }
+}
+
 #[cfg(test)]
 mod tests {
    use super::*;
    use hash::SubotaiHash;
    use std::net;
    use std::str::FromStr;
-   use routing;
+   use {routing, time, storage};
 
    #[test]
    fn serdes_for_ping() {
@@ -247,6 +299,22 @@ mod tests {
       let serialized_ping = ping.serialize();
       let deserialized_ping = Rpc::deserialize(&serialized_ping).unwrap();
       assert_eq!(ping, deserialized_ping);
+   }
+
+   #[test]
+   fn serdes_for_store() {
+      let now = time::now();
+      let serializable_now = SerializableTime::from(now.clone());
+      let store = Rpc::store(node_info_no_net(SubotaiHash::random()),
+                             SubotaiHash::random(),
+                             storage::StorageEntry::Blob(Vec::<u8>::new()),
+                             serializable_now);
+      let deserialized_store = Rpc::deserialize(&store.serialize()).unwrap();
+      if let Kind::Store(ref payload) = deserialized_store.kind {
+         assert_eq!(now, time::Tm::from(payload.expiration.clone()));
+      } else {
+         panic!();
+      }
    }
 
    fn node_info_no_net(id : SubotaiHash) -> routing::NodeInfo {

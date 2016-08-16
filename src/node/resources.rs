@@ -247,7 +247,11 @@ impl Resources {
          // If we found it, we cache the value and we're done.
          if let Some(retrieved) = responses.iter().filter_map(|rpc| rpc.successfully_retrieved(key)).next() {
             if let Some(ref candidate) = cache_candidate {
-               let _ = self.store_remotely(candidate, key.clone(), retrieved.clone());
+               // TODO work this out (expiration)
+               let expiration = time::now() + time::Duration::hours(self.configuration.base_expiration_time_hrs);
+               let rpc = Rpc::store(self.local_info(), key.clone(), retrieved.clone(), rpc::SerializableTime::from(expiration));
+               let packet = rpc.serialize();
+               let _ = self.outbound.send_to(&packet, candidate.address);
             }
             return WaveStrategy::Halt(retrieved);
          }
@@ -337,41 +341,18 @@ impl Resources {
          .filter(|rpc| rpc.successfully_stored(key))
          .take(1);
 
+      let expiration = time::now() + time::Duration::hours(self.configuration.base_expiration_time_hrs);
+      let rpc = Rpc::store(self.local_info(), key.clone(), entry.clone(), rpc::SerializableTime::from(expiration));
+      let packet = rpc.serialize();
+
       for candidate in &storage_candidates {
-         try!(self.store_remotely_and_forget(candidate, key.clone(), entry.clone()));
+         try!(self.outbound.send_to(&packet, candidate.address));
       }
 
       match response.next() {
          Some(_) => Ok(()),
          None    => Err(SubotaiError::UnresponsiveNetwork),
       }
-   }
-
-   /// Instructs a node to store a key_value pair.
-   fn store_remotely(&self, target: &routing::NodeInfo, key: SubotaiHash, entry: storage::StorageEntry) -> SubotaiResult<storage::StoreResult> {
-      let rpc = Rpc::store(self.local_info(), key, entry);
-      let packet = rpc.serialize();
-      let mut responses = self.receptions()
-         .during(time::Duration::seconds(self.configuration.network_timeout_s))
-         .of_kind(receptions::KindFilter::StoreResponse)
-         .from(target.id.clone())
-         .take(1);
-      try!(self.outbound.send_to(&packet, target.address));
-
-      if let Some(rpc) = responses.next() {
-         if let rpc::Kind::StoreResponse(ref payload) = rpc.kind {
-            return Ok(payload.result.clone());
-         }
-      }
-
-      Err(SubotaiError::NoResponse)
-   }
-
-   fn store_remotely_and_forget(&self, target: &routing::NodeInfo, key: SubotaiHash, entry: storage::StorageEntry) -> SubotaiResult<()> {
-      let rpc = Rpc::store(self.local_info(), key, entry);
-      let packet = rpc.serialize();
-      try!(self.outbound.send_to(&packet, target.address));
-      Ok(())
    }
 
    pub fn revert_conflicts_for_sender(&self, sender_id: &SubotaiHash) {
