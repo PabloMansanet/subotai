@@ -247,8 +247,7 @@ impl Resources {
          // If we found it, we cache the value and we're done.
          if let Some(retrieved) = responses.iter().filter_map(|rpc| rpc.successfully_retrieved(key)).next() {
             if let Some(ref candidate) = cache_candidate {
-               // TODO work this out (expiration)
-               let expiration = time::now() + time::Duration::hours(self.configuration.base_expiration_time_hrs);
+               let expiration = self.calculate_cache_expiration(&candidate.id, &key);
                let rpc = Rpc::store(self.local_info(), key.clone(), retrieved.clone(), rpc::SerializableTime::from(expiration));
                let packet = rpc.serialize();
                let _ = self.outbound.send_to(&packet, candidate.address);
@@ -269,6 +268,15 @@ impl Resources {
       self.wave(seeds, strategy, rpc, timeout)
    }
   
+   ///// the expiration time drops substantially the further away the parent node is from the key, past
+   ///// a threshold.
+   fn calculate_cache_expiration(&self, candidate_id: &SubotaiHash, key: &SubotaiHash) -> time::Tm {
+      let distance = (candidate_id ^ key).height().unwrap_or(0);
+      let adjusted_distance  = usize::saturating_sub(distance, self.configuration.expiration_distance_threshold) as u32;
+      let clamped_distance = cmp::min(16, adjusted_distance);
+      let expiration_factor = 2i64.pow(clamped_distance);
+      time::now() + time::Duration::minutes(60 * self.configuration.base_expiration_time_hrs / expiration_factor)
+   }
 
    /// Wave operation. Contacts nodes from a list by sending a specific RPC. Then, it 
    /// extracts new node candidates from their response by applying a strategy function.
@@ -327,22 +335,22 @@ impl Resources {
       Ok(())
    }
 
-   pub fn store(&self, key: &SubotaiHash, entry: &storage::StorageEntry) ->SubotaiResult<()> {
+   pub fn store(&self, key: SubotaiHash, entry: storage::StorageEntry, expiration: time::Tm) -> SubotaiResult<()> {
       if let node::State::OffGrid = *self.state.read().unwrap() {
          return Err(SubotaiError::OffGridError);
       }
 
       let storage_candidates = try!(self.probe(&key, self.configuration.k_factor));
+      let cloned_key = key.clone();
       // At least one store RPC must succeed.
       let mut response = self
          .receptions()
          .of_kind(receptions::KindFilter::StoreResponse)
          .during(time::Duration::seconds(self.configuration.network_timeout_s))
-         .filter(|rpc| rpc.successfully_stored(key))
+         .filter(|rpc| rpc.successfully_stored(&cloned_key))
          .take(1);
 
-      let expiration = time::now() + time::Duration::hours(self.configuration.base_expiration_time_hrs);
-      let rpc = Rpc::store(self.local_info(), key.clone(), entry.clone(), rpc::SerializableTime::from(expiration));
+      let rpc = Rpc::store(self.local_info(), key, entry, rpc::SerializableTime::from(expiration));
       let packet = rpc.serialize();
 
       for candidate in &storage_candidates {
@@ -394,7 +402,7 @@ impl Resources {
    }
 
    fn handle_store(&self, payload: sync::Arc<rpc::StorePayload>,  sender: routing::NodeInfo) -> SubotaiResult<()> {
-      let store_result = self.storage.store(payload.key.clone(), payload.entry.clone());
+      let store_result = self.storage.store(payload.key.clone(), payload.entry.clone(), time::Tm::from(payload.expiration.clone()));
       let rpc = Rpc::store_response(self.local_info(), payload.key.clone(), store_result);
       let packet = rpc.serialize();
       try!(self.outbound.send_to(&packet, sender.address));
@@ -458,8 +466,9 @@ impl Resources {
    }
 
    fn handle_retrieve_response(&self, payload: sync::Arc<rpc::RetrieveResponsePayload>) -> SubotaiResult<()> {
-      if let rpc::RetrieveResult::Found(ref value) = payload.result {
-         self.storage.store(payload.key_to_find.clone(), value.clone());
+      if let rpc::RetrieveResult::Found(ref entry) = payload.result {
+         // Retrieved keys are cached locally for a limited time, to guarantee succesive retrieves don't flood the network.
+         self.storage.store(payload.key_to_find.clone(), entry.clone(), time::now() + time::Duration::minutes(5));
       }
       Ok(())
    }

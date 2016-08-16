@@ -236,33 +236,33 @@ pub struct ProbeResponsePayload {
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
 pub struct SerializableTime {
-   pub tm_sec: i32,
-   pub tm_min: i32,
-   pub tm_hour: i32,
-   pub tm_mday: i32,
-   pub tm_mon: i32,
-   pub tm_year: i32,
-   pub tm_wday: i32,
-   pub tm_yday: i32,
-   pub tm_isdst: i32,
-   pub tm_utcoff: i32,
-   pub tm_nsec: i32,
+   tm_sec    : i32,
+   tm_min    : i32,
+   tm_hour   : i32,
+   tm_mday   : i32,
+   tm_mon    : i32,
+   tm_year   : i32,
+   tm_wday   : i32,
+   tm_yday   : i32,
+   tm_isdst  : i32,
+   tm_utcoff : i32,
+   tm_nsec   : i32,
 }
 
 impl From<time::Tm> for SerializableTime {
    fn from(time: time::Tm) -> Self {
       SerializableTime {
-         tm_sec: time.tm_sec,
-         tm_min: time.tm_min,
-         tm_hour: time.tm_hour,
-         tm_mday: time.tm_mday,
-         tm_mon: time.tm_mon,
-         tm_year: time.tm_year,
-         tm_wday: time.tm_wday,
-         tm_yday: time.tm_yday,
-         tm_isdst: time.tm_isdst,
-         tm_utcoff: time.tm_utcoff,
-         tm_nsec: time.tm_nsec,
+         tm_sec    : time.tm_sec,
+         tm_min    : time.tm_min,
+         tm_hour   : time.tm_hour,
+         tm_mday   : time.tm_mday,
+         tm_mon    : time.tm_mon,
+         tm_year   : time.tm_year,
+         tm_wday   : time.tm_wday,
+         tm_yday   : time.tm_yday,
+         tm_isdst  : time.tm_isdst,
+         tm_utcoff : time.tm_utcoff,
+         tm_nsec   : time.tm_nsec,
       }
    }
 }
@@ -270,17 +270,17 @@ impl From<time::Tm> for SerializableTime {
 impl From<SerializableTime> for time::Tm {
    fn from(time: SerializableTime) -> Self {
       time::Tm {
-         tm_sec: time.tm_sec,
-         tm_min: time.tm_min,
-         tm_hour: time.tm_hour,
-         tm_mday: time.tm_mday,
-         tm_mon: time.tm_mon,
-         tm_year: time.tm_year,
-         tm_wday: time.tm_wday,
-         tm_yday: time.tm_yday,
-         tm_isdst: time.tm_isdst,
-         tm_utcoff: time.tm_utcoff,
-         tm_nsec: time.tm_nsec,
+         tm_sec    : time.tm_sec,
+         tm_min    : time.tm_min,
+         tm_hour   : time.tm_hour,
+         tm_mday   : time.tm_mday,
+         tm_mon    : time.tm_mon,
+         tm_year   : time.tm_year,
+         tm_wday   : time.tm_wday,
+         tm_yday   : time.tm_yday,
+         tm_isdst  : time.tm_isdst,
+         tm_utcoff : time.tm_utcoff,
+         tm_nsec   : time.tm_nsec,
       }
    }
 }

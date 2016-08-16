@@ -112,7 +112,10 @@ pub struct Configuration {
    pub max_storage_blob_size         : usize,
 
    /// Xor distance from a key at which point nodes will start to dramatically decrease
-   /// the expiration time for a particular storage entry.
+   /// the expiration time for cached storage entries. This is only relevant in cases of 
+   /// extreme network traffic around a given key. A bigger threshold allows for more
+   /// over-caching and therefore less load on the critical nodes, while a smaller 
+   /// threshold allows for a leaner network.
    pub expiration_distance_threshold : usize,
 
    /// Base expiration time for key-value pairs. As long as the key falls within the 
@@ -133,7 +136,7 @@ impl Default for Configuration {
          max_conflicts                 : 60,
          max_storage                   : 10000,
          max_storage_blob_size         : 1024,
-         expiration_distance_threshold : 8,
+         expiration_distance_threshold : 3,
          base_expiration_time_hrs      : 24,
          network_timeout_s             : 5,
       }
@@ -207,9 +210,10 @@ impl Node {
       self.resources.local_info()
    }
 
-   /// Stores an entry in the network
-   pub fn store(&self, key: &SubotaiHash, entry: &StorageEntry) -> SubotaiResult<()> {
-      self.resources.store(key, entry)
+   /// Stores an entry in the network, refreshing its expiration time back to the base value.
+   pub fn store(&self, key: SubotaiHash, entry: StorageEntry) -> SubotaiResult<()> {
+      let expiration = time::now() + time::Duration::hours(self.resources.configuration.base_expiration_time_hrs);
+      self.resources.store(key, entry, expiration)
    }
 
    /// Retrieves a value from the network, given a key.
@@ -297,8 +301,8 @@ impl Node {
          resources.storage.clear_expired_entries();
 
          if now - last_republish > hour {
-            for (key, entry) in resources.storage.get_all_ready_entries() {
-               resources.store(&key, &entry);
+            for (key, entry, expiration) in resources.storage.get_all_ready_entries() {
+               resources.store(key, entry, expiration);
             }
 
             last_republish = time::SteadyTime::now();

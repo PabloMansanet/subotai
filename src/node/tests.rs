@@ -245,7 +245,7 @@ fn store_retrieve_in_simulated_network()
    let tail = nodes.pop_back().unwrap();
 
    println!("Before first store");
-   head.store(&key, &entry).unwrap();
+   head.store(key.clone(), entry.clone()).unwrap();
    println!("After first store");
    let retrieved_entry = tail.retrieve(&key).unwrap();
    println!("After first retrieve");
@@ -256,13 +256,12 @@ fn store_retrieve_in_simulated_network()
    let entry = storage::StorageEntry::Blob(blob.clone());
 
    println!("Before second store");
-   head.store(&key, &entry).unwrap();
+   head.store(key.clone(), entry.clone()).unwrap();
    println!("After second store");
    let retrieved_entry = tail.retrieve(&key).unwrap();
    println!("After second retrieve");
    assert_eq!(entry, retrieved_entry);
 }
-
 
 fn node_info_no_net(id : hash::SubotaiHash) -> routing::NodeInfo {
    routing::NodeInfo {

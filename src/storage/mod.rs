@@ -13,7 +13,7 @@ pub enum StorageEntry {
 #[derive(Debug, Clone)]
 struct EntryAndTimes {
    entry           : StorageEntry,
-   expiration      : time::SteadyTime,
+   expiration      : time::Tm,
    republish_ready : bool,
 }
 
@@ -47,23 +47,23 @@ impl Storage {
       self.entries_and_times.read().unwrap().is_empty()
    }
 
-   pub fn store(&self, key: SubotaiHash, entry: StorageEntry) -> StoreResult {
+   pub fn store(&self, key: SubotaiHash, entry: StorageEntry, expiration: time::Tm) -> StoreResult {
       let mut entries_and_times = self.entries_and_times.write().unwrap();
 
-      // If the key was already present, the expiration time is kept.
-      let expiration = if let Some(old) = entries_and_times.remove(&key) {
-         old.expiration
-      } else {
-         self.calculate_expiration_date(&key)
-      };
+      // We will only store entries up to our base expiration time. (i.e. clamping to the max value)
+      let mut expiration = cmp::min(expiration, time::now() + time::Duration::hours(self.configuration.base_expiration_time_hrs));
 
-      let entry_and_times = EntryAndTimes { entry: entry, expiration: expiration, republish_ready: false };
+      // If we already had an entry, we keep the longest expiration time.
+      if let Some(old) = entries_and_times.remove(&key) {
+         expiration = cmp::max(expiration, old.expiration)
+      };
 
       if entries_and_times.len() >= self.configuration.max_storage {
          StoreResult::StorageFull
-      } else if self.is_big_blob(&entry_and_times.entry){
+      } else if self.is_big_blob(&entry){
          StoreResult::BlobTooBig
       } else {
+         let entry_and_times = EntryAndTimes { entry: entry, expiration: expiration, republish_ready: false };
          entries_and_times.insert(key.clone(), entry_and_times);
          StoreResult::Success
       }
@@ -86,7 +86,7 @@ impl Storage {
    }
 
    pub fn clear_expired_entries(&self) {
-      let now = time::SteadyTime::now();
+      let now = time::now();
       let mut entries_and_times = self.entries_and_times.write().unwrap();
       let keys_to_remove: Vec<_>= entries_and_times
          .iter()
@@ -113,22 +113,12 @@ impl Storage {
       }
    }
 
-   /// Retrieves all key-entry pairs ready for republishing.
-   pub fn get_all_ready_entries(&self) -> Vec<(SubotaiHash, StorageEntry)>  {
+   /// Retrieves all key-entry pairs ready for republishing, together with their current expiration date
+   pub fn get_all_ready_entries(&self) -> Vec<(SubotaiHash, StorageEntry, time::Tm)>  {
       self.entries_and_times.read().unwrap().iter()
          .filter(|&(_, &EntryAndTimes{ republish_ready, ..})| republish_ready)
-         .map(|(key, &EntryAndTimes{ ref entry, ..})| (key.clone(), entry.clone()))
+         .map(|(key, &EntryAndTimes{ ref entry, ref expiration, ..})| (key.clone(), entry.clone(), expiration.clone()))
          .collect()
-   }
-
-   /// the expiration time drops substantially the further away the parent node is from the key, past
-   /// a threshold.
-   fn calculate_expiration_date(&self, key: &SubotaiHash) -> time::SteadyTime {
-      let distance = (&self.parent_id ^ key).height().unwrap_or(0);
-      let adjusted_distance  = usize::saturating_sub(distance, self.configuration.expiration_distance_threshold) as u32;
-      let clamped_distance = cmp::min(16, adjusted_distance);
-      let expiration_factor = 2i64.pow(clamped_distance);
-      time::SteadyTime::now() + time::Duration::minutes(60 * self.configuration.base_expiration_time_hrs / expiration_factor)
    }
 }
 
@@ -138,50 +128,34 @@ mod tests {
    use {hash, time, node};
 
    #[test]
-   fn expiration_date_calculation_below_distance_threshold() {
+   fn storing_and_retrieving_preserves_conservative_expiration_dates() {
       let default_config: node::Configuration = Default::default();
-      let id = hash::SubotaiHash::random();
-      let storage = Storage::new(id.clone(), default_config.clone());
-
-      // We create a key at distance 1 from our node.
-      let key_at_1 = hash::SubotaiHash::random_at_distance(&id, 1);
-      let key_at_expf = hash::SubotaiHash::random_at_distance(&id, default_config.expiration_distance_threshold);
+      let storage = Storage::new(hash::SubotaiHash::random(), default_config.clone());
+      let dummy_key = hash::SubotaiHash::random();
       let dummy_entry = StorageEntry::Value(hash::SubotaiHash::random());
 
-      storage.store(key_at_1.clone(), dummy_entry.clone());
-      storage.store(key_at_expf.clone(), dummy_entry.clone());
-      
-      // Both keys should have an expiration date of roughly 24 hours from now.
-      let exp_alpha = storage.entries_and_times.read().unwrap().get(&key_at_1).unwrap().expiration.clone();
-      let exp_beta  = storage.entries_and_times.read().unwrap().get(&key_at_expf).unwrap().expiration.clone();
+      // We start with an impossible expiration date
+      let long_expiration = time::now() + time::Duration::hours(10 * default_config.base_expiration_time_hrs);
+      let clamped_expiration = time::now() + time::Duration::hours(default_config.base_expiration_time_hrs);
+      storage.store(dummy_key.clone(), dummy_entry.clone(), long_expiration);
 
-      let max_duration = time::Duration::hours(default_config.base_expiration_time_hrs);
-      let min_duration = time::Duration::hours(default_config.base_expiration_time_hrs) - time::Duration::minutes(1);
+      // We check it gets clamped.
+      let retrieved_expiration = match storage.entries_and_times.read().unwrap().get(&dummy_key) {
+         None => panic!(),
+         Some(&super::EntryAndTimes{ref expiration, ..}) => expiration.clone(),
+      };
+      assert!(retrieved_expiration < clamped_expiration + time::Duration::minutes(1));
 
-      assert!(exp_alpha <= time::SteadyTime::now() + max_duration);
-      assert!(exp_alpha >= time::SteadyTime::now() + min_duration);
-      assert!(exp_beta  <= time::SteadyTime::now() + max_duration);
-      assert!(exp_beta  >= time::SteadyTime::now() + min_duration);
-   }
+      // We try an expiration date smaller than what we have
+      let short_expiration = time::now() + time::Duration::minutes(5);
+      storage.store(dummy_key.clone(), dummy_entry.clone(), short_expiration);
 
-   #[test]
-   fn expiration_date_calculation_over_distance_threshold() {
-      let id = hash::SubotaiHash::random();
-      let default_config: node::Configuration = Default::default();
-      let storage = Storage::new(id.clone(), default_config.clone());
-
-      // We create a key past the distance threshold;
-      let excess = 2usize;
-      let key = hash::SubotaiHash::random_at_distance(&id, default_config.expiration_distance_threshold + excess);
-      let dummy_entry = StorageEntry::Value(hash::SubotaiHash::random());
-      storage.store(key.clone(), dummy_entry.clone());
-      let expiration = storage.entries_and_times.read().unwrap().get(&key).unwrap().expiration.clone();
-
-      let expiration_factor = 2i64.pow(excess as u32);
-      let max_duration = time::Duration::minutes(60 * default_config.base_expiration_time_hrs / expiration_factor );
-      let min_duration = time::Duration::minutes(60 * default_config.base_expiration_time_hrs / expiration_factor - 1);
-      assert!(expiration <= time::SteadyTime::now() + max_duration);
-      assert!(expiration >= time::SteadyTime::now() + min_duration);
+      // We check it remains long.
+      let retrieved_expiration = match storage.entries_and_times.read().unwrap().get(&dummy_key) {
+         None => panic!(),
+         Some(&super::EntryAndTimes{ref expiration, ..}) => expiration.clone(),
+      };
+      assert!(retrieved_expiration > clamped_expiration - time::Duration::minutes(1));
    }
 
    #[test]
@@ -192,7 +166,7 @@ mod tests {
       let dummy_entry = StorageEntry::Value(hash::SubotaiHash::random());
 
       for key in dummy_keys.iter() {
-         storage.store(key.clone(), dummy_entry.clone());
+         storage.store(key.clone(), dummy_entry.clone(), time::now() + time::Duration::hours(24));
       }
    
       assert_eq!(0, storage.get_all_ready_entries().len());
