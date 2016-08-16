@@ -1,5 +1,5 @@
 use std::{net, mem, sync, iter};
-use {hash, time, factory};
+use {hash, time, node};
 use std::cmp::PartialEq;
 use hash::HASH_SIZE;
 use hash::SubotaiHash;
@@ -17,7 +17,7 @@ mod tests;
 pub struct Table {
    buckets       : Vec<sync::RwLock<Bucket> >,
    parent_id     : SubotaiHash,
-   configuration : factory::Configuration
+   configuration : node::Configuration
 }
 
 /// ID - Address pair that identifies a unique Subotai node in the network.
@@ -55,7 +55,7 @@ pub enum UpdateResult {
 impl Table {
    /// Constructs a routing table based on a parent node id. Other nodes
    /// will be stored in this table based on their distance to the node id provided.
-   pub fn new(id: hash::SubotaiHash, configuration: factory::Configuration) -> Table {
+   pub fn new(id: hash::SubotaiHash, configuration: node::Configuration) -> Table {
       Table { 
          buckets       : (0..HASH_SIZE).map(|_| sync::RwLock::new(Bucket::with_capacity(configuration.k_factor))).collect(),
          parent_id     : id,

@@ -1,15 +1,8 @@
-use time;
+use {time, node};
 use hash::SubotaiHash;
 use std::collections::HashMap;
 use std::sync::RwLock;
 use std::cmp;
-
-pub const MAX_STORAGE: usize = 10000;
-
-/// Distance after which the expiration time for a particular key will begin
-/// to drop dramatically. Prevents over-caching.
-const BASE_EXPIRATION_TIME_HRS : i64 = 24;
-const EXPIRATION_DISTANCE_THRESHOLD : usize = 8;
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum StorageEntry {
@@ -27,19 +20,22 @@ struct EntryAndTimes {
 pub struct Storage {
    entries_and_times : RwLock<HashMap<SubotaiHash, EntryAndTimes> >,
    parent_id         : SubotaiHash,
+   configuration     : node::Configuration,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum StoreResult {
    Success,
    StorageFull,
+   BlobTooBig,
 }
 
 impl Storage {
-   pub fn new(parent_id: SubotaiHash) -> Storage {
+   pub fn new(parent_id: SubotaiHash, configuration: node::Configuration) -> Storage {
       Storage {
-         entries_and_times : RwLock::new(HashMap::with_capacity(MAX_STORAGE)),
+         entries_and_times : RwLock::new(HashMap::with_capacity(configuration.max_storage)),
          parent_id         : parent_id,
+         configuration     : configuration,
       }
    }
    
@@ -63,11 +59,20 @@ impl Storage {
 
       let entry_and_times = EntryAndTimes { entry: entry, expiration: expiration, republish_ready: false };
 
-      if entries_and_times.len() >= MAX_STORAGE {
+      if entries_and_times.len() >= self.configuration.max_storage {
          StoreResult::StorageFull
+      } else if self.is_big_blob(&entry_and_times.entry){
+         StoreResult::BlobTooBig
       } else {
          entries_and_times.insert(key.clone(), entry_and_times);
          StoreResult::Success
+      }
+   }
+
+   fn is_big_blob(&self, entry: &StorageEntry) -> bool {
+      match entry {
+         &StorageEntry::Blob(ref vec) => vec.len() > self.configuration.max_storage_blob_size,
+         _ => false,
       }
    }
 
@@ -120,26 +125,27 @@ impl Storage {
    /// a threshold.
    fn calculate_expiration_date(&self, key: &SubotaiHash) -> time::SteadyTime {
       let distance = (&self.parent_id ^ key).height().unwrap_or(0);
-      let adjusted_distance  = usize::saturating_sub(distance, EXPIRATION_DISTANCE_THRESHOLD) as u32;
+      let adjusted_distance  = usize::saturating_sub(distance, self.configuration.expiration_distance_threshold) as u32;
       let clamped_distance = cmp::min(16, adjusted_distance);
       let expiration_factor = 2i64.pow(clamped_distance);
-      time::SteadyTime::now() + time::Duration::minutes(60 * BASE_EXPIRATION_TIME_HRS / expiration_factor)
+      time::SteadyTime::now() + time::Duration::minutes(60 * self.configuration.base_expiration_time_hrs / expiration_factor)
    }
 }
 
 #[cfg(test)]
 mod tests {
    use super::*; 
-   use {storage, hash, time};
+   use {hash, time, node};
 
    #[test]
    fn expiration_date_calculation_below_distance_threshold() {
+      let default_config: node::Configuration = Default::default();
       let id = hash::SubotaiHash::random();
-      let storage = Storage::new(id.clone());
+      let storage = Storage::new(id.clone(), default_config.clone());
 
       // We create a key at distance 1 from our node.
       let key_at_1 = hash::SubotaiHash::random_at_distance(&id, 1);
-      let key_at_expf = hash::SubotaiHash::random_at_distance(&id, storage::EXPIRATION_DISTANCE_THRESHOLD);
+      let key_at_expf = hash::SubotaiHash::random_at_distance(&id, default_config.expiration_distance_threshold);
       let dummy_entry = StorageEntry::Value(hash::SubotaiHash::random());
 
       storage.store(key_at_1.clone(), dummy_entry.clone());
@@ -149,8 +155,8 @@ mod tests {
       let exp_alpha = storage.entries_and_times.read().unwrap().get(&key_at_1).unwrap().expiration.clone();
       let exp_beta  = storage.entries_and_times.read().unwrap().get(&key_at_expf).unwrap().expiration.clone();
 
-      let max_duration = time::Duration::hours(storage::BASE_EXPIRATION_TIME_HRS);
-      let min_duration = time::Duration::hours(storage::BASE_EXPIRATION_TIME_HRS) - time::Duration::minutes(1);
+      let max_duration = time::Duration::hours(default_config.base_expiration_time_hrs);
+      let min_duration = time::Duration::hours(default_config.base_expiration_time_hrs) - time::Duration::minutes(1);
 
       assert!(exp_alpha <= time::SteadyTime::now() + max_duration);
       assert!(exp_alpha >= time::SteadyTime::now() + min_duration);
@@ -161,18 +167,19 @@ mod tests {
    #[test]
    fn expiration_date_calculation_over_distance_threshold() {
       let id = hash::SubotaiHash::random();
-      let storage = Storage::new(id.clone());
+      let default_config: node::Configuration = Default::default();
+      let storage = Storage::new(id.clone(), default_config.clone());
 
       // We create a key past the distance threshold;
       let excess = 2usize;
-      let key = hash::SubotaiHash::random_at_distance(&id, storage::EXPIRATION_DISTANCE_THRESHOLD + excess);
+      let key = hash::SubotaiHash::random_at_distance(&id, default_config.expiration_distance_threshold + excess);
       let dummy_entry = StorageEntry::Value(hash::SubotaiHash::random());
       storage.store(key.clone(), dummy_entry.clone());
       let expiration = storage.entries_and_times.read().unwrap().get(&key).unwrap().expiration.clone();
 
       let expiration_factor = 2i64.pow(excess as u32);
-      let max_duration = time::Duration::minutes(60 * storage::BASE_EXPIRATION_TIME_HRS / expiration_factor );
-      let min_duration = time::Duration::minutes(60 * storage::BASE_EXPIRATION_TIME_HRS / expiration_factor - 1);
+      let max_duration = time::Duration::minutes(60 * default_config.base_expiration_time_hrs / expiration_factor );
+      let min_duration = time::Duration::minutes(60 * default_config.base_expiration_time_hrs / expiration_factor - 1);
       assert!(expiration <= time::SteadyTime::now() + max_duration);
       assert!(expiration >= time::SteadyTime::now() + min_duration);
    }
@@ -180,7 +187,7 @@ mod tests {
    #[test]
    fn setting_and_getting_ready_to_republish_entries() {
       let number_of_keys = 8;
-      let storage = Storage::new(hash::SubotaiHash::random());
+      let storage = Storage::new(hash::SubotaiHash::random(), Default::default());
       let dummy_keys: Vec<_> = (0..number_of_keys).map(|_| hash::SubotaiHash::random()).collect();
       let dummy_entry = StorageEntry::Value(hash::SubotaiHash::random());
 
@@ -196,8 +203,4 @@ mod tests {
       storage.mark_as_not_ready(dummy_keys.first().unwrap());
       assert_eq!(number_of_keys - 1, storage.get_all_ready_entries().len());
    }
-
 }
-
-
-

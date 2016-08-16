@@ -13,26 +13,23 @@
 //!
 //! Destroying a node automatically schedules all threads to terminate after finishing 
 //! any pending operations.
-
 pub mod receptions;
 pub use routing::NodeInfo as NodeInfo;
 pub use storage::StorageEntry as StorageEntry;
+pub use node::factory::Factory as Factory;
 
 #[cfg(test)]
 mod tests;
 mod resources;
+mod factory;
 
-use {storage, routing, rpc, bus, SubotaiResult, time, factory};
+use {storage, routing, rpc, bus, SubotaiResult, time};
 use hash::SubotaiHash;
 use std::{net, thread, sync};
 use std::time::Duration as StdDuration;
 
-/// Timeout period in seconds to stop waiting for a remote node response. 
-pub const NETWORK_TIMEOUT_S : i64 = 5;
-
 /// Size of a typical UDP socket buffer.
 pub const SOCKET_BUFFER_SIZE_BYTES : usize = 65536;
-
 const SOCKET_TIMEOUT_MS     : u64   = 200;
 const UPDATE_BUS_SIZE_BYTES : usize = 50;
 
@@ -71,6 +68,76 @@ pub enum State {
    ShuttingDown,
 }
 
+
+/// Network configuration constants. Note that for the network to function
+/// optimally, the `alpha`, `impatience`, `expiration_distance_threshold` and
+/// `base_expiration_time_hrs` must be identical for all nodes.
+///
+/// Do not set these values directly, as there is no way to initialize a node
+/// from a `Configuration` struct. Instead, use node::Factory if you want your
+/// application to use non-default network constants.
+#[derive(Clone, Debug)]
+pub struct Configuration {
+   /// Network-wide concurrency factor. It's used, for example, to decide the
+   /// number of remote nodes to interrogate concurrently when performing a 
+   /// network-wide lookup.
+   pub alpha                         : usize,
+
+   /// Impatience factor, valid in the range [0..ALPHA). When performing "waves",
+   /// the impatience factor denotes how many nodes we can give up waiting for, before
+   /// starting the next wave. 
+   ///
+   /// If we send a request to ALPHA nodes during a lookup wave, we will start
+   /// the next wave after we receive 'ALPHA - IMPATIENCE' responses.
+   pub impatience                    : usize,
+
+   /// Data structure factor. It's used to dictate the size of the internal routing
+   /// data structures (k-buckets).
+   pub k_factor                      : usize,
+
+   /// Maximum amount of eviction conflicts allowed before the node goes into
+   /// a temporary defensive mode, and starts to prioritize old contacts to new, 
+   /// potentially malicious ones.
+   pub max_conflicts                 : usize,
+
+   /// Maximum amount of storage entries (key-value or key-blob pairs). This has no
+   /// effect on the routing table size (amount of node id-address pairs), which is
+   /// dictated by the k_factor.
+   pub max_storage                   : usize,
+
+   /// Maximum size in bytes for a blob storage entry. (A blob entry consists in a 
+   /// key associated with a chunk of binary data, instead of a 160 bit value hash).
+   pub max_storage_blob_size         : usize,
+
+   /// Xor distance from a key at which point nodes will start to dramatically decrease
+   /// the expiration time for a particular storage entry.
+   pub expiration_distance_threshold : usize,
+
+   /// Base expiration time for key-value pairs. As long as the key falls within the 
+   /// expiration distance threshold, the pair will be kept for this amount of hours.
+   pub base_expiration_time_hrs      : i64,
+
+   /// Time in seconds after which it can be assumed that a remote node has failed to 
+   /// respond to a query.
+   pub network_timeout_s             : i64,
+}
+
+impl Default for Configuration {
+   fn default() -> Configuration {
+      Configuration {
+         alpha                         : 3,
+         impatience                    : 1,
+         k_factor                      : 20,
+         max_conflicts                 : 60,
+         max_storage                   : 10000,
+         max_storage_blob_size         : 1024,
+         expiration_distance_threshold : 8,
+         base_expiration_time_hrs      : 24,
+         network_timeout_s             : 5,
+      }
+   }
+}
+
 impl Node {
    /// Constructs a node with OS allocated random ports.
    pub fn new() -> SubotaiResult<Node> {
@@ -82,6 +149,11 @@ impl Node {
       &self.resources.id
    }
 
+   /// Returns the network constant strucure for this node.
+   pub fn configuration(&self) -> &Configuration {
+      &self.resources.configuration
+   }
+
    /// Returns the current state of the node.
    pub fn state(&self)-> State {
       *self.resources.state.read().unwrap()
@@ -89,13 +161,16 @@ impl Node {
 
    /// Constructs a node with a given inbound/outbound UDP port pair.
    pub fn with_ports(inbound_port: u16, outbound_port: u16) -> SubotaiResult<Node> {
+      Node::with_ports_and_configuration(inbound_port, outbound_port, Default::default())
+   }
+
+   pub fn with_ports_and_configuration(inbound_port: u16, outbound_port: u16, configuration: Configuration) -> SubotaiResult<Node> {
       let id = SubotaiHash::random();
-      let configuration: factory::Configuration = Default::default();
       
       let resources = sync::Arc::new(resources::Resources {
          id            : id.clone(),
          table         : routing::Table::new(id.clone(), configuration.clone()),
-         storage       : storage::Storage::new(id),
+         storage       : storage::Storage::new(id, configuration.clone()),
          inbound       : try!(net::UdpSocket::bind(("0.0.0.0", inbound_port))),
          outbound      : try!(net::UdpSocket::bind(("0.0.0.0", outbound_port))),
          state         : sync::RwLock::new(State::OffGrid),

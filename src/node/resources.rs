@@ -1,4 +1,4 @@
-use {factory, hash, node, routing, storage, rpc, bus, time, SubotaiError, SubotaiResult};
+use {hash, node, routing, storage, rpc, bus, time, SubotaiError, SubotaiResult};
 use std::{net, sync, cmp};
 use rpc::Rpc;
 use hash::SubotaiHash;
@@ -8,7 +8,7 @@ use node::receptions;
 ///
 /// All methods on this module are synchronous, and will wait for any
 /// remote nodes queried to reply to the RPCs sent, up to the timeout
-/// defined at `node::node::NETWORK_TIMEOUT_S`. Complex operations 
+/// defined at `node::self.configuration.network_timeout_s`. Complex operations 
 /// involving multiple nodes have longer timeouts derived from that value.
 /// The node layer above is in charge of parallelizing those operations 
 /// by spawning threads when adequate.
@@ -21,7 +21,7 @@ pub struct Resources {
    pub state         : sync::RwLock<node::State>,
    pub updates       : sync::Mutex<bus::Bus<Update>>,
    pub conflicts     : sync::Mutex<Vec<routing::EvictionConflict>>,
-   pub configuration : factory::Configuration,
+   pub configuration : node::Configuration,
 }
 
 #[derive(Clone)]
@@ -44,7 +44,7 @@ impl Resources {
       let rpc = Rpc::ping(self.local_info());
       let packet = rpc.serialize();
       let responses = self.receptions()
-         .during(time::Duration::seconds(node::NETWORK_TIMEOUT_S))
+         .during(time::Duration::seconds(self.configuration.network_timeout_s))
          .of_kind(receptions::KindFilter::PingResponse)
          .from(target.id.clone())
          .take(1);
@@ -145,7 +145,7 @@ impl Resources {
       };
 
       let rpc = Rpc::locate(self.local_info(), target.clone());
-      let timeout = time::Duration::seconds(3*node::NETWORK_TIMEOUT_S);
+      let timeout = time::Duration::seconds(3*self.configuration.network_timeout_s);
 
       self.wave(seeds, strategy, rpc, timeout)
    }
@@ -196,7 +196,7 @@ impl Resources {
       };
 
       let rpc = Rpc::probe(self.local_info(), target.clone());
-      let timeout = time::Duration::seconds(3*node::NETWORK_TIMEOUT_S);
+      let timeout = time::Duration::seconds(3*self.configuration.network_timeout_s);
 
       self.wave(seeds, strategy, rpc, timeout)
    }
@@ -250,7 +250,7 @@ impl Resources {
       };
 
       let rpc = Rpc::retrieve(self.local_info(), key.clone());
-      let timeout = time::Duration::seconds(3*node::NETWORK_TIMEOUT_S);
+      let timeout = time::Duration::seconds(3*self.configuration.network_timeout_s);
 
       self.wave(seeds, strategy, rpc, timeout)
    }
@@ -281,7 +281,7 @@ impl Resources {
          let senders: Vec<SubotaiHash> = nodes_to_query.iter().map(|info| &info.id).cloned().collect();
          let responses = self.receptions()
             .from_senders(senders)
-            .during(time::Duration::seconds(node::NETWORK_TIMEOUT_S))
+            .during(time::Duration::seconds(self.configuration.network_timeout_s))
             .take(cmp::min(nodes_to_query.len(), usize::saturating_sub(self.configuration.alpha, self.configuration.impatience)));
       
          // We query all the nodes with the wave RPC, and collect the responses, 
@@ -323,7 +323,7 @@ impl Resources {
       let mut response = self
          .receptions()
          .of_kind(receptions::KindFilter::StoreResponse)
-         .during(time::Duration::seconds(node::NETWORK_TIMEOUT_S))
+         .during(time::Duration::seconds(self.configuration.network_timeout_s))
          .filter(|rpc| rpc.successfully_stored(key))
          .take(1);
 
@@ -342,7 +342,7 @@ impl Resources {
       let rpc = Rpc::store(self.local_info(), key, entry);
       let packet = rpc.serialize();
       let mut responses = self.receptions()
-         .during(time::Duration::seconds(node::NETWORK_TIMEOUT_S))
+         .during(time::Duration::seconds(self.configuration.network_timeout_s))
          .of_kind(receptions::KindFilter::StoreResponse)
          .from(target.id.clone())
          .take(1);

@@ -1,4 +1,4 @@
-use {node, routing, time, hash, storage, factory};
+use {node, routing, time, hash, storage};
 use std::collections::VecDeque;
 use std::str::FromStr;
 use std::net;
@@ -87,7 +87,7 @@ fn finding_a_nonexisting_node_in_a_simulated_network_times_out() {
 }
 
 fn simulated_network(network_size: usize) -> VecDeque<node::Node> {
-   let cfg: factory::Configuration = Default::default();
+   let cfg: node::Configuration = Default::default();
    assert!(network_size > cfg.k_factor, "You can't build a network with so few nodes!");
 
    let nodes: VecDeque<node::Node> = (0..network_size).map(|_| { node::Node::new().unwrap() }).collect();
@@ -186,7 +186,7 @@ fn generating_too_many_conflicts_causes_the_node_to_enter_defensive_state()
 #[test]
 fn node_probing_in_simulated_network()
 {
-   let cfg: factory::Configuration = Default::default();
+   let cfg: node::Configuration = Default::default();
    let mut nodes = simulated_network(40);
    // We manually collect the info tags of all nodes.
    let mut info_nodes: Vec<routing::NodeInfo> = nodes
@@ -212,7 +212,7 @@ fn node_probing_in_simulated_network()
 #[test]
 fn node_probing_in_simulated_unresponsive_network()
 {
-   let cfg: factory::Configuration = Default::default();
+   let cfg: node::Configuration = Default::default();
    let mut nodes = simulated_network(40);
    // We manually collect the info tags of all nodes.
    let mut info_nodes: Vec<routing::NodeInfo> = nodes
