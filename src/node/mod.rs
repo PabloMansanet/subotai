@@ -118,8 +118,10 @@ pub struct Configuration {
    /// threshold allows for a leaner network.
    pub expiration_distance_threshold : usize,
 
-   /// Base expiration time for key-value pairs. As long as the key falls within the 
-   /// expiration distance threshold, the pair will be kept for this amount of hours.
+   /// Base expiration time for storage entries. Every time you call `store` on a node
+   /// that resides on a live network (i.e. is in an `OnGrid` state) you guarantee the
+   /// entry will remain in the network for this number of hours. Calling `store` again
+   /// will refresh this time.
    pub base_expiration_time_hrs      : i64,
 
    /// Time in seconds after which it can be assumed that a remote node has failed to 
