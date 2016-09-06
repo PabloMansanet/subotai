@@ -17,7 +17,7 @@ pub struct Storage {
    key_groups    : RwLock<HashMap<SubotaiHash, KeyGroup> >,
    parent_id     : SubotaiHash,
    configuration : node::Configuration,
-   size_bytes    : usize,
+   size_bytes    : RwLock<usize>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
@@ -33,17 +33,17 @@ impl Storage {
          key_groups    : RwLock::new(HashMap::with_capacity(configuration.max_storage)),
          parent_id     : parent_id,
          configuration : configuration,
-         size_bytes    : 0,
+         size_bytes    : RwLock::new(0),
       }
    }
   
    /// Returns size in bytes.
    pub fn len(&self) -> usize {
-      self.size_bytes
+      *self.size_bytes.read().unwrap()
    }
 
    pub fn is_empty(&self) -> bool {
-      self.size_bytes == 0
+      *self.size_bytes.read().unwrap() == 0
    }
 
    /// Retrieves all entries in a key_group.
@@ -76,7 +76,7 @@ impl Storage {
                return StoreResult::StorageFull;
             }
             key_group.push((expiration.clone(), entry.clone()));
-            self.size_bytes += compound_length;
+            *self.size_bytes.write().unwrap() += compound_length;
          }
       } else {
          if compound_length + self.len() > self.configuration.max_storage {
@@ -85,15 +85,15 @@ impl Storage {
          let mut key_group = KeyGroup::new();
          key_group.push((expiration.clone(), entry.clone()));
          key_groups.insert(key.clone(), key_group);
-         self.size_bytes += compound_length;
+         *self.size_bytes.write().unwrap() += compound_length;
       }
       StoreResult::Success
    }
 
    fn compound_length(entry: &StorageEntry) -> usize {
       mem::size_of::<time::Tm>() + match entry {
-         StorageEntry::Value(_) => mem::size_of::<SubotaiHash>(),
-         StorageEntry::Blob(blob) => blob.len(),
+         &StorageEntry::Value(_) => mem::size_of::<SubotaiHash>(),
+         &StorageEntry::Blob(ref blob) => blob.len(),
       }
    }
 
