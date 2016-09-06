@@ -58,6 +58,10 @@ impl Storage {
    /// Stores an entry in a key_group, with an expiration date, if it wasn't present already.
    /// If it was present, it keeps the latest expiration time.
    pub fn store(&self, key: &SubotaiHash, entry: &StorageEntry, expiration: &time::Tm) -> StoreResult {
+      if self.is_big_blob(entry) {
+         return StoreResult::BlobTooBig;
+      }
+
       // Expiration time is clamped to a reasonable value.
       let expiration = cmp::min(*expiration, time::now() + time::Duration::hours(self.configuration.base_expiration_time_hrs));
       let mut key_groups = self.key_groups.write().unwrap();
@@ -97,19 +101,17 @@ impl Storage {
       }
    }
 
-   //pub fn clear_expired_entries(&self) {
-   //   let now = time::now();
-   //   let mut extended_entries = self.extended_entries.write().unwrap();
-   //   let keys_to_remove: Vec<_>= extended_entries
-   //      .iter()
-   //      .filter_map(|(key, &ExtendedEntry{ expiration, .. })| if expiration < now { Some(key) } else { None })
-   //      .cloned()
-   //      .collect();
+   fn is_big_blob(&self, entry: &StorageEntry) -> bool {
+      match entry {
+         &StorageEntry::Blob(ref vec) => vec.len() > self.configuration.max_storage_blob_size,
+         _ => false,
+      }
+   }
 
-   //   for key in keys_to_remove {
-   //      extended_entries.remove(&key);
-   //   }
-   //}
+   pub fn clear_expired_entries(&self) {
+      let now = time::now();
+      let mut key_groups = self.key_groups.write().unwrap();
+   }
 
    ///// Marks all key-entry pairs as ready for republishing.
    //pub fn mark_all_as_ready(&self) {
