@@ -4,6 +4,8 @@ use std::collections::HashMap;
 use std::sync::RwLock;
 use std::cmp;
 
+pub mod mod2;
+
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum StorageEntry {
    Value(SubotaiHash),

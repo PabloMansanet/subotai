@@ -1,3 +1,7 @@
+//! #Factory
+//!
+//! The factory module allows you to create Subotai nodes with specific configuration options,
+//! such as network constants and different UDP ports.
 use {node, SubotaiResult};
 use std::cmp;
 
