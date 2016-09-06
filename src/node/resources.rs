@@ -386,7 +386,7 @@ impl Resources {
          rpc::Kind::Probe(ref payload)             => self.handle_probe(payload.clone(), sender),
          rpc::Kind::Store(ref payload)             => self.handle_store(payload.clone(), sender),
          rpc::Kind::Retrieve(ref payload)          => self.handle_retrieve(payload.clone(), sender),
-         rpc::Kind::RetrieveResponse(ref payload)  => self.handle_retrieve_response(payload.clone()),
+         rpc::Kind::RetrieveResponse(ref payload)  => self.handle_retrieve_response(payload.clone(), sender),
          _ => Ok(()),
       };
       self.update_table(rpc.sender.clone());
@@ -402,7 +402,10 @@ impl Resources {
    }
 
    fn handle_store(&self, payload: sync::Arc<rpc::StorePayload>,  sender: routing::NodeInfo) -> SubotaiResult<()> {
-      let store_result = self.storage.store(payload.key.clone(), payload.entry.clone(), time::Tm::from(payload.expiration.clone()));
+      let store_result = self.storage.store(payload.key.clone(), 
+                                            payload.entry.clone(),
+                                            time::Tm::from(payload.expiration.clone()),
+                                            sender.id.clone());
       let rpc = Rpc::store_response(self.local_info(), payload.key.clone(), store_result);
       let packet = rpc.serialize();
       try!(self.outbound.send_to(&packet, sender.address));
@@ -465,10 +468,10 @@ impl Resources {
       Ok(())
    }
 
-   fn handle_retrieve_response(&self, payload: sync::Arc<rpc::RetrieveResponsePayload>) -> SubotaiResult<()> {
+   fn handle_retrieve_response(&self, payload: sync::Arc<rpc::RetrieveResponsePayload>, sender: routing::NodeInfo) -> SubotaiResult<()> {
       if let rpc::RetrieveResult::Found(ref entry) = payload.result {
          // Retrieved keys are cached locally for a limited time, to guarantee succesive retrieves don't flood the network.
-         self.storage.store(payload.key_to_find.clone(), entry.clone(), time::now() + time::Duration::minutes(5));
+         self.storage.store(payload.key_to_find.clone(), entry.clone(), time::now() + time::Duration::minutes(5), sender.id.clone());
       }
       Ok(())
    }

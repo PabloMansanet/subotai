@@ -13,7 +13,7 @@
 //!   makes the network more dynamic and capable to adapt quickly, while still providing protection
 //!   against basic `DDoS` attacks in the form of a defensive state.
 #![allow(dead_code, unknown_lints, wrong_self_convention)]
-#![feature(custom_derive, plugin, vec_deque_contains)]
+#![feature(custom_derive, plugin)]
 #![plugin(serde_macros)]
 
 extern crate itertools;

@@ -11,14 +11,15 @@ pub enum StorageEntry {
 }
 
 #[derive(Debug, Clone)]
-struct EntryAndTimes {
+struct ExtendedEntry {
    entry           : StorageEntry,
    expiration      : time::Tm,
+   owner           : SubotaiHash,
    republish_ready : bool,
 }
 
 pub struct Storage {
-   entries_and_times : RwLock<HashMap<SubotaiHash, EntryAndTimes> >,
+   extended_entries  : RwLock<HashMap<SubotaiHash, ExtendedEntry> >,
    parent_id         : SubotaiHash,
    configuration     : node::Configuration,
 }
@@ -28,44 +29,67 @@ pub enum StoreResult {
    Success,
    StorageFull,
    BlobTooBig,
+   WrongOwner,
 }
 
 impl Storage {
    pub fn new(parent_id: SubotaiHash, configuration: node::Configuration) -> Storage {
       Storage {
-         entries_and_times : RwLock::new(HashMap::with_capacity(configuration.max_storage)),
+         extended_entries  : RwLock::new(HashMap::with_capacity(configuration.max_storage)),
          parent_id         : parent_id,
          configuration     : configuration,
       }
    }
    
    pub fn len(&self) -> usize {
-      self.entries_and_times.read().unwrap().len()
+      self.extended_entries.read().unwrap().len()
    }
 
    pub fn is_empty(&self) -> bool {
-      self.entries_and_times.read().unwrap().is_empty()
+      self.extended_entries.read().unwrap().is_empty()
    }
 
-   pub fn store(&self, key: SubotaiHash, entry: StorageEntry, expiration: time::Tm) -> StoreResult {
-      let mut entries_and_times = self.entries_and_times.write().unwrap();
+   pub fn store(&self, key: SubotaiHash, entry: StorageEntry, expiration: time::Tm, agent: SubotaiHash) -> StoreResult {
+      let mut extended_entries = self.extended_entries.write().unwrap();
+      let expiration = cmp::min(expiration, time::now() + time::Duration::hours(self.configuration.base_expiration_time_hrs));
 
-      // We will only store entries up to our base expiration time. (i.e. clamping to the max value)
-      let mut expiration = cmp::min(expiration, time::now() + time::Duration::hours(self.configuration.base_expiration_time_hrs));
+      if self.is_big_blob(&entry) {
+         return StoreResult::BlobTooBig;
+      }
 
-      // If we already had an entry, we keep the longest expiration time.
-      if let Some(old) = entries_and_times.remove(&key) {
-         expiration = cmp::max(expiration, old.expiration)
+      let new_extended_entry = ExtendedEntry {
+         entry           : entry,
+         expiration      : expiration,
+         owner           : agent,
+         republish_ready : false,
       };
 
-      if entries_and_times.len() >= self.configuration.max_storage {
-         StoreResult::StorageFull
-      } else if self.is_big_blob(&entry){
-         StoreResult::BlobTooBig
-      } else {
-         let entry_and_times = EntryAndTimes { entry: entry, expiration: expiration, republish_ready: false };
-         entries_and_times.insert(key.clone(), entry_and_times);
-         StoreResult::Success
+      match extended_entries.remove(&key) {
+         Some(mut present_entry) => {
+            if present_entry.owner == new_extended_entry.owner {
+               extended_entries.insert(key, new_extended_entry);
+               StoreResult::Success
+            } else {
+               let different = present_entry.entry != new_extended_entry.entry ||
+                               present_entry.expiration != new_extended_entry.expiration;
+               present_entry.republish_ready = false;
+               extended_entries.insert(key, present_entry);
+
+               if different {
+                  StoreResult::WrongOwner
+               } else {
+                  StoreResult::Success
+               }
+            }
+         }
+         None => {
+            if extended_entries.len() >= self.configuration.max_storage {
+               StoreResult::StorageFull
+            } else {
+               extended_entries.insert(key, new_extended_entry);
+               StoreResult::Success
+            }
+         }
       }
    }
 
@@ -78,7 +102,7 @@ impl Storage {
 
    /// Retrieves a particular entry given a key.
    pub fn retrieve(&self, key: &SubotaiHash) -> Option<StorageEntry> {
-      if let Some( &EntryAndTimes { ref entry, .. } ) = self.entries_and_times.read().unwrap().get(key) {
+      if let Some( &ExtendedEntry { ref entry, .. } ) = self.extended_entries.read().unwrap().get(key) {
          Some(entry.clone())
       } else {
          None
@@ -87,37 +111,37 @@ impl Storage {
 
    pub fn clear_expired_entries(&self) {
       let now = time::now();
-      let mut entries_and_times = self.entries_and_times.write().unwrap();
-      let keys_to_remove: Vec<_>= entries_and_times
+      let mut extended_entries = self.extended_entries.write().unwrap();
+      let keys_to_remove: Vec<_>= extended_entries
          .iter()
-         .filter_map(|(key, &EntryAndTimes{ expiration, .. })| if expiration < now { Some(key) } else { None })
+         .filter_map(|(key, &ExtendedEntry{ expiration, .. })| if expiration < now { Some(key) } else { None })
          .cloned()
          .collect();
 
       for key in keys_to_remove {
-         entries_and_times.remove(&key);
+         extended_entries.remove(&key);
       }
    }
 
    /// Marks all key-entry pairs as ready for republishing.
    pub fn mark_all_as_ready(&self) {
-      for (_, &mut EntryAndTimes {ref mut republish_ready, ..})  in self.entries_and_times.write().unwrap().iter_mut() {
+      for (_, &mut ExtendedEntry {ref mut republish_ready, ..})  in self.extended_entries.write().unwrap().iter_mut() {
          *republish_ready = true;
       }
    }
 
    /// Marks a particular key-entry pair as not ready for republishing.
    pub fn mark_as_not_ready(&self, key: &SubotaiHash) {
-      if let Some( &mut EntryAndTimes {ref mut republish_ready, ..}) = self.entries_and_times.write().unwrap().get_mut(key) {
+      if let Some( &mut ExtendedEntry {ref mut republish_ready, ..}) = self.extended_entries.write().unwrap().get_mut(key) {
          *republish_ready = false;
       }
    }
 
    /// Retrieves all key-entry pairs ready for republishing, together with their current expiration date
    pub fn get_all_ready_entries(&self) -> Vec<(SubotaiHash, StorageEntry, time::Tm)>  {
-      self.entries_and_times.read().unwrap().iter()
-         .filter(|&(_, &EntryAndTimes{ republish_ready, ..})| republish_ready)
-         .map(|(key, &EntryAndTimes{ ref entry, ref expiration, ..})| (key.clone(), entry.clone(), expiration.clone()))
+      self.extended_entries.read().unwrap().iter()
+         .filter(|&(_, &ExtendedEntry{ republish_ready, ..})| republish_ready)
+         .map(|(key, &ExtendedEntry{ ref entry, ref expiration, ..})| (key.clone(), entry.clone(), expiration.clone()))
          .collect()
    }
 }
@@ -128,34 +152,54 @@ mod tests {
    use {hash, time, node};
 
    #[test]
-   fn storing_and_retrieving_preserves_conservative_expiration_dates() {
+   fn only_the_owner_is_allowed_to_change_an_entry_or_increase_expiration() {
       let default_config: node::Configuration = Default::default();
       let storage = Storage::new(hash::SubotaiHash::random(), default_config.clone());
-      let dummy_key = hash::SubotaiHash::random();
-      let dummy_entry = StorageEntry::Value(hash::SubotaiHash::random());
 
-      // We start with an impossible expiration date
-      let long_expiration = time::now() + time::Duration::hours(10 * default_config.base_expiration_time_hrs);
-      let clamped_expiration = time::now() + time::Duration::hours(default_config.base_expiration_time_hrs);
-      storage.store(dummy_key.clone(), dummy_entry.clone(), long_expiration);
+      let owner = hash::SubotaiHash::random();
+      let entry = StorageEntry::Value(hash::SubotaiHash::random());
+      let key = hash::SubotaiHash::random();
+      let expiration = time::now() + time::Duration::hours(1);
 
-      // We check it gets clamped.
-      let retrieved_expiration = match storage.entries_and_times.read().unwrap().get(&dummy_key) {
-         None => panic!(),
-         Some(&super::EntryAndTimes{ref expiration, ..}) => expiration.clone(),
-      };
-      assert!(retrieved_expiration < clamped_expiration + time::Duration::minutes(1));
+      match storage.store(key.clone(), entry.clone(), expiration.clone(), owner.clone()) {
+         StoreResult::Success => (),
+         _ => panic!(),
+      }
 
-      // We try an expiration date smaller than what we have
-      let short_expiration = time::now() + time::Duration::minutes(5);
-      storage.store(dummy_key.clone(), dummy_entry.clone(), short_expiration);
+      let wrong_owner = hash::SubotaiHash::random();
+      let later_expiration   = expiration + time::Duration::hours(1);
+      let new_entry = StorageEntry::Value(hash::SubotaiHash::random());
 
-      // We check it remains long.
-      let retrieved_expiration = match storage.entries_and_times.read().unwrap().get(&dummy_key) {
-         None => panic!(),
-         Some(&super::EntryAndTimes{ref expiration, ..}) => expiration.clone(),
-      };
-      assert!(retrieved_expiration > clamped_expiration - time::Duration::minutes(1));
+      // This is fine, because even though we are a different owner, the entry data and expiration are the same.
+      match storage.store(key.clone(), entry.clone(), expiration.clone(), wrong_owner.clone()) {
+         StoreResult::Success => (),
+         _ => panic!(),
+      }
+
+      // This won't work, because as the wrong owner we can't increase the expiration date.
+      match storage.store(key.clone(), entry.clone(), later_expiration.clone(), wrong_owner.clone()) {
+         StoreResult::WrongOwner => (),
+         _ => panic!(),
+      }
+
+      // This won't work, because as the wrong owner we can't change the data.
+      match storage.store(key.clone(), new_entry.clone(), expiration.clone(), wrong_owner.clone()) {
+         StoreResult::WrongOwner => (),
+         _ => panic!(),
+      }
+
+      // This is fine, because as the right owner we can change the data.
+      match storage.store(key.clone(), new_entry.clone(), expiration.clone(), owner.clone()) {
+         StoreResult::Success => (),
+         _ => panic!(),
+      }
+      assert_eq!(storage.retrieve(&key).unwrap(), new_entry);
+
+      // This is fine, because as the owner we can increase the expiration date.
+      match storage.store(key.clone(), new_entry.clone(), later_expiration.clone(), owner.clone()) {
+         StoreResult::Success => (),
+         _ => panic!(),
+      }
    }
 
    #[test]
@@ -164,9 +208,10 @@ mod tests {
       let storage = Storage::new(hash::SubotaiHash::random(), Default::default());
       let dummy_keys: Vec<_> = (0..number_of_keys).map(|_| hash::SubotaiHash::random()).collect();
       let dummy_entry = StorageEntry::Value(hash::SubotaiHash::random());
+      let owner = hash::SubotaiHash::random();
 
       for key in dummy_keys.iter() {
-         storage.store(key.clone(), dummy_entry.clone(), time::now() + time::Duration::hours(24));
+         storage.store(key.clone(), dummy_entry.clone(), time::now() + time::Duration::hours(24), owner.clone());
       }
    
       assert_eq!(0, storage.get_all_ready_entries().len());
