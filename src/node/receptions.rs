@@ -23,6 +23,7 @@ pub struct Receptions {
    shutdown      : bool,
 }
 
+/// Filters out all RPCs except those of a particular kind.
 #[derive(Eq, PartialEq, Debug)]
 pub enum KindFilter {
    Ping,

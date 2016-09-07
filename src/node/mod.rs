@@ -13,6 +13,9 @@
 //!
 //! Destroying a node automatically schedules all threads to terminate after finishing 
 //! any pending operations.
+
+/// Allows listening to RPCs received by a node. Unnecessary for normal operation,
+/// but it can be useful for debugging your network.
 pub mod receptions;
 pub use routing::NodeInfo as NodeInfo;
 pub use storage::StorageEntry as StorageEntry;
@@ -153,6 +156,17 @@ impl Node {
       Node::with_configuration(0, 0, Default::default())
    }
 
+   /// Stores an entry in the network, refreshing its expiration time back to the base value.
+   pub fn store(&self, key: SubotaiHash, entry: StorageEntry) -> SubotaiResult<()> {
+      let expiration = time::now() + time::Duration::hours(self.resources.configuration.base_expiration_time_hrs);
+      self.resources.store(key, entry, expiration)
+   }
+
+   /// Retrieves all values associated to a key from the network.
+   pub fn retrieve(&self, key: &SubotaiHash) -> SubotaiResult<Vec<StorageEntry>> {
+      self.resources.retrieve(key)
+   }
+
    /// Returns the hash used to identify this node in the network.
    pub fn id(&self) -> &SubotaiHash {
       &self.resources.id
@@ -210,17 +224,6 @@ impl Node {
    /// Retrieves the node ID + address pair.
    pub fn local_info(&self) -> NodeInfo {
       self.resources.local_info()
-   }
-
-   /// Stores an entry in the network, refreshing its expiration time back to the base value.
-   pub fn store(&self, key: SubotaiHash, entry: StorageEntry) -> SubotaiResult<()> {
-      let expiration = time::now() + time::Duration::hours(self.resources.configuration.base_expiration_time_hrs);
-      self.resources.store(key, entry, expiration)
-   }
-
-   /// Retrieves all values associated to a key from the network.
-   pub fn retrieve(&self, key: &SubotaiHash) -> SubotaiResult<Vec<StorageEntry>> {
-      self.resources.retrieve(key)
    }
 
    fn with_configuration(inbound_port: u16, outbound_port: u16, configuration: Configuration) -> SubotaiResult<Node> {

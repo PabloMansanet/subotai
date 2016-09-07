@@ -4,13 +4,21 @@ use std::fmt;
 use bincode::serde;
 use std::error::Error;
 
+/// Subotai error type. It reports the various ways in which a hash table query may fail.
 #[derive(Debug)]
 pub enum SubotaiError {
+   /// No response from a particular remote node.
    NoResponse,
+   /// This node isn't connected to enough live nodes to be considered part of a live network,
+   /// which caused this operation to fail (i.e. the node is off grid).
    OffGridError,
+   /// The node specified wasn't found.
    NodeNotFound,
+   /// The value specified falls out of bounds of the routing table space.
    OutOfBounds,
+   /// Error during a store operation.
    StorageError,
+   /// The network is unresponsive (several RPCs have timed out).
    UnresponsiveNetwork,
    Io(io::Error),
    Deserialize(serde::DeserializeError),

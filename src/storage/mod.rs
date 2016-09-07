@@ -4,8 +4,8 @@ use std::collections::HashMap;
 use std::sync::RwLock;
 use std::cmp;
 
-/// User facing storage entry. This is the data type that can be stored and retrieved 
-/// in the Subotai network, consisting of either another hash (Value) or a binary blob.
+/// Storage entry. This is the data type that can be stored and retrieved 
+/// in the Subotai network, consisting of either another hash or a binary blob.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum StorageEntry {
    Value(SubotaiHash),
