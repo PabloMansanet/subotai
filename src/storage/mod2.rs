@@ -5,13 +5,24 @@ use std::sync::RwLock;
 use std::cmp;
 use std::mem;
 
+/// User facing storage entry. This is the data type that can be stored and retrieved 
+/// in the Subotai network, consisting of either another hash (Value) or a binary blob.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum StorageEntry {
    Value(SubotaiHash),
    Blob(Vec<u8>),
 }
 
-type KeyGroup = Vec<(time::Tm, StorageEntry)>; // expiration/entry pair
+/// Storage entry wrapper that includes management information.
+#[derive(Debug, Clone)]
+struct ExtendedEntry {
+   entry           : StorageEntry,
+   expiration      : time::Tm,
+   republish_ready : bool,
+}
+
+/// Groups of extended entries classified by key.
+type KeyGroup = Vec<ExtendedEntry>;
 
 pub struct Storage {
    key_groups    : RwLock<HashMap<SubotaiHash, KeyGroup> >,
@@ -47,7 +58,7 @@ impl Storage {
    /// Retrieves all entries in a key_group.
    pub fn retrieve(&self, key: &SubotaiHash) -> Option<Vec<StorageEntry>> {
       if let Some(key_group) = self.key_groups.read().unwrap().get(key) {
-         Some(key_group.iter().cloned().map(|pair| pair.1).collect())
+         Some(key_group.iter().cloned().map(|extended| extended.entry).collect())
       } else {
          None
       }
@@ -66,8 +77,9 @@ impl Storage {
       let mut key_groups = self.key_groups.write().unwrap();
       if key_groups.contains_key(key) {
          let key_group = key_groups.get_mut(key).unwrap();
-         let already_existed = if let Some(preexisting_pair) = key_group.iter_mut().find(|stored_pair| stored_pair.1 == *entry) {
-            preexisting_pair.0 = cmp::max(preexisting_pair.0, expiration); // Take the latest expiration time.
+         let already_existed = if let Some(preexisting_pair) = key_group.iter_mut().find(|stored_pair| stored_pair.entry == *entry) {
+            preexisting_pair.expiration = cmp::max(preexisting_pair.expiration, expiration); // Take the latest expiration time.
+            preexisting_pair.republish_ready = false;
             true
          } else {
             false
@@ -76,14 +88,24 @@ impl Storage {
             if self.len() > self.configuration.max_storage {
                return StoreResult::StorageFull;
             }
-            key_group.push((expiration.clone(), entry.clone()));
+            let new_entry = ExtendedEntry {
+               entry           : entry.clone(),
+               expiration      : expiration.clone(),
+               republish_ready : false,
+            };
+            key_group.push(new_entry);
          }
       } else {
          if self.len() > self.configuration.max_storage {
             return StoreResult::StorageFull;
          }
          let mut key_group = KeyGroup::new();
-         key_group.push((expiration.clone(), entry.clone()));
+         let new_entry = ExtendedEntry {
+               entry           : entry.clone(),
+               expiration      : expiration.clone(),
+               republish_ready : false,
+         };
+         key_group.push(new_entry);
          key_groups.insert(key.clone(), key_group);
       }
       StoreResult::Success
@@ -100,7 +122,7 @@ impl Storage {
       let now = time::now();
       let mut key_groups = self.key_groups.write().unwrap();
       for mut key_group in key_groups.values_mut() {
-         key_group.retain(|&(time, _)| now < time);
+         key_group.retain(|&ExtendedEntry{ expiration, .. }| now < expiration);
       }
 
       // We clear the keygroups that have run out of entries.
@@ -115,7 +137,7 @@ impl Storage {
       }
    }
 
-   ///// Marks all key-entry pairs as ready for republishing.
+   // Marks all key-entry pairs as ready for republishing.
    //pub fn mark_all_as_ready(&self) {
    //   for (_, &mut ExtendedEntry {ref mut republish_ready, ..})  in self.extended_entries.write().unwrap().iter_mut() {
    //      *republish_ready = true;
