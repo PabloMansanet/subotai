@@ -17,7 +17,6 @@ pub struct Storage {
    key_groups    : RwLock<HashMap<SubotaiHash, KeyGroup> >,
    parent_id     : SubotaiHash,
    configuration : node::Configuration,
-   size_bytes    : RwLock<usize>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
@@ -33,17 +32,16 @@ impl Storage {
          key_groups    : RwLock::new(HashMap::with_capacity(configuration.max_storage)),
          parent_id     : parent_id,
          configuration : configuration,
-         size_bytes    : RwLock::new(0),
       }
    }
   
-   /// Returns size in bytes.
+   /// Returns number of entries.
    pub fn len(&self) -> usize {
-      *self.size_bytes.read().unwrap()
+      self.key_groups.read().unwrap().values().flat_map(|group| group.iter()).count()
    }
 
    pub fn is_empty(&self) -> bool {
-      *self.size_bytes.read().unwrap() == 0
+      self.len() == 0
    }
 
    /// Retrieves all entries in a key_group.
@@ -64,41 +62,31 @@ impl Storage {
 
       // Expiration time is clamped to a reasonable value.
       let expiration = cmp::min(*expiration, time::now() + time::Duration::hours(self.configuration.base_expiration_time_hrs));
-      let mut key_groups = self.key_groups.write().unwrap();
-      let compound_length = Storage::compound_length(entry);
 
+      let mut key_groups = self.key_groups.write().unwrap();
       if key_groups.contains_key(key) {
          let key_group = key_groups.get_mut(key).unwrap();
          let already_existed = if let Some(preexisting_pair) = key_group.iter_mut().find(|stored_pair| stored_pair.1 == *entry) {
-            preexisting_pair.0 = expiration.clone();
+            preexisting_pair.0 = cmp::max(preexisting_pair.0, expiration); // Take the latest expiration time.
             true
          } else {
             false
          };
          if !already_existed {
-            if compound_length + self.len() > self.configuration.max_storage {
+            if self.len() > self.configuration.max_storage {
                return StoreResult::StorageFull;
             }
             key_group.push((expiration.clone(), entry.clone()));
-            *self.size_bytes.write().unwrap() += compound_length;
          }
       } else {
-         if compound_length + self.len() > self.configuration.max_storage {
+         if self.len() > self.configuration.max_storage {
             return StoreResult::StorageFull;
          }
          let mut key_group = KeyGroup::new();
          key_group.push((expiration.clone(), entry.clone()));
          key_groups.insert(key.clone(), key_group);
-         *self.size_bytes.write().unwrap() += compound_length;
       }
       StoreResult::Success
-   }
-
-   fn compound_length(entry: &StorageEntry) -> usize {
-      mem::size_of::<time::Tm>() + match entry {
-         &StorageEntry::Value(_) => mem::size_of::<SubotaiHash>(),
-         &StorageEntry::Blob(ref blob) => blob.len(),
-      }
    }
 
    fn is_big_blob(&self, entry: &StorageEntry) -> bool {
@@ -111,6 +99,20 @@ impl Storage {
    pub fn clear_expired_entries(&self) {
       let now = time::now();
       let mut key_groups = self.key_groups.write().unwrap();
+      for mut key_group in key_groups.values_mut() {
+         key_group.retain(|&(time, _)| now < time);
+      }
+
+      // We clear the keygroups that have run out of entries.
+      let empty_keys: Vec<_> = key_groups
+         .iter()
+         .filter_map(|(key, group)| if group.is_empty() { Some(key) } else { None })
+         .cloned()
+         .collect();
+
+      for key in empty_keys {
+         key_groups.remove(&key);
+      }
    }
 
    ///// Marks all key-entry pairs as ready for republishing.
