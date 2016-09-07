@@ -247,9 +247,9 @@ fn store_retrieve_in_simulated_network()
    println!("Before first store");
    head.store(key.clone(), entry.clone()).unwrap();
    println!("After first store");
-   let retrieved_entry = tail.retrieve(&key).unwrap();
+   let retrieved_entries = tail.retrieve(&key).unwrap();
    println!("After first retrieve");
-   assert_eq!(entry, retrieved_entry);
+   assert_eq!(entry, retrieved_entries[0]);
 
    let key = hash::SubotaiHash::random();
    let blob: Vec<u8> = vec![0x00, 0x01, 0x02];
@@ -258,9 +258,9 @@ fn store_retrieve_in_simulated_network()
    println!("Before second store");
    head.store(key.clone(), entry.clone()).unwrap();
    println!("After second store");
-   let retrieved_entry = tail.retrieve(&key).unwrap();
+   let retrieved_entries = tail.retrieve(&key).unwrap();
    println!("After second retrieve");
-   assert_eq!(entry, retrieved_entry);
+   assert_eq!(entry, retrieved_entries[0]);
 }
 
 fn node_info_no_net(id : hash::SubotaiHash) -> routing::NodeInfo {

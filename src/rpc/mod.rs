@@ -120,10 +120,10 @@ impl Rpc {
 
    /// Reports whether the RPC is a RetrieveResponse that found
    /// a particular key.
-   pub fn successfully_retrieved(&self, key: &SubotaiHash) -> Option<storage::StorageEntry> {
+   pub fn successfully_retrieved(&self, key: &SubotaiHash) -> Option<Vec<storage::StorageEntry>> {
       if let Kind::RetrieveResponse(ref payload) = self.kind {
          match payload.result {
-            RetrieveResult::Found(ref entry) if &payload.key_to_find == key => return Some(entry.clone()),
+            RetrieveResult::Found(ref entries) if &payload.key_to_find == key => return Some(entries.clone()),
             _ => return None,
          }
       }
@@ -205,7 +205,7 @@ pub struct LocateResponsePayload {
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
 pub enum RetrieveResult {
-   Found(storage::StorageEntry),
+   Found(Vec<storage::StorageEntry>),
    Closest(Vec<routing::NodeInfo>),
 }
 

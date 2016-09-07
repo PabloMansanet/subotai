@@ -206,10 +206,10 @@ impl Resources {
       self.wave(seeds, strategy, rpc, timeout)
    }
 
-   pub fn retrieve(&self, key: &SubotaiHash) -> SubotaiResult<storage::StorageEntry> {
+   pub fn retrieve(&self, key: &SubotaiHash) -> SubotaiResult<Vec<storage::StorageEntry>> {
       // If the value is already present in our table, we are done early.
-      if let Some(entry) = self.storage.retrieve(key) {
-         return Ok(entry);
+      if let Some(entries) = self.storage.retrieve(key) {
+         return Ok(entries);
       }
 
       // We start with the closest K nodes we know about.
@@ -221,7 +221,7 @@ impl Resources {
       let seeds: Vec<_> = closest.iter().cloned().take(self.configuration.alpha).collect();
       let mut cache_candidate: Option<routing::NodeInfo> = None;
 
-      let strategy = |responses: &[rpc::Rpc], queried: &[routing::NodeInfo]| -> WaveStrategy<storage::StorageEntry> {
+      let strategy = |responses: &[rpc::Rpc], queried: &[routing::NodeInfo]| -> WaveStrategy<Vec<storage::StorageEntry>> {
          // If any parallel process, or the response from a slow node has retrieved the key,
          // we need to break out early
          if let Some(retrieved) = self.storage.retrieve(key) {
@@ -244,13 +244,15 @@ impl Resources {
          // The cache candidate is the closest node that hasn't found the value.
          cache_candidate = closest.first().cloned();
        
-         // If we found it, we cache the value and we're done.
+         // If we found it, we cache the values and we're done.
          if let Some(retrieved) = responses.iter().filter_map(|rpc| rpc.successfully_retrieved(key)).next() {
             if let Some(ref candidate) = cache_candidate {
                let expiration = self.calculate_cache_expiration(&candidate.id, &key);
-               let rpc = Rpc::store(self.local_info(), key.clone(), retrieved.clone(), rpc::SerializableTime::from(expiration));
-               let packet = rpc.serialize();
-               let _ = self.outbound.send_to(&packet, candidate.address);
+               for entry in &retrieved {
+                  let rpc = Rpc::store(self.local_info(), key.clone(), entry.clone(), rpc::SerializableTime::from(expiration));
+                  let packet = rpc.serialize();
+                  let _ = self.outbound.send_to(&packet, candidate.address);
+               }
             }
             return WaveStrategy::Halt(retrieved);
          }
@@ -386,7 +388,7 @@ impl Resources {
          rpc::Kind::Probe(ref payload)             => self.handle_probe(payload.clone(), sender),
          rpc::Kind::Store(ref payload)             => self.handle_store(payload.clone(), sender),
          rpc::Kind::Retrieve(ref payload)          => self.handle_retrieve(payload.clone(), sender),
-         rpc::Kind::RetrieveResponse(ref payload)  => self.handle_retrieve_response(payload.clone(), sender),
+         rpc::Kind::RetrieveResponse(ref payload)  => self.handle_retrieve_response(payload.clone()),
          _ => Ok(()),
       };
       self.update_table(rpc.sender.clone());
@@ -402,10 +404,9 @@ impl Resources {
    }
 
    fn handle_store(&self, payload: sync::Arc<rpc::StorePayload>,  sender: routing::NodeInfo) -> SubotaiResult<()> {
-      let store_result = self.storage.store(payload.key.clone(), 
-                                            payload.entry.clone(),
-                                            time::Tm::from(payload.expiration.clone()),
-                                            sender.id.clone());
+      let store_result = self.storage.store(&payload.key, 
+                                            &payload.entry,
+                                            &time::Tm::from(payload.expiration.clone()));
       let rpc = Rpc::store_response(self.local_info(), payload.key.clone(), store_result);
       let packet = rpc.serialize();
       try!(self.outbound.send_to(&packet, sender.address));
@@ -468,10 +469,12 @@ impl Resources {
       Ok(())
    }
 
-   fn handle_retrieve_response(&self, payload: sync::Arc<rpc::RetrieveResponsePayload>, sender: routing::NodeInfo) -> SubotaiResult<()> {
-      if let rpc::RetrieveResult::Found(ref entry) = payload.result {
+   fn handle_retrieve_response(&self, payload: sync::Arc<rpc::RetrieveResponsePayload>) -> SubotaiResult<()> {
+      if let rpc::RetrieveResult::Found(ref entries) = payload.result {
          // Retrieved keys are cached locally for a limited time, to guarantee succesive retrieves don't flood the network.
-         self.storage.store(payload.key_to_find.clone(), entry.clone(), time::now() + time::Duration::minutes(5), sender.id.clone());
+         for entry in entries {
+            self.storage.store(&payload.key_to_find, entry, &(time::now() + time::Duration::minutes(5)));
+         }
       }
       Ok(())
    }

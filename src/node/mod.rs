@@ -218,8 +218,8 @@ impl Node {
       self.resources.store(key, entry, expiration)
    }
 
-   /// Retrieves a value from the network, given a key.
-   pub fn retrieve(&self, key: &SubotaiHash) -> SubotaiResult<StorageEntry> {
+   /// Retrieves all values associated to a key from the network.
+   pub fn retrieve(&self, key: &SubotaiHash) -> SubotaiResult<Vec<StorageEntry>> {
       self.resources.retrieve(key)
    }
 
