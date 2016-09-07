@@ -190,6 +190,23 @@ mod tests {
    }
 
    #[test]
+   fn retrieving_all_ready_entries_across_keys() {
+      let storage = default_storage();
+      let key_alpha = SubotaiHash::random();
+      let key_beta = SubotaiHash::random();
+      let expiration = time::now() + time::Duration::minutes(30);
+
+      storage.store(&key_alpha, &StorageEntry::Value(SubotaiHash::random()), &expiration);
+      storage.store(&key_alpha, &StorageEntry::Value(SubotaiHash::random()), &expiration);
+      storage.store(&key_beta, &StorageEntry::Value(SubotaiHash::random()), &expiration);
+
+      // Not ready by default
+      assert_eq!(storage.get_all_ready_entries().len(), 0);
+      storage.mark_all_as_ready();
+      assert_eq!(storage.get_all_ready_entries().len(), 3);
+  }
+
+   #[test]
    fn storing_preexisting_entry_updates_to_max_expiration() {
       let now = time::now();
       let storage = default_storage();
@@ -248,7 +265,6 @@ mod tests {
       assert!(storage.retrieve(&key_beta).is_none());
       assert!(storage.retrieve(&key_alpha).is_some());
    }
-
 
    fn default_storage() -> Storage {
       let default_config: node::Configuration = Default::default();
