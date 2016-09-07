@@ -3,7 +3,6 @@ use hash::SubotaiHash;
 use std::collections::HashMap;
 use std::sync::RwLock;
 use std::cmp;
-use std::mem;
 
 /// User facing storage entry. This is the data type that can be stored and retrieved 
 /// in the Subotai network, consisting of either another hash (Value) or a binary blob.
@@ -65,7 +64,7 @@ impl Storage {
    }
 
    /// Stores an entry in a key_group, with an expiration date, if it wasn't present already.
-   /// If it was present, it keeps the latest expiration time.
+   /// If it was present, it keeps the latest expiration time and marks as not ready for republishing.
    pub fn store(&self, key: &SubotaiHash, entry: &StorageEntry, expiration: &time::Tm) -> StoreResult {
       if self.is_big_blob(entry) {
          return StoreResult::BlobTooBig;
@@ -137,27 +136,28 @@ impl Storage {
       }
    }
 
-   // Marks all key-entry pairs as ready for republishing.
-   //pub fn mark_all_as_ready(&self) {
-   //   for (_, &mut ExtendedEntry {ref mut republish_ready, ..})  in self.extended_entries.write().unwrap().iter_mut() {
-   //      *republish_ready = true;
-   //   }
-   //}
+   ///Marks all entries as ready for republishing.
+   pub fn mark_all_as_ready(&self) {
+      let mut key_groups = self.key_groups.write().unwrap();
+      let extended_entries = key_groups.values_mut().flat_map(|group| group.iter_mut());
+      for &mut ExtendedEntry {ref mut republish_ready, ..} in extended_entries {
+         *republish_ready = true;
+      }
+   }
 
-   ///// Marks a particular key-entry pair as not ready for republishing.
-   //pub fn mark_as_not_ready(&self, key: &SubotaiHash) {
-   //   if let Some( &mut ExtendedEntry {ref mut republish_ready, ..}) = self.extended_entries.write().unwrap().get_mut(key) {
-   //      *republish_ready = false;
-   //   }
-   //}
-
-   ///// Retrieves all key-entry pairs ready for republishing, together with their current expiration date
-   //pub fn get_all_ready_entries(&self) -> Vec<(SubotaiHash, StorageEntry, time::Tm)>  {
-   //   self.extended_entries.read().unwrap().iter()
-   //      .filter(|&(_, &ExtendedEntry{ republish_ready, ..})| republish_ready)
-   //      .map(|(key, &ExtendedEntry{ ref entry, ref expiration, ..})| (key.clone(), entry.clone(), expiration.clone()))
-   //      .collect()
-   //}
+   /// Retrieves all key-entry pairs ready for republishing, together with their current expiration date
+   pub fn get_all_ready_entries(&self) -> Vec<(SubotaiHash, StorageEntry, time::Tm)>  {
+      let key_groups = self.key_groups.read().unwrap();
+      let mut all_ready_entries = Vec::<(SubotaiHash, StorageEntry, time::Tm)>::new();
+      for (key, group) in key_groups.iter() {
+         let mut ready_entries_in_group: Vec<(SubotaiHash, StorageEntry, time::Tm)> = group
+         .iter()
+         .filter_map(|ext| if ext.republish_ready { Some((key.clone(), ext.entry.clone(), ext.expiration.clone())) } else { None } )
+         .collect();
+         all_ready_entries.append(&mut ready_entries_in_group);
+      }
+      all_ready_entries
+   }
 }
 
 #[cfg(test)]
