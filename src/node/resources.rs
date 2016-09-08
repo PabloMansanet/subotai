@@ -3,6 +3,7 @@ use std::{net, sync, cmp};
 use rpc::Rpc;
 use hash::SubotaiHash;
 use node::receptions;
+use std::str::FromStr;
 
 /// Node resources for synchronous operations.
 ///
@@ -39,16 +40,17 @@ impl Resources {
       }
    }
 
-   /// Pings a node, blocking until ping response.
-   pub fn ping(&self, target: &routing::NodeInfo) -> SubotaiResult<()> {
+   /// Pings a node via its IP address, blocking until ping response.
+   pub fn ping(&self, target: &net::SocketAddr) -> SubotaiResult<()> {
       let rpc = Rpc::ping(self.local_info());
       let packet = rpc.serialize();
       let responses = self.receptions()
          .during(time::Duration::seconds(self.configuration.network_timeout_s))
          .of_kind(receptions::KindFilter::PingResponse)
-         .from(target.id.clone())
+         .filter(|rpc| rpc.sender.address.ip() == target.ip() || 
+                       target.ip() == net::IpAddr::from_str("0.0.0.0").unwrap())
          .take(1);
-      try!(self.outbound.send_to(&packet, target.address));
+      try!(self.outbound.send_to(&packet, target));
 
       match responses.count() {
          1 => Ok(()),
@@ -57,10 +59,10 @@ impl Resources {
    }
 
    /// Sends a ping and doesn't wait for a response. Used by the maintenance threads.
-   pub fn ping_and_forget(&self, target: &routing::NodeInfo) -> SubotaiResult<()> {
+   pub fn ping_and_forget(&self, target: &net::SocketAddr) -> SubotaiResult<()> {
       let rpc = Rpc::ping(self.local_info());
       let packet = rpc.serialize();
-      try!(self.outbound.send_to(&packet, target.address));
+      try!(self.outbound.send_to(&packet, target));
       Ok(())
    }
 
@@ -119,7 +121,7 @@ impl Resources {
       // of. We define a strategy method for such a wave.
       let strategy = |responses: &[rpc::Rpc], queried: &[routing::NodeInfo]| -> WaveStrategy<routing::NodeInfo> {
          // If we found it, we're done.
-         if let Some(found) = responses.iter().filter_map(|rpc| rpc.successfuly_located(target)).next() {
+         if let Some(found) = responses.iter().filter_map(|rpc| rpc.successfully_located(target)).next() {
             return WaveStrategy::Halt(found);
          }
 
@@ -277,7 +279,7 @@ impl Resources {
       let adjusted_distance  = usize::saturating_sub(distance, self.configuration.expiration_distance_threshold) as u32;
       let clamped_distance = cmp::min(16, adjusted_distance);
       let expiration_factor = 2i64.pow(clamped_distance);
-      time::now() + time::Duration::minutes(60 * self.configuration.base_expiration_time_hrs / expiration_factor)
+      time::now() + time::Duration::minutes(self.configuration.base_cache_time_mins / expiration_factor)
    }
 
    /// Wave operation. Contacts nodes from a list by sending a specific RPC. Then, it 

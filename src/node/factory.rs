@@ -115,6 +115,17 @@ impl Factory {
       self.configuration.base_expiration_time_hrs = base_expiration_time_hrs;
       self
    }
+
+   /// Base expiration time for cached storage entries. When several nodes attempt to 
+   /// retrieve the same entry, it is cached at progressively longer distances from the 
+   /// owner. This will not prolong the overall lifespan of the entry because cached
+   /// entries do not live long enough to be republished.
+   ///
+   /// Note: Values will be clamped to always be smaller than 1 hour.
+   pub fn base_cache_time_mins(mut self, base_cache_time_mins: i64) -> Self {
+      self.configuration.base_cache_time_mins = cmp::min(59i64, base_cache_time_mins);
+      self
+   }
 }
 
 #[cfg(test)]
@@ -125,5 +136,11 @@ mod tests {
    fn impatience_always_lower_than_alpha() {
       let factory = Factory::new().alpha(5).impatience(10);
       assert_eq!(factory.configuration.impatience, 4);
+   }
+
+   #[test]
+   fn base_cached_expiration_always_lower_than_hour() {
+      let factory = Factory::new().base_cache_time_mins(61);
+      assert_eq!(factory.configuration.base_cache_time_mins, 59);
    }
 }

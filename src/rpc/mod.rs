@@ -96,7 +96,7 @@ impl Rpc {
 
    /// Reports whether the RPC is a LocateResponse that found
    /// a particular node. If it was, returns the node.
-   pub fn successfuly_located(&self, id: &SubotaiHash) -> Option<routing::NodeInfo> {
+   pub fn successfully_located(&self, id: &SubotaiHash) -> Option<routing::NodeInfo> {
       if let Kind::LocateResponse(ref payload) = self.kind {
          match payload.result {
             routing::LookupResult::Found(ref node) if &payload.id_to_find == id => return Some(node.clone()),

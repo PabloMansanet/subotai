@@ -11,7 +11,7 @@ pub const TRIES: u8 = 5;
 fn node_ping() {
    let alpha = node::Node::new().unwrap();
    let beta  = node::Node::new().unwrap();
-   let beta_seed = beta.resources.local_info();
+   let beta_seed = beta.resources.local_info().address;
    let span = time::Duration::seconds(1);
 
    // Bootstrapping alpha:
@@ -28,7 +28,7 @@ fn node_ping() {
       .of_kind(receptions::KindFilter::Ping);
 
    // Alpha pings beta.
-   assert!(alpha.resources.ping(&beta.local_info()).is_ok());
+   assert!(alpha.resources.ping(&beta.local_info().address).is_ok());
    assert_eq!(1, beta_receptions.count());
 }
 
@@ -94,7 +94,7 @@ fn simulated_network(network_size: usize) -> VecDeque<node::Node> {
    {
       let origin = nodes.front().unwrap();
       for node in nodes.iter().skip(1) {
-         node.bootstrap(origin.resources.local_info()).unwrap();
+         node.bootstrap(origin.resources.local_info().address).unwrap();
       }
       for node in nodes.iter() {
          node.wait_for_state(node::State::OnGrid);

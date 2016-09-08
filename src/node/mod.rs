@@ -127,6 +127,12 @@ pub struct Configuration {
    /// will refresh this time.
    pub base_expiration_time_hrs      : i64,
 
+   /// Base expiration time for cached storage entries. When several nodes attempt to 
+   /// retrieve the same entry, it is cached at progressively longer distances from the 
+   /// owner. This will not prolong the overall lifespan of the entry because cached
+   /// entries do not live long enough to be republished.
+   pub base_cache_time_mins           : i64,
+
    /// Time in seconds after which it can be assumed that a remote node has failed to 
    /// respond to a query.
    pub network_timeout_s             : i64,
@@ -143,6 +149,7 @@ impl Default for Configuration {
          max_storage_blob_size         : 1024,
          expiration_distance_threshold : 3,
          base_expiration_time_hrs      : 24,
+         base_cache_time_mins          : 30,
          network_timeout_s             : 5,
       }
    }
@@ -188,11 +195,11 @@ impl Node {
       self.resources.receptions()
    }
 
-   /// Bootstraps the node from a seed. Returns Ok(()) if the seed has
-   /// been reached and the asynchronous bootstrap process has started.
-   /// However, it might take a bit for the node to become alive (use 
-   /// node::wait_until_state to block until it's alive, if necessary).
-   pub fn bootstrap(&self, seed: NodeInfo) -> SubotaiResult<()> {
+   /// Bootstraps the node from a seed IP:port pair. Returns Ok(()) if the seed has
+   /// been reached and the asynchronous bootstrap process has started  However, it 
+   /// might take a bit for the node to become alive (use node::wait_until_state to 
+   /// block until it's alive, if necessary).
+   pub fn bootstrap(&self, seed: net::SocketAddr) -> SubotaiResult<()> {
       try!(self.resources.ping(&seed));
       let bootstrap_resources = self.resources.clone();
       thread::spawn(move || {
@@ -329,7 +336,7 @@ impl Node {
 
             // We ping the evicted nodes for all conflicts that remain.
             for conflict in conflicts.iter_mut() {
-               resources.ping_and_forget(&conflict.evicted);
+               resources.ping_and_forget(&conflict.evicted.address);
                conflict.times_pinged += 1;
             }
             conflicts.is_empty()
