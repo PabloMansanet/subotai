@@ -34,6 +34,7 @@ extern crate rand;
 extern crate bincode;
 extern crate bus;
 extern crate time;
+extern crate sha1;
 
 pub mod node;
 pub mod hash;

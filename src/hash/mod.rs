@@ -4,6 +4,7 @@ use std::ops::BitXor;
 use std::fmt;
 use std::fmt::Write;
 use std::cmp::{PartialOrd, Ordering};
+use sha1;
 
 /// Hash length in bits. Generally 160 for Kademlia variants.
 pub const HASH_SIZE : usize = 160;
@@ -13,6 +14,8 @@ pub const HASH_SIZE_BYTES : usize = HASH_SIZE / 8;
 ///
 /// We aren't interested in strong cryptography, but rather
 /// a simple way to generate `HASH_SIZE` bit key identifiers.
+///
+/// Subotai hashes can be generated randomly or through sha1.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct SubotaiHash {
    pub raw : [u8; HASH_SIZE_BYTES],
@@ -29,6 +32,16 @@ impl SubotaiHash {
       let mut hash = SubotaiHash::blank();
       thread_rng().fill_bytes(&mut hash.raw);
       hash
+   }
+
+   /// Generates a SHA-1 hash from a string.
+   pub fn sha1(data: &str) -> SubotaiHash {
+      let mut m = sha1::Sha1::new();
+      m.reset();
+      m.update(data.as_bytes());
+      SubotaiHash {
+         raw: m.digest().bytes(),
+      }
    }
 
    /// Provides an iterator through the indices
