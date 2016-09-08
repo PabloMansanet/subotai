@@ -18,7 +18,7 @@
 //!
 //! * **Impatient**: Subotai is "impatient", in that it will attempt to never wait for responses from
 //! an unresponsive node. Queries are sent in parallel where possible, and processes continue when 
-//! the fastest nodes have responded.
+//! a subset of nodes have responded.
 //!
 //! Subotai supports automatic key republishing, providing a good guarantee that an entry will remain
 //! in the network until a configurable expiration date. Manually storing the entry in the network

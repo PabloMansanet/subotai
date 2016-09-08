@@ -199,8 +199,8 @@ impl Node {
    /// been reached and the asynchronous bootstrap process has started  However, it 
    /// might take a bit for the node to become alive (use node::wait_until_state to 
    /// block until it's alive, if necessary).
-   pub fn bootstrap(&self, seed: net::SocketAddr) -> SubotaiResult<()> {
-      try!(self.resources.ping(&seed));
+   pub fn bootstrap(&self, seed: &net::SocketAddr) -> SubotaiResult<()> {
+      try!(self.resources.ping(seed));
       let bootstrap_resources = self.resources.clone();
       thread::spawn(move || {
          for _ in 0..BOOTSTRAP_TRIES {
