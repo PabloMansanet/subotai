@@ -13,7 +13,7 @@
    makes the network more dynamic and capable to adapt quickly, while still providing protection
    against basic `DDoS` attacks in the form of a defensive state.
 
- * **Flexible storage**: Any key in the key space can hold any number of different entries with
+ * **Flexible storage**: Every key in the key space can hold any number of different entries with
    independent expiration times. 
 
  * **Impatient**: Subotai is "impatient", in that it will attempt to never wait for responses from
@@ -68,3 +68,14 @@ fn main() {
    assert_eq!(*retrieved_entries.first().unwrap(), node::StorageEntry::Blob(expected_data));
 }
 ```
+
+# State of the Project
+
+Subotai is feature complete, but in early stages of testing. I focused on making the API as stable 
+as possible (partly by handling all configuration through a factory, to prevent new configuration options 
+from becoming breaking changes) and providing a baseline of features for practical applications to be 
+built on top of it. 
+
+Even though every feature is unit tested, the network hasn't yet been tested in real world 
+conditions. I'd really appreciate any experiments! Just make sure not to use it for anything critical
+just yet :).
