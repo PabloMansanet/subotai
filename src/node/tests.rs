@@ -15,7 +15,7 @@ fn node_ping() {
    let span = time::Duration::seconds(1);
 
    // Bootstrapping alpha:
-   assert!(alpha.bootstrap(beta_seed).is_ok());
+   assert!(alpha.bootstrap(&beta_seed).is_ok());
    
    match alpha.state() {
       node::State::OffGrid => (), 
@@ -94,7 +94,7 @@ fn simulated_network(network_size: usize) -> VecDeque<node::Node> {
    {
       let origin = nodes.front().unwrap();
       for node in nodes.iter().skip(1) {
-         node.bootstrap(origin.resources.local_info().address).unwrap();
+         node.bootstrap(&origin.resources.local_info().address).unwrap();
       }
       for node in nodes.iter() {
          node.wait_for_state(node::State::OnGrid);

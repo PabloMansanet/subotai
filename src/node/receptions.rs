@@ -137,7 +137,7 @@ mod tests {
     fn produces_rpcs_but_not_ticks() {
        let alpha = node::Node::new().unwrap();
        let beta = node::Node::new().unwrap();
-       alpha.bootstrap(beta.resources.local_info().address).unwrap();
+       alpha.bootstrap(&beta.resources.local_info().address).unwrap();
 
        assert_eq!(alpha.resources.table.len(), 2); // One for self, and one for beta
        let beta_receptions = beta
@@ -166,8 +166,8 @@ mod tests {
          .from_senders(allowed)
          .of_kind(KindFilter::Ping);
 
-       assert!(receiver.bootstrap(alpha.resources.local_info().address).is_ok());
-       assert!(receiver.bootstrap(beta.resources.local_info().address).is_ok());
+       assert!(receiver.bootstrap(&alpha.resources.local_info().address).is_ok());
+       assert!(receiver.bootstrap(&beta.resources.local_info().address).is_ok());
 
        assert!(alpha.resources.ping(&receiver.local_info().address).is_ok());
        assert!(beta.resources.ping(&receiver.local_info().address).is_ok());
