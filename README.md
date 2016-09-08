@@ -26,19 +26,17 @@
 
  Subotai also supports caching to balance intense traffic around a given key.
 
-# Usage
+# How to use
 
 Let's say we have this code running on a machine:
 
 ```rust
-# Usage
-
 fn main() {
    let node = node::Node::new().unwrap();
 
    // We join the network through the address of any live node.
-   let node_seed_address = net::SocketAddr::from_str("192.168.1.100:50000").unwrap();
-   node.bootstrap(&node_seed_address);
+   let seed = net::SocketAddr::from_str("192.168.1.100:50000").unwrap();
+   node.bootstrap(&seed);
 
    // We store a key->data pair.
    let my_key = hash::SubotaiHash::sha1("example_key");
@@ -57,8 +55,8 @@ fn main() {
    let node = node::Node::new().unwrap();
 
    // We join the same network (can be on a different node).
-   let node_seed_address = net::SocketAddr::from_str("192.168.1.230:40000").unwrap();
-   node.bootstrap(&node_seed_address);
+   let seed = net::SocketAddr::from_str("192.168.1.230:40000").unwrap();
+   node.bootstrap(&seed);
 
    // We retrieve all entries for the same key.
    let my_key = hash::SubotaiHash::sha1("example_key");
