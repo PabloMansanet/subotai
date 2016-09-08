@@ -3,8 +3,7 @@
  Subotai is a Kademlia based distributed hash table. It's designed to be easy to use, safe
  and quick. Here are some of the ideas that differentiate it from other DHTs:
 
- * **Externally synchronous, internally concurrent**: I find blocking calls make it easier 
-   to reason about networking code than callbacks. All public methods are blocking and return
+ * **Externally synchronous, internally concurrent**: All public methods are blocking and return
    a sane result or an explicit timeout. Internally however, subotai is fully concurrent,
    and parallel operations will often help each other complete.
 
