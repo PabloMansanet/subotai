@@ -6,12 +6,25 @@
 //! * **Externally synchronous, internally concurrent**: I find blocking calls make it easier 
 //!   to reason about networking code than callbacks. All public methods are blocking and return
 //!   a sane result or an explicit timeout. Internally however, subotai is fully concurrent,
-//!   and parallel operations will often help each other complete!
+//!   and parallel operations will often help each other complete.
 //!
 //! * **Introduce nodes first, resolve conflicts later**: Subotai differs to the original Kademlia
 //!   implementation in that it gives temporary priority to newer contacts for full buckets. This
 //!   makes the network more dynamic and capable to adapt quickly, while still providing protection
 //!   against basic `DDoS` attacks in the form of a defensive state.
+//!
+//! * **Flexible storage**: Any key in the key space can hold any number of different entries with
+//!   independent expiration times. 
+//!
+//! * **Impatient**: Subotai is "impatient", in that it will attempt to never wait for responses from
+//! an unresponsive node. Queries are sent in parallel where possible, and processes continue when 
+//! the fastest nodes have responded.
+//!
+//! Subotai supports automatic key republishing, providing a good guarantee that an entry will remain
+//! in the network until a configurable expiration date. Manually storing the entry in the network
+//! again will refresh the expiration date.
+//!
+//! Subotai also supports caching to balance intense traffic around a given key.
 #![allow(dead_code, unknown_lints, wrong_self_convention)]
 #![feature(custom_derive, plugin)]
 #![plugin(serde_macros)]
@@ -23,7 +36,7 @@ extern crate bus;
 extern crate time;
 
 pub mod node;
-mod hash;
+pub mod hash;
 mod routing;
 mod storage;
 mod rpc;

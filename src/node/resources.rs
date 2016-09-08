@@ -159,8 +159,7 @@ impl Resources {
 
 
    /// Thoroughly searches for the nodes closest to a given ID, returning the `K_FACTOR` closest.
-   /// Returns the closest K we learned from, regardless of whether we have actually checked their
-   /// if they are alive.
+   /// Returns the closest K we learned from, regardless of whether or not they're alive.
    ///
    /// The probe will consult `depth` number of nodes to obtain that information.
    pub fn probe(&self, target: &SubotaiHash, depth: usize) -> SubotaiResult<Vec<routing::NodeInfo>> {
@@ -344,7 +343,9 @@ impl Resources {
          return Err(SubotaiError::OffGridError);
       }
 
-      let storage_candidates = try!(self.probe(&key, self.configuration.k_factor));
+      try!(self.probe(&key, self.configuration.k_factor));
+      // We attempt to store at the closest known live nodes.
+      let storage_candidates: Vec<_> = self.table.closest_nodes_to(&key).take(self.configuration.k_factor).collect();
       let cloned_key = key.clone();
       // At least one store RPC must succeed.
       let mut response = self
