@@ -77,6 +77,13 @@ impl Rpc {
       let payload = Arc::new(StorePayload { key: key, entry: entry, expiration: expiration });     
       Rpc { kind: Kind::Store(payload), sender: sender }
    }
+   /// Constructs a mass store RPC. It asks the receiving node to store several key->value pairs
+   pub fn mass_store(sender: routing::NodeInfo, 
+                     key: SubotaiHash, 
+                     entries_and_expirations: Vec<(storage::StorageEntry, SerializableTime)>) -> Rpc {
+      let payload = Arc::new(MassStorePayload { key: key, entries_and_expirations: entries_and_expirations });     
+      Rpc { kind: Kind::MassStore(payload), sender: sender }
+   }
 
    /// Constructs a response to the store RPC, including the key and the operation result.
    pub fn store_response(sender: routing::NodeInfo, key: SubotaiHash, result: storage::StoreResult) -> Rpc {
@@ -168,6 +175,7 @@ pub enum Kind {
    Ping,
    PingResponse,
    Store(Arc<StorePayload>),
+   MassStore(Arc<MassStorePayload>),
    StoreResponse(Arc<StoreResponsePayload>),
    Locate(Arc<LocatePayload>),
    LocateResponse(Arc<LocateResponsePayload>),
@@ -188,6 +196,12 @@ pub struct StorePayload {
 pub struct StoreResponsePayload {
    pub key    : SubotaiHash,
    pub result : storage::StoreResult,
+}
+
+#[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
+pub struct MassStorePayload {
+   pub key                     : SubotaiHash,
+   pub entries_and_expirations : Vec<(storage::StorageEntry, SerializableTime)>
 }
 
 /// Includes the ID to find and the amount of nodes required.

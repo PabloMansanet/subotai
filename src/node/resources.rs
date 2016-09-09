@@ -332,10 +332,42 @@ impl Resources {
       if index > hash::HASH_SIZE {
          return Err(SubotaiError::OutOfBounds);
       }
+      
+
 
       let id = SubotaiHash::random_at_distance(&self.id, index);
       try!(self.probe(&id, self.configuration.k_factor));
       Ok(())
+   }
+
+   pub fn mass_store(&self, key: SubotaiHash, entries: Vec<(storage::StorageEntry, time::Tm)>) -> SubotaiResult<()> {
+      if let node::State::OffGrid = *self.state.read().unwrap() {
+         return Err(SubotaiError::OffGridError);
+      }
+      let storage_candidates = try!(self.probe(&key, self.configuration.k_factor));
+      let cloned_key = key.clone();
+
+      // At least one third of the store RPCs must succeed.
+      let responses = self
+         .receptions()
+         .of_kind(receptions::KindFilter::StoreResponse)
+         .during(time::Duration::seconds(self.configuration.network_timeout_s))
+         .filter(|rpc| rpc.successfully_stored(&cloned_key))
+         .take(self.configuration.k_factor / 3);
+      
+      let collection: Vec<_> = entries.into_iter().map(|(entry, time)| (entry, rpc::SerializableTime::from(time))).collect();
+      let rpc = Rpc::mass_store(self.local_info(), key, collection );
+      let packet = rpc.serialize();
+
+      for candidate in &storage_candidates {
+         try!(self.outbound.send_to(&packet, candidate.address));
+      }
+
+      if responses.count() == self.configuration.k_factor / 3 {
+         Ok(())
+      } else {
+         Err(SubotaiError::UnresponsiveNetwork)
+      }
    }
 
    pub fn store(&self, key: SubotaiHash, entry: storage::StorageEntry, expiration: time::Tm) -> SubotaiResult<()> {
@@ -347,7 +379,7 @@ impl Resources {
       let cloned_key = key.clone();
 
       // At least one third of the store RPCs must succeed.
-      let mut response = self
+      let responses = self
          .receptions()
          .of_kind(receptions::KindFilter::StoreResponse)
          .during(time::Duration::seconds(self.configuration.network_timeout_s))
@@ -361,9 +393,10 @@ impl Resources {
          try!(self.outbound.send_to(&packet, candidate.address));
       }
 
-      match response.next() {
-         Some(_) => Ok(()),
-         None    => Err(SubotaiError::UnresponsiveNetwork),
+      if responses.count() == self.configuration.k_factor / 3 {
+         Ok(())
+      } else {
+         Err(SubotaiError::UnresponsiveNetwork)
       }
    }
 
@@ -389,6 +422,7 @@ impl Resources {
          rpc::Kind::LocateResponse(ref payload)    => self.handle_locate_response(payload.clone()),
          rpc::Kind::Probe(ref payload)             => self.handle_probe(payload.clone(), sender),
          rpc::Kind::Store(ref payload)             => self.handle_store(payload.clone(), sender),
+         rpc::Kind::MassStore(ref payload)         => self.handle_mass_store(payload.clone(), sender),
          rpc::Kind::Retrieve(ref payload)          => self.handle_retrieve(payload.clone(), sender),
          rpc::Kind::RetrieveResponse(ref payload)  => self.handle_retrieve_response(payload.clone()),
          _ => Ok(()),
@@ -409,6 +443,19 @@ impl Resources {
       let store_result = self.storage.store(&payload.key, 
                                             &payload.entry,
                                             &time::Tm::from(payload.expiration.clone()));
+      let rpc = Rpc::store_response(self.local_info(), payload.key.clone(), store_result);
+      let packet = rpc.serialize();
+      try!(self.outbound.send_to(&packet, sender.address));
+
+      Ok(())
+   }
+
+   fn handle_mass_store(&self, payload: sync::Arc<rpc::MassStorePayload>, sender: routing::NodeInfo) -> SubotaiResult<()> {
+      
+      let store_result = if payload.entries_and_expirations.iter().all(|&(ref entry, ref expiration)| {
+         self.storage.store(&payload.key, &entry, &time::Tm::from(expiration.clone())) == storage::StoreResult::Success
+      }) {  storage::StoreResult::Success } else { storage::StoreResult::MassStoreFailed };
+
       let rpc = Rpc::store_response(self.local_info(), payload.key.clone(), store_result);
       let packet = rpc.serialize();
       try!(self.outbound.send_to(&packet, sender.address));

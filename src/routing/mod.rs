@@ -106,6 +106,13 @@ impl Table {
       result
    }
 
+   /// Removes a node from the routing table, if present.
+   pub fn remove_node(&self, id: &hash::SubotaiHash) {
+      let index = self.bucket_for_node(&id);
+      let mut bucket = self.buckets[index].write().unwrap();
+      bucket.entries.retain(|ref stored_info| id != &stored_info.id);
+   }
+
    /// Performs a node lookup on the routing table. The lookup result may
    /// contain the specific node, a list of up to the N closest nodes, or
    /// report that the parent node itself was requested.
@@ -167,6 +174,11 @@ impl Table {
          bucket_index   : 0,
       }
    }
+
+   ///// Returns an iterator over all nodes stored in a particular bucket
+   //pub fn nodes_from_bucket(&self, index: usize) -> NodesFromBucket {
+   //
+   //}
 
    /// Returns an iterator over all stored nodes, ordered by ascending
    /// distance to a given reference ID. This iterator is designed for concurrent

@@ -35,6 +35,17 @@ fn measuring_table_length() {
 }
 
 #[test]
+fn inserting_and_removing() {
+   let table = Table::new(SubotaiHash::random(), Default::default());
+   let info = node_info_no_net(SubotaiHash::random());
+   table.update_node(info.clone());
+   assert!(table.specific_node(&info.id).is_some());
+   table.remove_node(&info.id);
+   assert!(table.specific_node(&info.id).is_none());
+
+}
+
+#[test]
 fn inserting_in_a_full_bucket_causes_eviction_conflict() {
    let mut parent_id = SubotaiHash::blank();
    parent_id.raw[1] = 1; // This will guarantee all nodes will fall on the same bucket.

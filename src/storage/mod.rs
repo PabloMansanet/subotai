@@ -34,6 +34,7 @@ pub enum StoreResult {
    Success,
    StorageFull,
    BlobTooBig,
+   MassStoreFailed,
 }
 
 impl Storage {
@@ -56,6 +57,7 @@ impl Storage {
 
    /// Retrieves all entries in a key_group.
    pub fn retrieve(&self, key: &SubotaiHash) -> Option<Vec<StorageEntry>> {
+      self.clear_expired_entries();
       if let Some(key_group) = self.key_groups.read().unwrap().get(key) {
          Some(key_group.iter().cloned().map(|extended| extended.entry).collect())
       } else {
@@ -69,6 +71,8 @@ impl Storage {
       if self.is_big_blob(entry) {
          return StoreResult::BlobTooBig;
       }
+
+      self.clear_expired_entries();
 
       // Expiration time is clamped to a reasonable value.
       let expiration = cmp::min(*expiration, time::now() + time::Duration::hours(self.configuration.base_expiration_time_hrs));
@@ -118,7 +122,7 @@ impl Storage {
       }
    }
 
-   pub fn clear_expired_entries(&self) {
+   fn clear_expired_entries(&self) {
       let now = time::now();
       let mut key_groups = self.key_groups.write().unwrap();
       for mut key_group in key_groups.values_mut() {
@@ -146,16 +150,21 @@ impl Storage {
       }
    }
 
-   /// Retrieves all key-entry pairs ready for republishing, together with their current expiration date
-   pub fn get_all_ready_entries(&self) -> Vec<(SubotaiHash, StorageEntry, time::Tm)>  {
+   /// Retrieves all keys and associated data ready for republishing
+   pub fn get_all_ready_entries(&self) -> Vec<(SubotaiHash, Vec<(StorageEntry, time::Tm)>)>  {
+      self.clear_expired_entries();
+      
       let key_groups = self.key_groups.read().unwrap();
-      let mut all_ready_entries = Vec::<(SubotaiHash, StorageEntry, time::Tm)>::new();
+      let mut all_ready_entries = Vec::<(SubotaiHash, Vec<(StorageEntry, time::Tm)>)>::new();
       for (key, group) in key_groups.iter() {
-         let mut ready_entries_in_group: Vec<(SubotaiHash, StorageEntry, time::Tm)> = group
+         let ready_entries_in_group: Vec<(StorageEntry, time::Tm)> = group
          .iter()
-         .filter_map(|ext| if ext.republish_ready { Some((key.clone(), ext.entry.clone(), ext.expiration.clone())) } else { None } )
+         .filter_map(|ext| if ext.republish_ready { Some((ext.entry.clone(), ext.expiration.clone())) } else { None } )
          .collect();
-         all_ready_entries.append(&mut ready_entries_in_group);
+
+         if !ready_entries_in_group.is_empty() {
+            all_ready_entries.push((key.clone(), ready_entries_in_group));
+         }
       }
       all_ready_entries
    }
@@ -203,7 +212,9 @@ mod tests {
       // Not ready by default
       assert_eq!(storage.get_all_ready_entries().len(), 0);
       storage.mark_all_as_ready();
-      assert_eq!(storage.get_all_ready_entries().len(), 3);
+      let ready_entries = storage.get_all_ready_entries();
+      assert_eq!(ready_entries.len(), 2);
+      assert_eq!(storage.len(), 3);
   }
 
    #[test]
@@ -222,7 +233,8 @@ mod tests {
       storage.mark_all_as_ready();
       let entries = storage.get_all_ready_entries();
       assert_eq!(entries.len(), 1);
-      assert_eq!(expiration_later, entries[0].2);
+      assert_eq!(entries[0].1.len(), 1);
+      assert_eq!(expiration_later, entries[0].1[0].1);
    }
 
    #[test]
@@ -242,11 +254,12 @@ mod tests {
       storage.mark_all_as_ready();
       let entries = storage.get_all_ready_entries();
       assert_eq!(entries.len(), 1);
-      assert_eq!(expiration_later, entries[0].2);
+      assert_eq!(entries[0].1.len(), 1);
+      assert_eq!(expiration_later, entries[0].1[0].1);
    }
 
    #[test]
-   fn clearing_expired_entries() {
+   fn clearing_expired_entries_on_retrieval() {
       let now = time::now();
       let storage = default_storage();
       let key_alpha = SubotaiHash::random();
@@ -259,11 +272,9 @@ mod tests {
       storage.store(&key_alpha, &entry_alpha, &expiration_alpha);
       storage.store(&key_beta, &entry_beta, &expiration_beta);
       assert_eq!(storage.len(), 2);
-      storage.clear_expired_entries();
-      assert_eq!(storage.len(), 1);
-
       assert!(storage.retrieve(&key_beta).is_none());
       assert!(storage.retrieve(&key_alpha).is_some());
+      assert_eq!(storage.len(), 1);
    }
 
    fn default_storage() -> Storage {

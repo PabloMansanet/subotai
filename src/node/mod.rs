@@ -287,7 +287,7 @@ impl Node {
    /// unless they are all younger than 1 hour, in which case it goes back to sleep.
    ///
    /// This loop also republishes all entries each hour, provided we haven't received
-   /// a `store` rpc for said entry in the past hour. It also clears expired entries.
+   /// a `store` rpc for said entry in the past hour.
    #[allow(unused_must_use)]
    fn maintenance_loop(resources: sync::Arc<resources::Resources>) {
       let hour = time::Duration::hours(1);
@@ -301,18 +301,18 @@ impl Node {
 
          let now = time::SteadyTime::now();
          // If the oldest bucket was refreshed more than a hour ago,
-         // or it was never refreshed, refresh it.
+         // or it was never refreshed, prune and refresh it.
          match resources.table.oldest_bucket() {
             (i, None) => {resources.refresh_bucket(i);},
             (i, Some(time)) if (now - time) > hour => {resources.refresh_bucket(i);},
             _ => (),
          }
-         
-         resources.storage.clear_expired_entries();
-
+        
+         // Republish all entries that haven't entered storage in the last hour.
          if now - last_republish > hour {
-            for (key, entry, expiration) in resources.storage.get_all_ready_entries() {
-               resources.store(key, entry, expiration);
+            let ready_entries = resources.storage.get_all_ready_entries();
+            for keygroup in ready_entries {
+               resources.mass_store(keygroup.0, keygroup.1);
             }
 
             last_republish = time::SteadyTime::now();

@@ -244,23 +244,28 @@ fn store_retrieve_in_simulated_network()
    let head = nodes.pop_front().unwrap();
    let tail = nodes.pop_back().unwrap();
 
-   println!("Before first store");
    head.store(key.clone(), entry.clone()).unwrap();
-   println!("After first store");
    let retrieved_entries = tail.retrieve(&key).unwrap();
-   println!("After first retrieve");
    assert_eq!(entry, retrieved_entries[0]);
 
    let key = hash::SubotaiHash::random();
    let blob: Vec<u8> = vec![0x00, 0x01, 0x02];
    let entry = storage::StorageEntry::Blob(blob.clone());
 
-   println!("Before second store");
    head.store(key.clone(), entry.clone()).unwrap();
-   println!("After second store");
    let retrieved_entries = tail.retrieve(&key).unwrap();
-   println!("After second retrieve");
    assert_eq!(entry, retrieved_entries[0]);
+
+   // Now for mass storage
+   let arbitrary_expiration = time::now() + time::Duration::minutes(30);
+   let collection: Vec<_> = (0..10)
+      .map(|_| (storage::StorageEntry::Value(hash::SubotaiHash::random()), arbitrary_expiration)).collect();
+   let collection_key = hash::SubotaiHash::random();
+   head.resources.mass_store(collection_key.clone(), collection.clone()).unwrap();
+   let retrieved_collection = tail.retrieve(&collection_key).unwrap();
+   let collection_entries: Vec<_> = collection.into_iter().map(|(entry, _)| entry).collect();
+   assert_eq!(collection_entries.len(), retrieved_collection.len());
+   assert_eq!(collection_entries, retrieved_collection);
 }
 
 fn node_info_no_net(id : hash::SubotaiHash) -> routing::NodeInfo {
