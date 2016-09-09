@@ -44,7 +44,7 @@ fn main() {
 }
 ```
 
-As long as there are a minimum amount of nodes in the network (a configurable amount, deemed sufficient
+As long as there is a minimum amount of nodes in the network (a configurable amount, deemed sufficient
 for the network to be considered alive), we have successfully stored data in the table.
 
 Now, on a machine very, very far away...
@@ -61,7 +61,7 @@ fn main() {
    let my_key = hash::SubotaiHash::sha1("example_key");
    let retrieved_entries = node.retrieve(&my_key).unwrap();
 
-   // We get what we stored!
+   // We get what we stored. In O(log n) number of steps, of course!
    assert_eq!(retrieved_entries.len(), 1);
    let expected_data = vec![0u8,1,2,3,4,5];
    assert_eq!(*retrieved_entries.first().unwrap(), node::StorageEntry::Blob(expected_data));

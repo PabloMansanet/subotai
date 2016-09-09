@@ -1,20 +1,15 @@
-//! #Receptions
-//!
-//! A receptions object is a convenient iterator over all RPCs received
-//! by a node. 
-//!
-//! By default, iterating over a Receptions object will block indefinitely
-//! while waiting for packet arrivals, but it's possible to specify an
-//! imprecise timeout so the iterator is only valid for a span of time.
-//!
-//! It is also possible to filter the iterator so it only applies to particular
-//! senders or RPC kinds without resorting to iterator adapters.
-
 use {bus, rpc, time, node};
 use node::resources;
 use hash::SubotaiHash;
 
-/// A blocking iterator over the RPCs received by a node.
+/// Iterator over all RPCs received by a node. 
+///
+/// By default, iterating over a Receptions object will block indefinitely
+/// while waiting for packet arrivals, but it's possible to specify an
+/// imprecise timeout so the iterator is only valid for a span of time.
+///
+/// It is also possible to filter the iterator so it only applies to particular
+/// senders or RPC kinds without resorting to iterator adapters.
 pub struct Receptions {
    iter          : bus::BusIntoIter<resources::Update>,
    timeout       : Option<time::SteadyTime>,

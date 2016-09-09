@@ -1,3 +1,10 @@
+//! The `SubotaiHash` is the element around which the Subotai network organizes itself.
+//! It's 160 bits long, and it serves as an ID number to identify nodes, as a key to
+//! identify storage entries, and optionally as a stored value.
+//!
+//! This module exposes utilities to create and inspect `SubotaiHash` structures. A
+//! useful method is `sha1`, which allows you to create a sha-1 hash from some data,
+//! which can then be used as a key for a storage entry.
 use rand::{thread_rng, Rng};
 use itertools::Zip;
 use std::ops::BitXor;
@@ -6,16 +13,10 @@ use std::fmt::Write;
 use std::cmp::{PartialOrd, Ordering};
 use sha1;
 
-/// Hash length in bits. Generally 160 for Kademlia variants.
 pub const HASH_SIZE : usize = 160;
 pub const HASH_SIZE_BYTES : usize = HASH_SIZE / 8;
 
-/// Light wrapper over a little endian `HASH_SIZE` bit hash
-///
-/// We aren't interested in strong cryptography, but rather
-/// a simple way to generate `HASH_SIZE` bit key identifiers.
-///
-/// Subotai hashes can be generated randomly or through sha1.
+/// Light wrapper over a little endian `HASH_SIZE` bit hash.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct SubotaiHash {
    pub raw : [u8; HASH_SIZE_BYTES],
@@ -97,14 +98,14 @@ impl SubotaiHash {
       None
    }
 
-   /// Flips a random bit somewhere in the hash.
+   /// Flips a bit in the hash.
    pub fn flip_bit(&mut self, position : usize) {
       if position >= HASH_SIZE { return; }
       let byte = &mut self.raw[position / 8];
       *byte ^= 1 << (position % 8);
    }
 
-   /// Creates a random hash at a given XOR distance from another. (height of their XOR value)
+   /// Creates a random hash at a given XOR distance from another (height of their XOR value).
    pub fn random_at_distance(reference: &SubotaiHash, distance: usize) -> SubotaiHash {
       let mut random_hash = SubotaiHash::random();
       let distance_ones = (&random_hash ^ reference).into_ones();

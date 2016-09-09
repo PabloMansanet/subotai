@@ -24,6 +24,7 @@ pub enum SubotaiError {
    Deserialize(serde::DeserializeError),
 }
 
+/// Custom result type over `SubotaiError`.
 pub type SubotaiResult<T> = result::Result<T, SubotaiError>;
 
 impl fmt::Display for SubotaiError {

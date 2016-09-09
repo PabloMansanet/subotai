@@ -1,5 +1,3 @@
-//! # Subotai
-//!
 //! Subotai is a Kademlia based distributed hash table. It's designed to be easy to use, safe
 //! and quick. Here are some of the ideas that differentiate it from other DHTs:
 //!

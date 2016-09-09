@@ -1,5 +1,3 @@
-//! #Node
-//!
 //! The node module is the main point of contact with Subotai. Node structs contain
 //! all the pieces needed to join a Subotai network.
 //!
@@ -46,7 +44,7 @@ const BOOTSTRAP_TRIES : u32 = 3;
 ///
 /// On construction, it launches three asynchronous threads.
 ///
-/// * For packet reception.
+/// * For RPC reception.
 /// * For conflict resolution.
 /// * For general maintenance.
 pub struct Node {
@@ -195,8 +193,8 @@ impl Node {
       self.resources.receptions()
    }
 
-   /// Bootstraps the node from a seed IP:port pair. Returns Ok(()) if the seed has
-   /// been reached and the asynchronous bootstrap process has started  However, it 
+   /// Bootstraps the node from a seed IP:Port pair. Returns Ok(()) if the seed has
+   /// been reached and the asynchronous bootstrap process has started. However, it 
    /// might take a bit for the node to become alive (use node::wait_until_state to 
    /// block until it's alive, if necessary).
    pub fn bootstrap(&self, seed: &net::SocketAddr) -> SubotaiResult<()> {
