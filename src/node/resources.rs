@@ -343,17 +343,16 @@ impl Resources {
          return Err(SubotaiError::OffGridError);
       }
 
-      try!(self.probe(&key, self.configuration.k_factor));
-      // We attempt to store at the closest known live nodes.
-      let storage_candidates: Vec<_> = self.table.closest_nodes_to(&key).take(self.configuration.k_factor).collect();
+      let storage_candidates = try!(self.probe(&key, self.configuration.k_factor));
       let cloned_key = key.clone();
-      // At least one store RPC must succeed.
+
+      // At least one third of the store RPCs must succeed.
       let mut response = self
          .receptions()
          .of_kind(receptions::KindFilter::StoreResponse)
          .during(time::Duration::seconds(self.configuration.network_timeout_s))
          .filter(|rpc| rpc.successfully_stored(&cloned_key))
-         .take(1);
+         .take(self.configuration.k_factor / 3);
 
       let rpc = Rpc::store(self.local_info(), key, entry, rpc::SerializableTime::from(expiration));
       let packet = rpc.serialize();
