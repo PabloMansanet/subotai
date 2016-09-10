@@ -5,7 +5,7 @@ authors = ["PabloMansanet <pablomansanet@gmail.com>"]
 description = "Kademlia based DHT"
 repository = "https://github.com/PabloMansanet/subotai"
 readme = "README.md"
-keywords = ["kademlia", "DHT", "distributed", "hash", "table", "torrent", "p2p", "kad", "network"]
+keywords = ["kademlia", "DHT", "p2p", "kad", "network"]
 license = "MIT"
 license-file = "LICENSE.md"
 
