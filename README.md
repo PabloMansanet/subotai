@@ -25,6 +25,8 @@
 
  Subotai also supports caching to balance intense traffic around a given key.
 
+[Docs](https://PabloMansanet.github.io/subotai/subotai)
+
 # How to use
 
 Let's say we have this code running on a machine:
