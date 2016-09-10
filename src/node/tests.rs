@@ -236,6 +236,24 @@ fn node_probing_in_simulated_unresponsive_network()
 }
 
 #[test]
+fn bucket_pruning_removes_dead_nodes() {
+   let mut nodes = simulated_network(40);
+   let head = nodes.pop_front().unwrap();
+
+   // let's find a bucket with nodes
+   let index = (0..160).rev().find(|i| head.resources.table.nodes_from_bucket(*i).len() > 0).unwrap();
+   let initial_nodes = head.resources.table.nodes_from_bucket(index).len();
+   head.resources.prune_bucket(index).unwrap();
+   assert_eq!(initial_nodes, head.resources.table.nodes_from_bucket(index).len());
+
+   // Now when we kill the nodes, the pruning will work.
+   nodes.clear();
+   head.resources.prune_bucket(index).unwrap();
+
+   assert_eq!(0, head.resources.table.nodes_from_bucket(index).len());
+}
+
+#[test]
 fn store_retrieve_in_simulated_network()
 {
    let mut nodes = simulated_network(40);

@@ -175,10 +175,11 @@ impl Table {
       }
    }
 
-   ///// Returns an iterator over all nodes stored in a particular bucket
-   //pub fn nodes_from_bucket(&self, index: usize) -> NodesFromBucket {
-   //
-   //}
+   /// Produces copies of all nodes from a particular bucket.
+   pub fn nodes_from_bucket(&self, index: usize) -> Vec<NodeInfo> {
+      let bucket = self.buckets[index].read().unwrap();
+      bucket.entries.iter().cloned().collect()
+   }
 
    /// Returns an iterator over all stored nodes, ordered by ascending
    /// distance to a given reference ID. This iterator is designed for concurrent

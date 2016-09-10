@@ -333,13 +333,41 @@ impl Resources {
          return Err(SubotaiError::OutOfBounds);
       }
       
-
+      try!(self.prune_bucket(index));
 
       let id = SubotaiHash::random_at_distance(&self.id, index);
       try!(self.probe(&id, self.configuration.k_factor));
       Ok(())
    }
 
+   /// Pings all nodes in a bucket and eliminates unresponsive ones.
+   pub fn prune_bucket(&self, index: usize) -> SubotaiResult<()>  {
+      let mut nodes = self.table.nodes_from_bucket(index);
+      let ids: Vec<_> = nodes.iter().map(|node| &node.id).cloned().collect();
+      let responses = self
+         .receptions()
+         .of_kind(receptions::KindFilter::PingResponse)
+         .during(time::Duration::seconds(self.configuration.network_timeout_s))
+         .filter(|rpc| ids.contains(&rpc.sender.id))
+         .take(ids.len());
+
+      for node in self.table.nodes_from_bucket(index) {
+         try!(self.ping_and_forget(&node.address));
+      }
+      
+      for response in responses {
+         nodes.retain(|node| node.id != response.sender.id);
+      }
+
+      for unresponsive_node in nodes {
+         println!("Removing node");
+         self.table.remove_node(&unresponsive_node.id);
+      }
+
+      Ok(())
+   }
+
+   /// Stores entries associated to a key with a single RPC.
    pub fn mass_store(&self, key: SubotaiHash, entries: Vec<(storage::StorageEntry, time::Tm)>) -> SubotaiResult<()> {
       if let node::State::OffGrid = *self.state.read().unwrap() {
          return Err(SubotaiError::OffGridError);
