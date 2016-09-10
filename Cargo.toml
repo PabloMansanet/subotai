@@ -1,7 +1,13 @@
 [package]
 name = "subotai"
-version = "0.1.0"
-authors = ["Cu3rv0 <pablomansanet@gmail.com>"]
+version = "1.0.0"
+authors = ["PabloMansanet <pablomansanet@gmail.com>"]
+description = "Kademlia based DHT"
+repository = "https://github.com/PabloMansanet/subotai"
+readme = "README.md"
+keywords = ["kademlia", "DHT", "distributed", "hash", "table", "torrent", "p2p", "kad", "network"]
+license = "MIT"
+license-file = "LICENSE.md"
 
 [dependencies]
 itertools = "*"
