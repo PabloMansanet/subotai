@@ -6,7 +6,8 @@ description = "Kademlia based DHT"
 repository = "https://github.com/PabloMansanet/subotai"
 readme = "README.md"
 keywords = ["kademlia", "DHT", "p2p", "kad", "network"]
-license-file = "LICENSE.md"
+documentation = "https://PabloMansanet.github.io/Subotai/subotai"
+license = "MIT"
 
 [dependencies]
 itertools = "0.*.*"
