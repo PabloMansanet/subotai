@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="rustdoc">
+    <meta name="description" content="API documentation for the Rust `AtomicOption` struct in crate `atomic_option`.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, AtomicOption">
+
+    <title>atomic_option::AtomicOption - Rust</title>
+
+    <link rel="stylesheet" type="text/css" href="../rustdoc.css">
+    <link rel="stylesheet" type="text/css" href="../main.css">
+    
+
+    
+    
+</head>
+<body class="rustdoc">
+    <!--[if lte IE 8]>
+    <div class="warning">
+        This old browser is unsupported and will most likely display funky
+        things.
+    </div>
+    <![endif]-->
+
+    
+
+    <nav class="sidebar">
+        
+        <p class='location'><a href='index.html'>atomic_option</a></p><script>window.sidebarCurrent = {name: 'AtomicOption', ty: 'struct', relpath: ''};</script><script defer src="sidebar-items.js"></script>
+    </nav>
+
+    <nav class="sub">
+        <form class="search-form js-only">
+            <div class="search-container">
+                <input class="search-input" name="search"
+                       autocomplete="off"
+                       placeholder="Click or press ‘S’ to search, ‘?’ for more options…"
+                       type="search">
+            </div>
+        </form>
+    </nav>
+
+    <section id='main' class="content struct">
+<h1 class='fqn'><span class='in-band'>Struct <a href='index.html'>atomic_option</a>::<wbr><a class='struct' href=''>AtomicOption</a></span><span class='out-of-band'><span id='render-detail'>
+                   <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
+                       [<span class='inner'>&#x2212;</span>]
+                   </a>
+               </span><a id='src-8' class='srclink' href='../src/atomic_option/lib.rs.html#17-21' title='goto source code'>[src]</a></span></h1>
+<pre class='rust struct'>pub struct AtomicOption&lt;T&gt; { /* fields omitted */ }</pre><div class='docblock'><p>An atomic version of <code>Option&lt;Box&lt;T&gt;&gt;</code>, useful for moving owned objects
+between threads in a wait-free manner.</p>
+</div><h2 id='methods'>Methods</h2><h3 class='impl'><span class='in-band'><code>impl&lt;T&gt; <a class='struct' href='../atomic_option/struct.AtomicOption.html' title='atomic_option::AtomicOption'>AtomicOption</a>&lt;T&gt;</code></span><span class='out-of-band'><div class='ghost'></div><a id='src-14' class='srclink' href='../src/atomic_option/lib.rs.html#25-192' title='goto source code'>[src]</a></span></h3>
+<div class='impl-items'><h4 id='method.new' class='method'><span id='new.v' class='invisible'><code>fn <a href='#method.new' class='fnname'>new</a>(data: <a class='struct' href='https://doc.rust-lang.org/nightly/alloc/boxed/struct.Box.html' title='alloc::boxed::Box'>Box</a>&lt;T&gt;) -&gt; <a class='struct' href='../atomic_option/struct.AtomicOption.html' title='atomic_option::AtomicOption'>AtomicOption</a>&lt;T&gt;</code></span></h4>
+<div class='docblock'><p>Create a new AtomicOption storing the specified data.</p>
+
+<pre class='rust rust-example-rendered'>
+<span class='kw'>let</span> <span class='ident'>opt</span> <span class='op'>=</span> <span class='ident'>AtomicOption</span>::<span class='ident'>new</span>(<span class='ident'>Box</span>::<span class='ident'>new</span>(<span class='number'>7</span>));
+<span class='kw'>let</span> <span class='ident'>value</span> <span class='op'>=</span> <span class='ident'>opt</span>.<span class='ident'>take</span>(<span class='ident'>Ordering</span>::<span class='ident'>SeqCst</span>).<span class='ident'>unwrap</span>();
+<span class='macro'>assert_eq</span><span class='macro'>!</span>(<span class='ident'>value</span>, <span class='ident'>Box</span>::<span class='ident'>new</span>(<span class='number'>7</span>));<a class='test-arrow' target='_blank' href=''>Run</a></pre>
+</div><h4 id='method.from_raw' class='method'><span id='from_raw.v' class='invisible'><code>unsafe fn <a href='#method.from_raw' class='fnname'>from_raw</a>(ptr: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.pointer.html'>*mut T</a>) -&gt; <a class='struct' href='../atomic_option/struct.AtomicOption.html' title='atomic_option::AtomicOption'>AtomicOption</a>&lt;T&gt;</code></span></h4>
+<div class='docblock'><p>Create a new AtomicOption from a raw pointer.</p>
+</div><h4 id='method.empty' class='method'><span id='empty.v' class='invisible'><code>fn <a href='#method.empty' class='fnname'>empty</a>() -&gt; <a class='struct' href='../atomic_option/struct.AtomicOption.html' title='atomic_option::AtomicOption'>AtomicOption</a>&lt;T&gt;</code></span></h4>
+<div class='docblock'><p>Create a new AtomicOption storing None.</p>
+
+<pre class='rust rust-example-rendered'>
+<span class='kw'>let</span> <span class='ident'>opt</span>: <span class='ident'>AtomicOption</span><span class='op'>&lt;</span>()<span class='op'>&gt;</span> <span class='op'>=</span> <span class='ident'>AtomicOption</span>::<span class='ident'>empty</span>();
+<span class='kw'>let</span> <span class='ident'>value</span> <span class='op'>=</span> <span class='ident'>opt</span>.<span class='ident'>take</span>(<span class='ident'>Ordering</span>::<span class='ident'>SeqCst</span>);
+<span class='macro'>assert</span><span class='macro'>!</span>(<span class='ident'>value</span>.<span class='ident'>is_none</span>());<a class='test-arrow' target='_blank' href=''>Run</a></pre>
+</div><h4 id='method.take' class='method'><span id='take.v' class='invisible'><code>fn <a href='#method.take' class='fnname'>take</a>(&amp;self, ordering: <a class='enum' href='https://doc.rust-lang.org/nightly/core/sync/atomic/enum.Ordering.html' title='core::sync::atomic::Ordering'>Ordering</a>) -&gt; <a class='enum' href='https://doc.rust-lang.org/nightly/core/option/enum.Option.html' title='core::option::Option'>Option</a>&lt;<a class='struct' href='https://doc.rust-lang.org/nightly/alloc/boxed/struct.Box.html' title='alloc::boxed::Box'>Box</a>&lt;T&gt;&gt;</code></span></h4>
+<div class='docblock'><p>Take the value out of the AtomicOption, if there is one.</p>
+
+<pre class='rust rust-example-rendered'>
+<span class='kw'>let</span> <span class='ident'>opt</span> <span class='op'>=</span> <span class='ident'>AtomicOption</span>::<span class='ident'>new</span>(<span class='ident'>Box</span>::<span class='ident'>new</span>(<span class='number'>178</span>));
+<span class='kw'>let</span> <span class='ident'>first_take</span> <span class='op'>=</span> <span class='ident'>opt</span>.<span class='ident'>take</span>(<span class='ident'>Ordering</span>::<span class='ident'>SeqCst</span>);
+<span class='kw'>let</span> <span class='ident'>second_take</span> <span class='op'>=</span> <span class='ident'>opt</span>.<span class='ident'>take</span>(<span class='ident'>Ordering</span>::<span class='ident'>SeqCst</span>);
+
+<span class='macro'>assert_eq</span><span class='macro'>!</span>(<span class='ident'>first_take</span>, <span class='prelude-val'>Some</span>(<span class='ident'>Box</span>::<span class='ident'>new</span>(<span class='number'>178</span>)));
+<span class='macro'>assert</span><span class='macro'>!</span>(<span class='ident'>second_take</span>.<span class='ident'>is_none</span>());<a class='test-arrow' target='_blank' href=''>Run</a></pre>
+</div><h4 id='method.swap' class='method'><span id='swap.v' class='invisible'><code>fn <a href='#method.swap' class='fnname'>swap</a>(&amp;self, new: <a class='struct' href='https://doc.rust-lang.org/nightly/alloc/boxed/struct.Box.html' title='alloc::boxed::Box'>Box</a>&lt;T&gt;, ordering: <a class='enum' href='https://doc.rust-lang.org/nightly/core/sync/atomic/enum.Ordering.html' title='core::sync::atomic::Ordering'>Ordering</a>) -&gt; <a class='enum' href='https://doc.rust-lang.org/nightly/core/option/enum.Option.html' title='core::option::Option'>Option</a>&lt;<a class='struct' href='https://doc.rust-lang.org/nightly/alloc/boxed/struct.Box.html' title='alloc::boxed::Box'>Box</a>&lt;T&gt;&gt;</code></span></h4>
+<div class='docblock'><p>Swap the value in the AtomicOption with a new one, returning the
+old value if there was one.</p>
+
+<pre class='rust rust-example-rendered'>
+<span class='kw'>let</span> <span class='ident'>opt</span> <span class='op'>=</span> <span class='ident'>AtomicOption</span>::<span class='ident'>new</span>(<span class='ident'>Box</span>::<span class='ident'>new</span>(<span class='number'>1236</span>));
+<span class='kw'>let</span> <span class='ident'>old</span> <span class='op'>=</span> <span class='ident'>opt</span>.<span class='ident'>swap</span>(<span class='ident'>Box</span>::<span class='ident'>new</span>(<span class='number'>542</span>), <span class='ident'>Ordering</span>::<span class='ident'>SeqCst</span>).<span class='ident'>unwrap</span>();
+<span class='macro'>assert_eq</span><span class='macro'>!</span>(<span class='ident'>old</span>, <span class='ident'>Box</span>::<span class='ident'>new</span>(<span class='number'>1236</span>));
+
+<span class='kw'>let</span> <span class='ident'>new</span> <span class='op'>=</span> <span class='ident'>opt</span>.<span class='ident'>take</span>(<span class='ident'>Ordering</span>::<span class='ident'>SeqCst</span>).<span class='ident'>unwrap</span>();
+<span class='macro'>assert_eq</span><span class='macro'>!</span>(<span class='ident'>new</span>, <span class='ident'>Box</span>::<span class='ident'>new</span>(<span class='number'>542</span>));<a class='test-arrow' target='_blank' href=''>Run</a></pre>
+</div><h4 id='method.replace' class='method'><span id='replace.v' class='invisible'><code>fn <a href='#method.replace' class='fnname'>replace</a>(&amp;self, new: <a class='enum' href='https://doc.rust-lang.org/nightly/core/option/enum.Option.html' title='core::option::Option'>Option</a>&lt;<a class='struct' href='https://doc.rust-lang.org/nightly/alloc/boxed/struct.Box.html' title='alloc::boxed::Box'>Box</a>&lt;T&gt;&gt;, ordering: <a class='enum' href='https://doc.rust-lang.org/nightly/core/sync/atomic/enum.Ordering.html' title='core::sync::atomic::Ordering'>Ordering</a>) -&gt; <a class='enum' href='https://doc.rust-lang.org/nightly/core/option/enum.Option.html' title='core::option::Option'>Option</a>&lt;<a class='struct' href='https://doc.rust-lang.org/nightly/alloc/boxed/struct.Box.html' title='alloc::boxed::Box'>Box</a>&lt;T&gt;&gt;</code></span></h4>
+<div class='docblock'><p>Replace the Option in the AtomicOption with a new one, returning the old option.</p>
+
+<pre class='rust rust-example-rendered'>
+<span class='kw'>let</span> <span class='ident'>opt</span> <span class='op'>=</span> <span class='ident'>AtomicOption</span>::<span class='ident'>empty</span>();
+<span class='kw'>let</span> <span class='ident'>old</span> <span class='op'>=</span> <span class='ident'>opt</span>.<span class='ident'>replace</span>(<span class='prelude-val'>Some</span>(<span class='ident'>Box</span>::<span class='ident'>new</span>(<span class='string'>&quot;hello&quot;</span>)), <span class='ident'>Ordering</span>::<span class='ident'>SeqCst</span>);
+<span class='macro'>assert</span><span class='macro'>!</span>(<span class='ident'>old</span>.<span class='ident'>is_none</span>());
+
+<span class='kw'>let</span> <span class='ident'>new</span> <span class='op'>=</span> <span class='ident'>opt</span>.<span class='ident'>take</span>(<span class='ident'>Ordering</span>::<span class='ident'>SeqCst</span>).<span class='ident'>unwrap</span>();
+<span class='macro'>assert_eq</span><span class='macro'>!</span>(<span class='ident'>new</span>, <span class='ident'>Box</span>::<span class='ident'>new</span>(<span class='string'>&quot;hello&quot;</span>));<a class='test-arrow' target='_blank' href=''>Run</a></pre>
+</div><h4 id='method.try_store' class='method'><span id='try_store.v' class='invisible'><code>fn <a href='#method.try_store' class='fnname'>try_store</a>(&amp;self, new: <a class='struct' href='https://doc.rust-lang.org/nightly/alloc/boxed/struct.Box.html' title='alloc::boxed::Box'>Box</a>&lt;T&gt;, ordering: <a class='enum' href='https://doc.rust-lang.org/nightly/core/sync/atomic/enum.Ordering.html' title='core::sync::atomic::Ordering'>Ordering</a>) -&gt; <a class='enum' href='https://doc.rust-lang.org/nightly/core/option/enum.Option.html' title='core::option::Option'>Option</a>&lt;<a class='struct' href='https://doc.rust-lang.org/nightly/alloc/boxed/struct.Box.html' title='alloc::boxed::Box'>Box</a>&lt;T&gt;&gt;</code></span></h4>
+<div class='docblock'><p>Store the new value in the AtomicOption iff it currently contains a None.</p>
+
+<p>None is returned if the store succeeded, or Some is returned with the rejected
+data if the store fails.</p>
+
+<p>This operation is implemented as a single atomic <code>compare_and_swap</code>.</p>
+
+<pre class='rust rust-example-rendered'>
+<span class='kw'>let</span> <span class='ident'>opt</span> <span class='op'>=</span> <span class='ident'>AtomicOption</span>::<span class='ident'>empty</span>();
+<span class='kw'>let</span> <span class='ident'>stored</span> <span class='op'>=</span> <span class='ident'>opt</span>.<span class='ident'>try_store</span>(<span class='ident'>Box</span>::<span class='ident'>new</span>(<span class='string'>&quot;some data&quot;</span>), <span class='ident'>Ordering</span>::<span class='ident'>SeqCst</span>);
+<span class='macro'>assert</span><span class='macro'>!</span>(<span class='ident'>stored</span>.<span class='ident'>is_none</span>());
+
+<span class='kw'>let</span> <span class='ident'>stored2</span> <span class='op'>=</span> <span class='ident'>opt</span>.<span class='ident'>try_store</span>(<span class='ident'>Box</span>::<span class='ident'>new</span>(<span class='string'>&quot;some more data&quot;</span>), <span class='ident'>Ordering</span>::<span class='ident'>SeqCst</span>);
+<span class='macro'>assert_eq</span><span class='macro'>!</span>(<span class='ident'>stored2</span>, <span class='prelude-val'>Some</span>(<span class='ident'>Box</span>::<span class='ident'>new</span>(<span class='string'>&quot;some more data&quot;</span>)));
+
+<span class='kw'>let</span> <span class='ident'>value</span> <span class='op'>=</span> <span class='ident'>opt</span>.<span class='ident'>take</span>(<span class='ident'>Ordering</span>::<span class='ident'>SeqCst</span>).<span class='ident'>unwrap</span>();
+<span class='macro'>assert_eq</span><span class='macro'>!</span>(<span class='ident'>value</span>, <span class='ident'>Box</span>::<span class='ident'>new</span>(<span class='string'>&quot;some data&quot;</span>));<a class='test-arrow' target='_blank' href=''>Run</a></pre>
+</div><h4 id='method.spinlock' class='method'><span id='spinlock.v' class='invisible'><code>fn <a href='#method.spinlock' class='fnname'>spinlock</a>(&amp;self, ordering: <a class='enum' href='https://doc.rust-lang.org/nightly/core/sync/atomic/enum.Ordering.html' title='core::sync::atomic::Ordering'>Ordering</a>) -&gt; <a class='struct' href='https://doc.rust-lang.org/nightly/alloc/boxed/struct.Box.html' title='alloc::boxed::Box'>Box</a>&lt;T&gt;</code></span></h4>
+<div class='docblock'><p>Execute a <code>compare_and_swap</code> loop until there is a value in the AtomicOption,
+then return it.</p>
+
+<pre class='rust rust-example-rendered'>
+
+<span class='comment'>// We&#39;ll use an AtomicOption as a lightweight channel transferring data via a spinlock.</span>
+<span class='kw'>let</span> <span class='ident'>tx</span> <span class='op'>=</span> <span class='ident'>Arc</span>::<span class='ident'>new</span>(<span class='ident'>AtomicOption</span>::<span class='ident'>empty</span>());
+<span class='kw'>let</span> <span class='ident'>rx</span> <span class='op'>=</span> <span class='ident'>tx</span>.<span class='ident'>clone</span>();
+
+<span class='ident'>thread</span>::<span class='ident'>spawn</span>(<span class='kw'>move</span> <span class='op'>||</span> {
+    <span class='macro'>assert_eq</span><span class='macro'>!</span>(<span class='op'>*</span><span class='ident'>rx</span>.<span class='ident'>spinlock</span>(<span class='ident'>Ordering</span>::<span class='ident'>Acquire</span>), <span class='number'>7</span>);
+});
+
+<span class='ident'>tx</span>.<span class='ident'>swap</span>(<span class='ident'>Box</span>::<span class='ident'>new</span>(<span class='number'>7</span>), <span class='ident'>Ordering</span>::<span class='ident'>Release</span>);<a class='test-arrow' target='_blank' href=''>Run</a></pre>
+</div><h4 id='method.load_raw' class='method'><span id='load_raw.v' class='invisible'><code>fn <a href='#method.load_raw' class='fnname'>load_raw</a>(&amp;self, ordering: <a class='enum' href='https://doc.rust-lang.org/nightly/core/sync/atomic/enum.Ordering.html' title='core::sync::atomic::Ordering'>Ordering</a>) -&gt; <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.pointer.html'>*const T</a></code></span></h4>
+<div class='docblock'><p>Get the raw value stored in the AtomicOption.</p>
+
+<h2 id='safety' class='section-header'><a href='#safety'>Safety</a></h2>
+<p>It is almost <em>never</em> safe to read from this pointer.</p>
+</div></div><h2 id='implementations'>Trait Implementations</h2><h3 class='impl'><span class='in-band'><code>impl&lt;T&gt; <a class='trait' href='https://doc.rust-lang.org/nightly/core/marker/trait.Sync.html' title='core::marker::Sync'>Sync</a> for <a class='struct' href='../atomic_option/struct.AtomicOption.html' title='atomic_option::AtomicOption'>AtomicOption</a>&lt;T&gt;</code></span><span class='out-of-band'><div class='ghost'></div><a id='src-12' class='srclink' href='../src/atomic_option/lib.rs.html#23' title='goto source code'>[src]</a></span></h3>
+<div class='impl-items'></div><h3 class='impl'><span class='in-band'><code>impl&lt;T&gt; <a class='trait' href='https://doc.rust-lang.org/nightly/core/convert/trait.From.html' title='core::convert::From'>From</a>&lt;<a class='enum' href='https://doc.rust-lang.org/nightly/core/option/enum.Option.html' title='core::option::Option'>Option</a>&lt;<a class='struct' href='https://doc.rust-lang.org/nightly/alloc/boxed/struct.Box.html' title='alloc::boxed::Box'>Box</a>&lt;T&gt;&gt;&gt; for <a class='struct' href='../atomic_option/struct.AtomicOption.html' title='atomic_option::AtomicOption'>AtomicOption</a>&lt;T&gt;</code></span><span class='out-of-band'><div class='ghost'></div><a id='src-49' class='srclink' href='../src/atomic_option/lib.rs.html#194-202' title='goto source code'>[src]</a></span></h3>
+<div class='impl-items'><h4 id='method.from' class='method'><span id='from.v' class='invisible'><code>fn <a href='https://doc.rust-lang.org/nightly/core/convert/trait.From.html#tymethod.from' class='fnname'>from</a>(opt: <a class='enum' href='https://doc.rust-lang.org/nightly/core/option/enum.Option.html' title='core::option::Option'>Option</a>&lt;<a class='struct' href='https://doc.rust-lang.org/nightly/alloc/boxed/struct.Box.html' title='alloc::boxed::Box'>Box</a>&lt;T&gt;&gt;) -&gt; <a class='struct' href='../atomic_option/struct.AtomicOption.html' title='atomic_option::AtomicOption'>AtomicOption</a>&lt;T&gt;</code></span></h4>
+<div class='docblock'><p>Performs the conversion.</p>
+</div></div><h3 class='impl'><span class='in-band'><code>impl&lt;T&gt; <a class='trait' href='https://doc.rust-lang.org/nightly/core/ops/trait.Drop.html' title='core::ops::Drop'>Drop</a> for <a class='struct' href='../atomic_option/struct.AtomicOption.html' title='atomic_option::AtomicOption'>AtomicOption</a>&lt;T&gt;</code></span><span class='out-of-band'><div class='ghost'></div><a id='src-55' class='srclink' href='../src/atomic_option/lib.rs.html#204-208' title='goto source code'>[src]</a></span></h3>
+<div class='impl-items'><h4 id='method.drop' class='method'><span id='drop.v' class='invisible'><code>fn <a href='https://doc.rust-lang.org/nightly/core/ops/trait.Drop.html#tymethod.drop' class='fnname'>drop</a>(&amp;mut self)</code></span></h4>
+<div class='docblock'><p>A method called when the value goes out of scope. <a href="https://doc.rust-lang.org/nightly/core/ops/trait.Drop.html#tymethod.drop">Read more</a></p>
+</div></div></section>
+    <section id='search' class="content hidden"></section>
+
+    <section class="footer"></section>
+
+    <aside id="help" class="hidden">
+        <div>
+            <h1 class="hidden">Help</h1>
+
+            <div class="shortcuts">
+                <h2>Keyboard Shortcuts</h2>
+
+                <dl>
+                    <dt>?</dt>
+                    <dd>Show this help dialog</dd>
+                    <dt>S</dt>
+                    <dd>Focus the search field</dd>
+                    <dt>&larrb;</dt>
+                    <dd>Move up in search results</dd>
+                    <dt>&rarrb;</dt>
+                    <dd>Move down in search results</dd>
+                    <dt>&#9166;</dt>
+                    <dd>Go to active search result</dd>
+                    <dt>+</dt>
+                    <dd>Collapse/expand all sections</dd>
+                </dl>
+            </div>
+
+            <div class="infos">
+                <h2>Search Tricks</h2>
+
+                <p>
+                    Prefix searches with a type followed by a colon (e.g.
+                    <code>fn:</code>) to restrict the search to a given type.
+                </p>
+
+                <p>
+                    Accepted types are: <code>fn</code>, <code>mod</code>,
+                    <code>struct</code>, <code>enum</code>,
+                    <code>trait</code>, <code>type</code>, <code>macro</code>,
+                    and <code>const</code>.
+                </p>
+
+                <p>
+                    Search functions by type signature (e.g.
+                    <code>vec -> usize</code> or <code>* -> vec</code>)
+                </p>
+            </div>
+        </div>
+    </aside>
+
+    
+
+    <script>
+        window.rootPath = "../";
+        window.currentCrate = "atomic_option";
+        window.playgroundUrl = "";
+    </script>
+    <script src="../jquery.js"></script>
+    <script src="../main.js"></script>
+    
+    <script defer src="../search-index.js"></script>
+</body>
+</html>

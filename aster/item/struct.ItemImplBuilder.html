@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="rustdoc">
+    <meta name="description" content="API documentation for the Rust `ItemImplBuilder` struct in crate `aster`.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, ItemImplBuilder">
+
+    <title>aster::item::ItemImplBuilder - Rust</title>
+
+    <link rel="stylesheet" type="text/css" href="../../rustdoc.css">
+    <link rel="stylesheet" type="text/css" href="../../main.css">
+    
+
+    
+    
+</head>
+<body class="rustdoc">
+    <!--[if lte IE 8]>
+    <div class="warning">
+        This old browser is unsupported and will most likely display funky
+        things.
+    </div>
+    <![endif]-->
+
+    
+
+    <nav class="sidebar">
+        
+        <p class='location'><a href='../index.html'>aster</a>::<wbr><a href='index.html'>item</a></p><script>window.sidebarCurrent = {name: 'ItemImplBuilder', ty: 'struct', relpath: ''};</script><script defer src="sidebar-items.js"></script>
+    </nav>
+
+    <nav class="sub">
+        <form class="search-form js-only">
+            <div class="search-container">
+                <input class="search-input" name="search"
+                       autocomplete="off"
+                       placeholder="Click or press ‘S’ to search, ‘?’ for more options…"
+                       type="search">
+            </div>
+        </form>
+    </nav>
+
+    <section id='main' class="content struct">
+<h1 class='fqn'><span class='in-band'>Struct <a href='../index.html'>aster</a>::<wbr><a href='index.html'>item</a>::<wbr><a class='struct' href=''>ItemImplBuilder</a></span><span class='out-of-band'><span id='render-detail'>
+                   <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
+                       [<span class='inner'>&#x2212;</span>]
+                   </a>
+               </span><a id='src-2469' class='srclink' href='../../src/aster/item.rs.html#1143-1150' title='goto source code'>[src]</a></span></h1>
+<pre class='rust struct'>pub struct ItemImplBuilder&lt;F&gt; { /* fields omitted */ }</pre><h2 id='methods'>Methods</h2><h3 class='impl'><span class='in-band'><code>impl&lt;F&gt; <a class='struct' href='../../aster/item/struct.ItemImplBuilder.html' title='aster::item::ItemImplBuilder'>ItemImplBuilder</a>&lt;F&gt; <span class='where'>where F: <a class='trait' href='../../aster/invoke/trait.Invoke.html' title='aster::invoke::Invoke'>Invoke</a>&lt;<a class='struct' href='https://doc.rust-lang.org/nightly/syntax/ptr/struct.P.html' title='syntax::ptr::P'>P</a>&lt;<a class='struct' href='https://doc.rust-lang.org/nightly/syntax/ast/struct.Item.html' title='syntax::ast::Item'>Item</a>&gt;&gt;</span></code></span><span class='out-of-band'><div class='ghost'></div><a id='src-2477' class='srclink' href='../../src/aster/item.rs.html#1152-1234' title='goto source code'>[src]</a></span></h3>
+<div class='impl-items'><h4 id='method.unsafe_' class='method'><span id='unsafe_.v' class='invisible'><code>fn <a href='#method.unsafe_' class='fnname'>unsafe_</a>(self) -&gt; Self</code></span></h4>
+<h4 id='method.negative' class='method'><span id='negative.v' class='invisible'><code>fn <a href='#method.negative' class='fnname'>negative</a>(self) -&gt; Self</code></span></h4>
+<h4 id='method.with_generics' class='method'><span id='with_generics.v' class='invisible'><code>fn <a href='#method.with_generics' class='fnname'>with_generics</a>(self, generics: <a class='struct' href='https://doc.rust-lang.org/nightly/syntax/ast/struct.Generics.html' title='syntax::ast::Generics'>Generics</a>) -&gt; Self</code></span></h4>
+<h4 id='method.generics' class='method'><span id='generics.v' class='invisible'><code>fn <a href='#method.generics' class='fnname'>generics</a>(self) -&gt; <a class='struct' href='../../aster/generics/struct.GenericsBuilder.html' title='aster::generics::GenericsBuilder'>GenericsBuilder</a>&lt;Self&gt;</code></span></h4>
+<h4 id='method.with_trait' class='method'><span id='with_trait.v' class='invisible'><code>fn <a href='#method.with_trait' class='fnname'>with_trait</a>(self, trait_ref: <a class='struct' href='https://doc.rust-lang.org/nightly/syntax/ast/struct.TraitRef.html' title='syntax::ast::TraitRef'>TraitRef</a>) -&gt; Self</code></span></h4>
+<h4 id='method.trait_' class='method'><span id='trait_.v' class='invisible'><code>fn <a href='#method.trait_' class='fnname'>trait_</a>(self) -&gt; <a class='struct' href='../../aster/path/struct.PathBuilder.html' title='aster::path::PathBuilder'>PathBuilder</a>&lt;Self&gt;</code></span></h4>
+<h4 id='method.ty' class='method'><span id='ty.v' class='invisible'><code>fn <a href='#method.ty' class='fnname'>ty</a>(self) -&gt; <a class='struct' href='../../aster/ty/struct.TyBuilder.html' title='aster::ty::TyBuilder'>TyBuilder</a>&lt;Self&gt;</code></span></h4>
+<h4 id='method.build_ty' class='method'><span id='build_ty.v' class='invisible'><code>fn <a href='#method.build_ty' class='fnname'>build_ty</a>(self, ty: <a class='struct' href='https://doc.rust-lang.org/nightly/syntax/ptr/struct.P.html' title='syntax::ptr::P'>P</a>&lt;<a class='struct' href='https://doc.rust-lang.org/nightly/syntax/ast/struct.Ty.html' title='syntax::ast::Ty'>Ty</a>&gt;) -&gt; F::Result</code></span></h4>
+<h4 id='method.with_items' class='method'><span id='with_items.v' class='invisible'><code>fn <a href='#method.with_items' class='fnname'>with_items</a>&lt;I&gt;(self, items: I) -&gt; Self <span class='where'>where I: <a class='trait' href='https://doc.rust-lang.org/nightly/core/iter/traits/trait.IntoIterator.html' title='core::iter::traits::IntoIterator'>IntoIterator</a>&lt;Item=<a class='struct' href='https://doc.rust-lang.org/nightly/syntax/ast/struct.ImplItem.html' title='syntax::ast::ImplItem'>ImplItem</a>&gt;</span></code></span></h4>
+<h4 id='method.with_item' class='method'><span id='with_item.v' class='invisible'><code>fn <a href='#method.with_item' class='fnname'>with_item</a>(self, item: <a class='struct' href='https://doc.rust-lang.org/nightly/syntax/ast/struct.ImplItem.html' title='syntax::ast::ImplItem'>ImplItem</a>) -&gt; Self</code></span></h4>
+<h4 id='method.item' class='method'><span id='item.v' class='invisible'><code>fn <a href='#method.item' class='fnname'>item</a>&lt;T&gt;(self, id: T) -&gt; <a class='struct' href='../../aster/item/struct.ItemImplItemBuilder.html' title='aster::item::ItemImplItemBuilder'>ItemImplItemBuilder</a>&lt;Self&gt; <span class='where'>where T: <a class='trait' href='../../aster/ident/trait.ToIdent.html' title='aster::ident::ToIdent'>ToIdent</a></span></code></span></h4>
+<h4 id='method.const_' class='method'><span id='const_.v' class='invisible'><code>fn <a href='#method.const_' class='fnname'>const_</a>&lt;T&gt;(self, id: T) -&gt; <a class='struct' href='../../aster/constant/struct.ConstBuilder.html' title='aster::constant::ConstBuilder'>ConstBuilder</a>&lt;<a class='struct' href='../../aster/item/struct.ItemImplItemBuilder.html' title='aster::item::ItemImplItemBuilder'>ItemImplItemBuilder</a>&lt;Self&gt;&gt; <span class='where'>where T: <a class='trait' href='../../aster/ident/trait.ToIdent.html' title='aster::ident::ToIdent'>ToIdent</a></span></code></span></h4>
+<h4 id='method.method' class='method'><span id='method.v' class='invisible'><code>fn <a href='#method.method' class='fnname'>method</a>&lt;T&gt;(self, id: T) -&gt; <a class='struct' href='../../aster/method/struct.MethodSigBuilder.html' title='aster::method::MethodSigBuilder'>MethodSigBuilder</a>&lt;<a class='struct' href='../../aster/item/struct.ItemImplItemBuilder.html' title='aster::item::ItemImplItemBuilder'>ItemImplItemBuilder</a>&lt;Self&gt;&gt; <span class='where'>where T: <a class='trait' href='../../aster/ident/trait.ToIdent.html' title='aster::ident::ToIdent'>ToIdent</a></span></code></span></h4>
+<h4 id='method.type_' class='method'><span id='type_.v' class='invisible'><code>fn <a href='#method.type_' class='fnname'>type_</a>&lt;T&gt;(self, id: T) -&gt; <a class='struct' href='../../aster/ty/struct.TyBuilder.html' title='aster::ty::TyBuilder'>TyBuilder</a>&lt;<a class='struct' href='../../aster/item/struct.ItemImplItemBuilder.html' title='aster::item::ItemImplItemBuilder'>ItemImplItemBuilder</a>&lt;Self&gt;&gt; <span class='where'>where T: <a class='trait' href='../../aster/ident/trait.ToIdent.html' title='aster::ident::ToIdent'>ToIdent</a></span></code></span></h4>
+</div><h2 id='implementations'>Trait Implementations</h2><h3 class='impl'><span class='in-band'><code>impl&lt;F&gt; <a class='trait' href='../../aster/invoke/trait.Invoke.html' title='aster::invoke::Invoke'>Invoke</a>&lt;<a class='struct' href='https://doc.rust-lang.org/nightly/syntax/ast/struct.Generics.html' title='syntax::ast::Generics'>Generics</a>&gt; for <a class='struct' href='../../aster/item/struct.ItemImplBuilder.html' title='aster::item::ItemImplBuilder'>ItemImplBuilder</a>&lt;F&gt; <span class='where'>where F: <a class='trait' href='../../aster/invoke/trait.Invoke.html' title='aster::invoke::Invoke'>Invoke</a>&lt;<a class='struct' href='https://doc.rust-lang.org/nightly/syntax/ptr/struct.P.html' title='syntax::ptr::P'>P</a>&lt;<a class='struct' href='https://doc.rust-lang.org/nightly/syntax/ast/struct.Item.html' title='syntax::ast::Item'>Item</a>&gt;&gt;</span></code></span><span class='out-of-band'><div class='ghost'></div><a id='src-2523' class='srclink' href='../../src/aster/item.rs.html#1236-1244' title='goto source code'>[src]</a></span></h3>
+<div class='impl-items'><h4 id='associatedtype.Result' class='type'><span id='Result.t' class='invisible'><code>type <a href='../../aster/invoke/trait.Invoke.html#associatedtype.Result' class='type'>Result</a> = Self</code></span></h4>
+<h4 id='method.invoke' class='method'><span id='invoke.v' class='invisible'><code>fn <a href='../../aster/invoke/trait.Invoke.html#tymethod.invoke' class='fnname'>invoke</a>(self, generics: <a class='struct' href='https://doc.rust-lang.org/nightly/syntax/ast/struct.Generics.html' title='syntax::ast::Generics'>Generics</a>) -&gt; Self</code></span></h4>
+</div><h3 class='impl'><span class='in-band'><code>impl&lt;F&gt; <a class='trait' href='../../aster/invoke/trait.Invoke.html' title='aster::invoke::Invoke'>Invoke</a>&lt;<a class='struct' href='https://doc.rust-lang.org/nightly/syntax/ast/struct.Path.html' title='syntax::ast::Path'>Path</a>&gt; for <a class='struct' href='../../aster/item/struct.ItemImplBuilder.html' title='aster::item::ItemImplBuilder'>ItemImplBuilder</a>&lt;F&gt; <span class='where'>where F: <a class='trait' href='../../aster/invoke/trait.Invoke.html' title='aster::invoke::Invoke'>Invoke</a>&lt;<a class='struct' href='https://doc.rust-lang.org/nightly/syntax/ptr/struct.P.html' title='syntax::ptr::P'>P</a>&lt;<a class='struct' href='https://doc.rust-lang.org/nightly/syntax/ast/struct.Item.html' title='syntax::ast::Item'>Item</a>&gt;&gt;</span></code></span><span class='out-of-band'><div class='ghost'></div><a id='src-2529' class='srclink' href='../../src/aster/item.rs.html#1246-1257' title='goto source code'>[src]</a></span></h3>
+<div class='impl-items'><h4 id='associatedtype.Result-1' class='type'><span id='Result.t-1' class='invisible'><code>type <a href='../../aster/invoke/trait.Invoke.html#associatedtype.Result' class='type'>Result</a> = Self</code></span></h4>
+<h4 id='method.invoke-1' class='method'><span id='invoke.v-1' class='invisible'><code>fn <a href='../../aster/invoke/trait.Invoke.html#tymethod.invoke' class='fnname'>invoke</a>(self, path: <a class='struct' href='https://doc.rust-lang.org/nightly/syntax/ast/struct.Path.html' title='syntax::ast::Path'>Path</a>) -&gt; Self</code></span></h4>
+</div><h3 class='impl'><span class='in-band'><code>impl&lt;F&gt; <a class='trait' href='../../aster/invoke/trait.Invoke.html' title='aster::invoke::Invoke'>Invoke</a>&lt;<a class='struct' href='https://doc.rust-lang.org/nightly/syntax/ast/struct.ImplItem.html' title='syntax::ast::ImplItem'>ImplItem</a>&gt; for <a class='struct' href='../../aster/item/struct.ItemImplBuilder.html' title='aster::item::ItemImplBuilder'>ItemImplBuilder</a>&lt;F&gt; <span class='where'>where F: <a class='trait' href='../../aster/invoke/trait.Invoke.html' title='aster::invoke::Invoke'>Invoke</a>&lt;<a class='struct' href='https://doc.rust-lang.org/nightly/syntax/ptr/struct.P.html' title='syntax::ptr::P'>P</a>&lt;<a class='struct' href='https://doc.rust-lang.org/nightly/syntax/ast/struct.Item.html' title='syntax::ast::Item'>Item</a>&gt;&gt;</span></code></span><span class='out-of-band'><div class='ghost'></div><a id='src-2535' class='srclink' href='../../src/aster/item.rs.html#1259-1267' title='goto source code'>[src]</a></span></h3>
+<div class='impl-items'><h4 id='associatedtype.Result-2' class='type'><span id='Result.t-2' class='invisible'><code>type <a href='../../aster/invoke/trait.Invoke.html#associatedtype.Result' class='type'>Result</a> = Self</code></span></h4>
+<h4 id='method.invoke-2' class='method'><span id='invoke.v-2' class='invisible'><code>fn <a href='../../aster/invoke/trait.Invoke.html#tymethod.invoke' class='fnname'>invoke</a>(self, item: <a class='struct' href='https://doc.rust-lang.org/nightly/syntax/ast/struct.ImplItem.html' title='syntax::ast::ImplItem'>ImplItem</a>) -&gt; Self</code></span></h4>
+</div><h3 class='impl'><span class='in-band'><code>impl&lt;F&gt; <a class='trait' href='../../aster/invoke/trait.Invoke.html' title='aster::invoke::Invoke'>Invoke</a>&lt;<a class='struct' href='https://doc.rust-lang.org/nightly/syntax/ptr/struct.P.html' title='syntax::ptr::P'>P</a>&lt;<a class='struct' href='https://doc.rust-lang.org/nightly/syntax/ast/struct.Ty.html' title='syntax::ast::Ty'>Ty</a>&gt;&gt; for <a class='struct' href='../../aster/item/struct.ItemImplBuilder.html' title='aster::item::ItemImplBuilder'>ItemImplBuilder</a>&lt;F&gt; <span class='where'>where F: <a class='trait' href='../../aster/invoke/trait.Invoke.html' title='aster::invoke::Invoke'>Invoke</a>&lt;<a class='struct' href='https://doc.rust-lang.org/nightly/syntax/ptr/struct.P.html' title='syntax::ptr::P'>P</a>&lt;<a class='struct' href='https://doc.rust-lang.org/nightly/syntax/ast/struct.Item.html' title='syntax::ast::Item'>Item</a>&gt;&gt;</span></code></span><span class='out-of-band'><div class='ghost'></div><a id='src-2541' class='srclink' href='../../src/aster/item.rs.html#1269-1277' title='goto source code'>[src]</a></span></h3>
+<div class='impl-items'><h4 id='associatedtype.Result-3' class='type'><span id='Result.t-3' class='invisible'><code>type <a href='../../aster/invoke/trait.Invoke.html#associatedtype.Result' class='type'>Result</a> = F::Result</code></span></h4>
+<h4 id='method.invoke-3' class='method'><span id='invoke.v-3' class='invisible'><code>fn <a href='../../aster/invoke/trait.Invoke.html#tymethod.invoke' class='fnname'>invoke</a>(self, ty: <a class='struct' href='https://doc.rust-lang.org/nightly/syntax/ptr/struct.P.html' title='syntax::ptr::P'>P</a>&lt;<a class='struct' href='https://doc.rust-lang.org/nightly/syntax/ast/struct.Ty.html' title='syntax::ast::Ty'>Ty</a>&gt;) -&gt; F::Result</code></span></h4>
+</div></section>
+    <section id='search' class="content hidden"></section>
+
+    <section class="footer"></section>
+
+    <aside id="help" class="hidden">
+        <div>
+            <h1 class="hidden">Help</h1>
+
+            <div class="shortcuts">
+                <h2>Keyboard Shortcuts</h2>
+
+                <dl>
+                    <dt>?</dt>
+                    <dd>Show this help dialog</dd>
+                    <dt>S</dt>
+                    <dd>Focus the search field</dd>
+                    <dt>&larrb;</dt>
+                    <dd>Move up in search results</dd>
+                    <dt>&rarrb;</dt>
+                    <dd>Move down in search results</dd>
+                    <dt>&#9166;</dt>
+                    <dd>Go to active search result</dd>
+                    <dt>+</dt>
+                    <dd>Collapse/expand all sections</dd>
+                </dl>
+            </div>
+
+            <div class="infos">
+                <h2>Search Tricks</h2>
+
+                <p>
+                    Prefix searches with a type followed by a colon (e.g.
+                    <code>fn:</code>) to restrict the search to a given type.
+                </p>
+
+                <p>
+                    Accepted types are: <code>fn</code>, <code>mod</code>,
+                    <code>struct</code>, <code>enum</code>,
+                    <code>trait</code>, <code>type</code>, <code>macro</code>,
+                    and <code>const</code>.
+                </p>
+
+                <p>
+                    Search functions by type signature (e.g.
+                    <code>vec -> usize</code> or <code>* -> vec</code>)
+                </p>
+            </div>
+        </div>
+    </aside>
+
+    
+
+    <script>
+        window.rootPath = "../../";
+        window.currentCrate = "aster";
+        window.playgroundUrl = "";
+    </script>
+    <script src="../../jquery.js"></script>
+    <script src="../../main.js"></script>
+    
+    <script defer src="../../search-index.js"></script>
+</body>
+</html>

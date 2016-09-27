@@ -1,0 +1,1 @@
+initSidebarItems({"enum":[["FieldDefault","Represents the default to use for a field when deserializing."]],"fn":[["get_serde_meta_items",""]],"struct":[["Field","Represents field attribute information"],["Item","Represents container (e.g. struct) attribute information"],["Name",""],["Variant","Represents variant attribute information"]]});

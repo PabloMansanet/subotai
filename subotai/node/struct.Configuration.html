@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="rustdoc">
+    <meta name="description" content="API documentation for the Rust `Configuration` struct in crate `subotai`.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, Configuration">
+
+    <title>subotai::node::Configuration - Rust</title>
+
+    <link rel="stylesheet" type="text/css" href="../../rustdoc.css">
+    <link rel="stylesheet" type="text/css" href="../../main.css">
+    
+
+    
+    
+</head>
+<body class="rustdoc">
+    <!--[if lte IE 8]>
+    <div class="warning">
+        This old browser is unsupported and will most likely display funky
+        things.
+    </div>
+    <![endif]-->
+
+    
+
+    <nav class="sidebar">
+        
+        <p class='location'><a href='../index.html'>subotai</a>::<wbr><a href='index.html'>node</a></p><script>window.sidebarCurrent = {name: 'Configuration', ty: 'struct', relpath: ''};</script><script defer src="sidebar-items.js"></script>
+    </nav>
+
+    <nav class="sub">
+        <form class="search-form js-only">
+            <div class="search-container">
+                <input class="search-input" name="search"
+                       autocomplete="off"
+                       placeholder="Click or press ‘S’ to search, ‘?’ for more options…"
+                       type="search">
+            </div>
+        </form>
+    </nav>
+
+    <section id='main' class="content struct">
+<h1 class='fqn'><span class='in-band'>Struct <a href='../index.html'>subotai</a>::<wbr><a href='index.html'>node</a>::<wbr><a class='struct' href=''>Configuration</a></span><span class='out-of-band'><span id='render-detail'>
+                   <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
+                       [<span class='inner'>&#x2212;</span>]
+                   </a>
+               </span><a id='src-548' class='srclink' href='../../src/subotai/src/node/mod.rs.html#77-131' title='goto source code'>[src]</a></span></h1>
+<pre class='rust struct'>pub struct Configuration {
+    pub alpha: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>,
+    pub impatience: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>,
+    pub k_factor: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>,
+    pub max_conflicts: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>,
+    pub max_storage: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>,
+    pub max_storage_blob_size: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>,
+    pub expiration_distance_threshold: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>,
+    pub base_expiration_time_hrs: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.i64.html'>i64</a>,
+    pub base_cache_time_mins: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.i64.html'>i64</a>,
+    pub network_timeout_s: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.i64.html'>i64</a>,
+}</pre><div class='docblock'><p>Network configuration constants. Do not set these values directly, as there
+is no way to initialize a node from a <code>Configuration</code> struct. Instead, use 
+<code>node::Factory</code> if you want your application to use non-default network constants.</p>
+
+<p>Note that for the network to function optimally, the <code>alpha</code>, <code>impatience</code>, 
+<code>expiration_distance_threshold</code> and  <code>base_expiration_time_hrs</code> must be identical 
+for all nodes.</p>
+</div><h2 class='fields'>Fields</h2><span id='structfield.alpha' class='structfield'>
+                           <span id='alpha.v' class='invisible'>
+                           <code>alpha: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a></code>
+                           </span></span><span class='stab '></span><div class='docblock'><p>Network-wide concurrency factor. It&#39;s used, for example, to decide the
+number of remote nodes to interrogate concurrently when performing a 
+network-wide lookup.</p>
+</div><span id='structfield.impatience' class='structfield'>
+                           <span id='impatience.v' class='invisible'>
+                           <code>impatience: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a></code>
+                           </span></span><span class='stab '></span><div class='docblock'><p>Impatience factor, valid in the range [0..ALPHA). When performing &quot;waves&quot;,
+the impatience factor denotes how many nodes we can give up waiting for, before
+starting the next wave. </p>
+
+<p>If we send a request to ALPHA nodes during a lookup wave, we will start
+the next wave after we receive &#39;ALPHA - IMPATIENCE&#39; responses.</p>
+</div><span id='structfield.k_factor' class='structfield'>
+                           <span id='k_factor.v' class='invisible'>
+                           <code>k_factor: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a></code>
+                           </span></span><span class='stab '></span><div class='docblock'><p>Data structure factor. It&#39;s used to dictate the size of the internal routing
+data structures (k-buckets).</p>
+</div><span id='structfield.max_conflicts' class='structfield'>
+                           <span id='max_conflicts.v' class='invisible'>
+                           <code>max_conflicts: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a></code>
+                           </span></span><span class='stab '></span><div class='docblock'><p>Maximum amount of eviction conflicts allowed before the node goes into
+a temporary defensive mode, and starts to prioritize old contacts to new, 
+potentially malicious ones.</p>
+</div><span id='structfield.max_storage' class='structfield'>
+                           <span id='max_storage.v' class='invisible'>
+                           <code>max_storage: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a></code>
+                           </span></span><span class='stab '></span><div class='docblock'><p>Maximum amount of storage entries (key-value or key-blob pairs). This has no
+effect on the routing table size (amount of node id-address pairs), which is
+dictated by the k_factor.</p>
+</div><span id='structfield.max_storage_blob_size' class='structfield'>
+                           <span id='max_storage_blob_size.v' class='invisible'>
+                           <code>max_storage_blob_size: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a></code>
+                           </span></span><span class='stab '></span><div class='docblock'><p>Maximum size in bytes for a blob storage entry. (A blob entry consists in a
+key associated with a chunk of binary data, instead of a 160 bit value hash).</p>
+</div><span id='structfield.expiration_distance_threshold' class='structfield'>
+                           <span id='expiration_distance_threshold.v' class='invisible'>
+                           <code>expiration_distance_threshold: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a></code>
+                           </span></span><span class='stab '></span><div class='docblock'><p>Xor distance from a key at which point nodes will start to dramatically decrease
+the expiration time for cached storage entries. This is only relevant in cases of 
+extreme network traffic around a given key. A bigger threshold allows for more
+over-caching and therefore less load on the critical nodes, while a smaller 
+threshold allows for a leaner network.</p>
+</div><span id='structfield.base_expiration_time_hrs' class='structfield'>
+                           <span id='base_expiration_time_hrs.v' class='invisible'>
+                           <code>base_expiration_time_hrs: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.i64.html'>i64</a></code>
+                           </span></span><span class='stab '></span><div class='docblock'><p>Base expiration time for storage entries. Every time you call <code>store</code> on a node
+that resides on a live network (i.e. is in an <code>OnGrid</code> state) you guarantee the
+entry will remain in the network for this number of hours. Calling <code>store</code> again
+will refresh this time.</p>
+</div><span id='structfield.base_cache_time_mins' class='structfield'>
+                           <span id='base_cache_time_mins.v' class='invisible'>
+                           <code>base_cache_time_mins: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.i64.html'>i64</a></code>
+                           </span></span><span class='stab '></span><div class='docblock'><p>Base expiration time for cached storage entries. When several nodes attempt to
+retrieve the same entry, it is cached at progressively longer distances from the 
+owner. This will not prolong the overall lifespan of the entry because cached
+entries do not live long enough to be republished.</p>
+</div><span id='structfield.network_timeout_s' class='structfield'>
+                           <span id='network_timeout_s.v' class='invisible'>
+                           <code>network_timeout_s: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.i64.html'>i64</a></code>
+                           </span></span><span class='stab '></span><div class='docblock'><p>Time in seconds after which it can be assumed that a remote node has failed to
+respond to a query.</p>
+</div><h2 id='implementations'>Trait Implementations</h2><h3 class='impl'><span class='in-band'><code>impl <a class='trait' href='https://doc.rust-lang.org/nightly/core/clone/trait.Clone.html' title='core::clone::Clone'>Clone</a> for <a class='struct' href='../../subotai/node/struct.Configuration.html' title='subotai::node::Configuration'>Configuration</a></code></span><span class='out-of-band'><div class='ghost'></div><a id='src-559' class='srclink' href='../../src/subotai/src/node/mod.rs.html#76' title='goto source code'>[src]</a></span></h3>
+<div class='impl-items'><h4 id='method.clone' class='method'><span id='clone.v' class='invisible'><code>fn <a href='https://doc.rust-lang.org/nightly/core/clone/trait.Clone.html#tymethod.clone' class='fnname'>clone</a>(&amp;self) -&gt; <a class='struct' href='../../subotai/node/struct.Configuration.html' title='subotai::node::Configuration'>Configuration</a></code></span></h4>
+<div class='docblock'><p>Returns a copy of the value. <a href="https://doc.rust-lang.org/nightly/core/clone/trait.Clone.html#tymethod.clone">Read more</a></p>
+</div><h4 id='method.clone_from' class='method'><span id='clone_from.v' class='invisible'><code>fn <a href='https://doc.rust-lang.org/nightly/core/clone/trait.Clone.html#method.clone_from' class='fnname'>clone_from</a>(&amp;mut self, source: &amp;Self)</code><div class='since' title='Stable since Rust version 1.0.0'>1.0.0</div></span></h4>
+<div class='docblock'><p>Performs copy-assignment from <code>source</code>. <a href="https://doc.rust-lang.org/nightly/core/clone/trait.Clone.html#method.clone_from">Read more</a></p>
+</div></div><h3 class='impl'><span class='in-band'><code>impl <a class='trait' href='https://doc.rust-lang.org/nightly/core/fmt/trait.Debug.html' title='core::fmt::Debug'>Debug</a> for <a class='struct' href='../../subotai/node/struct.Configuration.html' title='subotai::node::Configuration'>Configuration</a></code></span><span class='out-of-band'><div class='ghost'></div><a id='src-572' class='srclink' href='../../src/subotai/src/node/mod.rs.html#76' title='goto source code'>[src]</a></span></h3>
+<div class='impl-items'><h4 id='method.fmt' class='method'><span id='fmt.v' class='invisible'><code>fn <a href='https://doc.rust-lang.org/nightly/core/fmt/trait.Debug.html#tymethod.fmt' class='fnname'>fmt</a>(&amp;self, __arg_0: &amp;mut <a class='struct' href='https://doc.rust-lang.org/nightly/core/fmt/struct.Formatter.html' title='core::fmt::Formatter'>Formatter</a>) -&gt; <a class='type' href='https://doc.rust-lang.org/nightly/core/fmt/type.Result.html' title='core::fmt::Result'>Result</a></code></span></h4>
+<div class='docblock'><p>Formats the value using the given formatter.</p>
+</div></div><h3 class='impl'><span class='in-band'><code>impl <a class='trait' href='https://doc.rust-lang.org/nightly/core/default/trait.Default.html' title='core::default::Default'>Default</a> for <a class='struct' href='../../subotai/node/struct.Configuration.html' title='subotai::node::Configuration'>Configuration</a></code></span><span class='out-of-band'><div class='ghost'></div><a id='src-587' class='srclink' href='../../src/subotai/src/node/mod.rs.html#133-148' title='goto source code'>[src]</a></span></h3>
+<div class='impl-items'><h4 id='method.default' class='method'><span id='default.v' class='invisible'><code>fn <a href='https://doc.rust-lang.org/nightly/core/default/trait.Default.html#tymethod.default' class='fnname'>default</a>() -&gt; <a class='struct' href='../../subotai/node/struct.Configuration.html' title='subotai::node::Configuration'>Configuration</a></code></span></h4>
+<div class='docblock'><p>Returns the &quot;default value&quot; for a type. <a href="https://doc.rust-lang.org/nightly/core/default/trait.Default.html#tymethod.default">Read more</a></p>
+</div></div></section>
+    <section id='search' class="content hidden"></section>
+
+    <section class="footer"></section>
+
+    <aside id="help" class="hidden">
+        <div>
+            <h1 class="hidden">Help</h1>
+
+            <div class="shortcuts">
+                <h2>Keyboard Shortcuts</h2>
+
+                <dl>
+                    <dt>?</dt>
+                    <dd>Show this help dialog</dd>
+                    <dt>S</dt>
+                    <dd>Focus the search field</dd>
+                    <dt>&larrb;</dt>
+                    <dd>Move up in search results</dd>
+                    <dt>&rarrb;</dt>
+                    <dd>Move down in search results</dd>
+                    <dt>&#9166;</dt>
+                    <dd>Go to active search result</dd>
+                    <dt>+</dt>
+                    <dd>Collapse/expand all sections</dd>
+                </dl>
+            </div>
+
+            <div class="infos">
+                <h2>Search Tricks</h2>
+
+                <p>
+                    Prefix searches with a type followed by a colon (e.g.
+                    <code>fn:</code>) to restrict the search to a given type.
+                </p>
+
+                <p>
+                    Accepted types are: <code>fn</code>, <code>mod</code>,
+                    <code>struct</code>, <code>enum</code>,
+                    <code>trait</code>, <code>type</code>, <code>macro</code>,
+                    and <code>const</code>.
+                </p>
+
+                <p>
+                    Search functions by type signature (e.g.
+                    <code>vec -> usize</code> or <code>* -> vec</code>)
+                </p>
+            </div>
+        </div>
+    </aside>
+
+    
+
+    <script>
+        window.rootPath = "../../";
+        window.currentCrate = "subotai";
+        window.playgroundUrl = "";
+    </script>
+    <script src="../../jquery.js"></script>
+    <script src="../../main.js"></script>
+    
+    <script defer src="../../search-index.js"></script>
+</body>
+</html>

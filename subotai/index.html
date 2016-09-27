@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="rustdoc">
+    <meta name="description" content="API documentation for the Rust `subotai` crate.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, subotai">
+
+    <title>subotai - Rust</title>
+
+    <link rel="stylesheet" type="text/css" href="../rustdoc.css">
+    <link rel="stylesheet" type="text/css" href="../main.css">
+    
+
+    
+    
+</head>
+<body class="rustdoc">
+    <!--[if lte IE 8]>
+    <div class="warning">
+        This old browser is unsupported and will most likely display funky
+        things.
+    </div>
+    <![endif]-->
+
+    
+
+    <nav class="sidebar">
+        
+        <p class='location'></p><script>window.sidebarCurrent = {name: 'subotai', ty: 'mod', relpath: '../'};</script>
+    </nav>
+
+    <nav class="sub">
+        <form class="search-form js-only">
+            <div class="search-container">
+                <input class="search-input" name="search"
+                       autocomplete="off"
+                       placeholder="Click or press ‘S’ to search, ‘?’ for more options…"
+                       type="search">
+            </div>
+        </form>
+    </nav>
+
+    <section id='main' class="content mod">
+<h1 class='fqn'><span class='in-band'>Crate <a class='mod' href=''>subotai</a></span><span class='out-of-band'><span id='render-detail'>
+                   <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
+                       [<span class='inner'>&#x2212;</span>]
+                   </a>
+               </span><a id='src-0' class='srclink' href='../src/subotai/src/lib.rs.html#1-44' title='goto source code'>[src]</a></span></h1>
+<div class='docblock'><p>Subotai is a Kademlia based distributed hash table. It&#39;s designed to be easy to use, safe
+and quick. Here are some of the ideas that differentiate it from other DHTs:</p>
+
+<ul>
+<li><p><strong>Externally synchronous, internally concurrent</strong>: All public methods are blocking and return
+a sane result or an explicit timeout. Internally however, subotai is fully concurrent,
+and parallel operations will often help each other complete.</p></li>
+<li><p><strong>Introduce nodes first, resolve conflicts later</strong>: Subotai differs to the original Kademlia
+implementation in that it gives temporary priority to newer contacts for full buckets. This
+makes the network more dynamic and capable to adapt quickly, while still providing protection
+against basic <code>DDoS</code> attacks in the form of a defensive state.</p></li>
+<li><p><strong>Flexible storage</strong>: Any key in the key space can hold any number of different entries with
+independent expiration times. </p></li>
+<li><p><strong>Impatient</strong>: Subotai is &quot;impatient&quot;, in that it will attempt to never wait for responses from
+an unresponsive node. Queries are sent in parallel where possible, and processes continue when 
+a subset of nodes have responded.</p></li>
+</ul>
+
+<p>Subotai supports automatic key republishing, providing a good guarantee that an entry will remain
+in the network until a configurable expiration date. Manually storing the entry in the network
+again will refresh the expiration date.</p>
+
+<p>Subotai also supports caching to balance intense traffic around a given key.</p>
+</div><h2 id='modules' class='section-header'><a href="#modules">Modules</a></h2>
+<table>
+                       <tr class=' module-item'>
+                           <td><a class='mod' href='hash/index.html'
+                                  title='subotai::hash'>hash</a></td>
+                           <td class='docblock-short'>
+                                <p>The <code>SubotaiHash</code> is the element around which the Subotai network organizes itself.
+It&#39;s 160 bits long, and it serves as an ID number to identify nodes, as a key to
+identify storage entries, and optionally as a stored value.</p>
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class='mod' href='node/index.html'
+                                  title='subotai::node'>node</a></td>
+                           <td class='docblock-short'>
+                                <p>The node module is the main point of contact with Subotai. Node structs contain
+all the pieces needed to join a Subotai network.</p>
+                           </td>
+                       </tr></table><h2 id='enums' class='section-header'><a href="#enums">Enums</a></h2>
+<table>
+                       <tr class=' module-item'>
+                           <td><a class='enum' href='enum.SubotaiError.html'
+                                  title='subotai::SubotaiError'>SubotaiError</a></td>
+                           <td class='docblock-short'>
+                                <p>Subotai error type. It reports the various ways in which a hash table query may fail.</p>
+                           </td>
+                       </tr></table><h2 id='types' class='section-header'><a href="#types">Type Definitions</a></h2>
+<table>
+                       <tr class=' module-item'>
+                           <td><a class='type' href='type.SubotaiResult.html'
+                                  title='subotai::SubotaiResult'>SubotaiResult</a></td>
+                           <td class='docblock-short'>
+                                <p>Custom result type over <code>SubotaiError</code>.</p>
+                           </td>
+                       </tr></table></section>
+    <section id='search' class="content hidden"></section>
+
+    <section class="footer"></section>
+
+    <aside id="help" class="hidden">
+        <div>
+            <h1 class="hidden">Help</h1>
+
+            <div class="shortcuts">
+                <h2>Keyboard Shortcuts</h2>
+
+                <dl>
+                    <dt>?</dt>
+                    <dd>Show this help dialog</dd>
+                    <dt>S</dt>
+                    <dd>Focus the search field</dd>
+                    <dt>&larrb;</dt>
+                    <dd>Move up in search results</dd>
+                    <dt>&rarrb;</dt>
+                    <dd>Move down in search results</dd>
+                    <dt>&#9166;</dt>
+                    <dd>Go to active search result</dd>
+                    <dt>+</dt>
+                    <dd>Collapse/expand all sections</dd>
+                </dl>
+            </div>
+
+            <div class="infos">
+                <h2>Search Tricks</h2>
+
+                <p>
+                    Prefix searches with a type followed by a colon (e.g.
+                    <code>fn:</code>) to restrict the search to a given type.
+                </p>
+
+                <p>
+                    Accepted types are: <code>fn</code>, <code>mod</code>,
+                    <code>struct</code>, <code>enum</code>,
+                    <code>trait</code>, <code>type</code>, <code>macro</code>,
+                    and <code>const</code>.
+                </p>
+
+                <p>
+                    Search functions by type signature (e.g.
+                    <code>vec -> usize</code> or <code>* -> vec</code>)
+                </p>
+            </div>
+        </div>
+    </aside>
+
+    
+
+    <script>
+        window.rootPath = "../";
+        window.currentCrate = "subotai";
+        window.playgroundUrl = "";
+    </script>
+    <script src="../jquery.js"></script>
+    <script src="../main.js"></script>
+    
+    <script defer src="../search-index.js"></script>
+</body>
+</html>

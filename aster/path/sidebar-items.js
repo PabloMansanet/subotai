@@ -1,0 +1,1 @@
+initSidebarItems({"struct":[["PathBuilder",""],["PathSegmentBuilder",""],["PathSegmentReturnBuilder",""],["PathSegmentsBuilder",""],["TypeBindingBuilder",""]],"trait":[["IntoPath",""]]});

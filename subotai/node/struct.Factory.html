@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="rustdoc">
+    <meta name="description" content="API documentation for the Rust `Factory` struct in crate `subotai`.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, Factory">
+
+    <title>subotai::node::Factory - Rust</title>
+
+    <link rel="stylesheet" type="text/css" href="../../rustdoc.css">
+    <link rel="stylesheet" type="text/css" href="../../main.css">
+    
+
+    
+    
+</head>
+<body class="rustdoc">
+    <!--[if lte IE 8]>
+    <div class="warning">
+        This old browser is unsupported and will most likely display funky
+        things.
+    </div>
+    <![endif]-->
+
+    
+
+    <nav class="sidebar">
+        
+        <p class='location'><a href='../index.html'>subotai</a>::<wbr><a href='index.html'>node</a></p><script>window.sidebarCurrent = {name: 'Factory', ty: 'struct', relpath: ''};</script><script defer src="sidebar-items.js"></script>
+    </nav>
+
+    <nav class="sub">
+        <form class="search-form js-only">
+            <div class="search-container">
+                <input class="search-input" name="search"
+                       autocomplete="off"
+                       placeholder="Click or press ‘S’ to search, ‘?’ for more options…"
+                       type="search">
+            </div>
+        </form>
+    </nav>
+
+    <section id='main' class="content struct">
+<h1 class='fqn'><span class='in-band'>Struct <a href='../index.html'>subotai</a>::<wbr><a href='index.html'>node</a>::<wbr><a class='struct' href=''>Factory</a></span><span class='out-of-band'><span id='render-detail'>
+                   <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
+                       [<span class='inner'>&#x2212;</span>]
+                   </a>
+               </span><a id='src-467' class='srclink' href='../../src/subotai/src/node/factory.rs.html#10-14' title='goto source code'>[src]</a></span></h1>
+<pre class='rust struct'>pub struct Factory { /* fields omitted */ }</pre><div class='docblock'><p>Allows the construction of nodes with custom network constants, specific ports,
+and other options.</p>
+</div><h2 id='methods'>Methods</h2><h3 class='impl'><span class='in-band'><code>impl <a class='struct' href='../../subotai/node/struct.Factory.html' title='subotai::node::Factory'>Factory</a></code></span><span class='out-of-band'><div class='ghost'></div><a id='src-471' class='srclink' href='../../src/subotai/src/node/factory.rs.html#16-129' title='goto source code'>[src]</a></span></h3>
+<div class='impl-items'><h4 id='method.new' class='method'><span id='new.v' class='invisible'><code>fn <a href='#method.new' class='fnname'>new</a>() -&gt; Self</code></span></h4>
+<h4 id='method.create_node' class='method'><span id='create_node.v' class='invisible'><code>fn <a href='#method.create_node' class='fnname'>create_node</a>(&amp;self) -&gt; <a class='type' href='../../subotai/type.SubotaiResult.html' title='subotai::SubotaiResult'>SubotaiResult</a>&lt;<a class='struct' href='../../subotai/node/struct.Node.html' title='subotai::node::Node'>Node</a>&gt;</code></span></h4>
+<div class='docblock'><p>Creates a node with the configuration values specified in the factory. Defaults to the
+same values as calling Node::new().</p>
+</div><h4 id='method.inbound_port' class='method'><span id='inbound_port.v' class='invisible'><code>fn <a href='#method.inbound_port' class='fnname'>inbound_port</a>(self, port: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.u16.html'>u16</a>) -&gt; Self</code></span></h4>
+<div class='docblock'><p>Inbound UDP port for incoming RPCs.</p>
+</div><h4 id='method.outbound_port' class='method'><span id='outbound_port.v' class='invisible'><code>fn <a href='#method.outbound_port' class='fnname'>outbound_port</a>(self, port: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.u16.html'>u16</a>) -&gt; Self</code></span></h4>
+<div class='docblock'><p>Outbound UDP port for outgoing RPCs.</p>
+</div><h4 id='method.alpha' class='method'><span id='alpha.v' class='invisible'><code>fn <a href='#method.alpha' class='fnname'>alpha</a>(self, alpha: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>) -&gt; Self</code></span></h4>
+<div class='docblock'><p>Network-wide concurrency factor. It&#39;s used, for example, to decide the
+number of remote nodes to interrogate concurrently when performing a 
+network-wide lookup.</p>
+</div><h4 id='method.impatience' class='method'><span id='impatience.v' class='invisible'><code>fn <a href='#method.impatience' class='fnname'>impatience</a>(self, impatience: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>) -&gt; Self</code></span></h4>
+<div class='docblock'><p>Impatience factor, valid in the range [0..ALPHA). When performing &quot;waves&quot;,
+the impatience factor denotes how many nodes we can give up waiting for, before
+starting the next wave. </p>
+
+<p>If we send a request to ALPHA nodes during a lookup wave, we will start
+the next wave after we receive &#39;ALPHA - IMPATIENCE&#39; responses.</p>
+</div><h4 id='method.k_factor' class='method'><span id='k_factor.v' class='invisible'><code>fn <a href='#method.k_factor' class='fnname'>k_factor</a>(self, k_factor: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>) -&gt; Self</code></span></h4>
+<div class='docblock'><p>Data structure factor. It&#39;s used to dictate the size of the internal routing
+data structures (k-buckets).</p>
+</div><h4 id='method.max_conflicts' class='method'><span id='max_conflicts.v' class='invisible'><code>fn <a href='#method.max_conflicts' class='fnname'>max_conflicts</a>(self, max_conflicts: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>) -&gt; Self</code></span></h4>
+<div class='docblock'><p>Maximum amount of eviction conflicts allowed before the node goes into
+a temporary defensive mode, and starts to prioritize old contacts to new, 
+potentially malicious ones.</p>
+</div><h4 id='method.max_storage' class='method'><span id='max_storage.v' class='invisible'><code>fn <a href='#method.max_storage' class='fnname'>max_storage</a>(self, max_storage: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>) -&gt; Self</code></span></h4>
+<div class='docblock'><p>Maximum amount of storage entries (key-value or key-blob pairs). This has no
+effect on the routing table size (amount of node id-address pairs), which is
+dictated by the k_factor.</p>
+</div><h4 id='method.max_storage_blob_size' class='method'><span id='max_storage_blob_size.v' class='invisible'><code>fn <a href='#method.max_storage_blob_size' class='fnname'>max_storage_blob_size</a>(self, max_storage_blob_size: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>) -&gt; Self</code></span></h4>
+<div class='docblock'><p>Maximum size in bytes for a blob storage entry. (A blob entry consists in a
+key associated with a chunk of binary data, instead of a 160 bit value hash).</p>
+</div><h4 id='method.expiration_distance_threshold' class='method'><span id='expiration_distance_threshold.v' class='invisible'><code>fn <a href='#method.expiration_distance_threshold' class='fnname'>expiration_distance_threshold</a>(self, expiration_distance_threshold: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>) -&gt; Self</code></span></h4>
+<div class='docblock'><p>Xor distance from a key at which point nodes will start to dramatically decrease
+the expiration time for cached storage entries. This is only relevant in cases of 
+extreme network traffic around a given key. A bigger threshold allows for more
+over-caching and therefore less load on the critical nodes, while a smaller 
+threshold allows for a leaner network.</p>
+</div><h4 id='method.network_timeout_s' class='method'><span id='network_timeout_s.v' class='invisible'><code>fn <a href='#method.network_timeout_s' class='fnname'>network_timeout_s</a>(self, network_timeout_s: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.i64.html'>i64</a>) -&gt; Self</code></span></h4>
+<div class='docblock'><p>Time in seconds after which it can be assumed that a remote node has failed to
+respond to a query.</p>
+</div><h4 id='method.base_expiration_time_hrs' class='method'><span id='base_expiration_time_hrs.v' class='invisible'><code>fn <a href='#method.base_expiration_time_hrs' class='fnname'>base_expiration_time_hrs</a>(self, base_expiration_time_hrs: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.i64.html'>i64</a>) -&gt; Self</code></span></h4>
+<div class='docblock'><p>Base expiration time for storage entries. Every time you call <code>store</code> on a node
+that resides on a live network (i.e. is in an <code>OnGrid</code> state) you guarantee the
+entry will remain in the network for this number of hours. Calling <code>store</code> again
+will refresh this time.</p>
+</div><h4 id='method.base_cache_time_mins' class='method'><span id='base_cache_time_mins.v' class='invisible'><code>fn <a href='#method.base_cache_time_mins' class='fnname'>base_cache_time_mins</a>(self, base_cache_time_mins: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.i64.html'>i64</a>) -&gt; Self</code></span></h4>
+<div class='docblock'><p>Base expiration time for cached storage entries. When several nodes attempt to
+retrieve the same entry, it is cached at progressively longer distances from the 
+owner. This will not prolong the overall lifespan of the entry because cached
+entries do not live long enough to be republished.</p>
+
+<p>Note: Values will be clamped to always be smaller than 1 hour.</p>
+</div></div></section>
+    <section id='search' class="content hidden"></section>
+
+    <section class="footer"></section>
+
+    <aside id="help" class="hidden">
+        <div>
+            <h1 class="hidden">Help</h1>
+
+            <div class="shortcuts">
+                <h2>Keyboard Shortcuts</h2>
+
+                <dl>
+                    <dt>?</dt>
+                    <dd>Show this help dialog</dd>
+                    <dt>S</dt>
+                    <dd>Focus the search field</dd>
+                    <dt>&larrb;</dt>
+                    <dd>Move up in search results</dd>
+                    <dt>&rarrb;</dt>
+                    <dd>Move down in search results</dd>
+                    <dt>&#9166;</dt>
+                    <dd>Go to active search result</dd>
+                    <dt>+</dt>
+                    <dd>Collapse/expand all sections</dd>
+                </dl>
+            </div>
+
+            <div class="infos">
+                <h2>Search Tricks</h2>
+
+                <p>
+                    Prefix searches with a type followed by a colon (e.g.
+                    <code>fn:</code>) to restrict the search to a given type.
+                </p>
+
+                <p>
+                    Accepted types are: <code>fn</code>, <code>mod</code>,
+                    <code>struct</code>, <code>enum</code>,
+                    <code>trait</code>, <code>type</code>, <code>macro</code>,
+                    and <code>const</code>.
+                </p>
+
+                <p>
+                    Search functions by type signature (e.g.
+                    <code>vec -> usize</code> or <code>* -> vec</code>)
+                </p>
+            </div>
+        </div>
+    </aside>
+
+    
+
+    <script>
+        window.rootPath = "../../";
+        window.currentCrate = "subotai";
+        window.playgroundUrl = "";
+    </script>
+    <script src="../../jquery.js"></script>
+    <script src="../../main.js"></script>
+    
+    <script defer src="../../search-index.js"></script>
+</body>
+</html>

@@ -1,0 +1,1 @@
+initSidebarItems({"struct":[["AtomicOption","An atomic version of `Option<Box<T>>`, useful for moving owned objects between threads in a wait-free manner."]]});
