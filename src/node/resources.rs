@@ -177,7 +177,7 @@ impl Resources {
             .collect();
        
          // We restore the order and remove duplicates, to finally return the closest ALPHA.
-         closest.sort_by(|ref info_a, ref info_b| (&info_a.id ^ target).cmp(&(&info_b.id ^ target)));
+         closest.sort_by(|info_a, info_b| (&info_a.id ^ target).cmp(&(&info_b.id ^ target)));
          closest.dedup();
          WaveStrategy::Continue(closest
             .iter()
@@ -222,7 +222,7 @@ impl Resources {
             .collect();
        
          // We restore the order and remove duplicates, to finally return the closest ALPHA.
-         closest.sort_by(|ref info_a, ref info_b| (&info_a.id ^ target).cmp(&(&info_b.id ^ target)));
+         closest.sort_by(|info_a, info_b| (&info_a.id ^ target).cmp(&(&info_b.id ^ target)));
          closest.dedup();
 
          if queried.len() >= depth {
@@ -274,7 +274,7 @@ impl Resources {
             .chain(former_closest)
             .filter(|info| !queried.contains(info) && &info.id != &self.id)
             .collect();
-         closest.sort_by(|ref info_a, ref info_b| (&info_a.id ^ key).cmp(&(&info_b.id ^ key)));
+         closest.sort_by(|info_a, info_b| (&info_a.id ^ key).cmp(&(&info_b.id ^ key)));
          closest.dedup();
 
          // The cache candidate is the closest node that hasn't found the value.
@@ -283,7 +283,7 @@ impl Resources {
          // If we found it, we cache the values and we're done.
          if let Some(retrieved) = responses.iter().filter_map(|rpc| rpc.successfully_retrieved(key)).next() {
             if let Some(ref candidate) = cache_candidate {
-               let expiration = self.calculate_cache_expiration(&candidate.id, &key);
+               let expiration = self.calculate_cache_expiration(&candidate.id, key);
                for entry in &retrieved {
                   let rpc = Rpc::store(self.local_info(), key.clone(), entry.clone(), rpc::SerializableTime::from(expiration));
                   let packet = rpc.serialize();
@@ -514,9 +514,15 @@ impl Resources {
 
    fn handle_mass_store(&self, payload: sync::Arc<rpc::MassStorePayload>, sender: routing::NodeInfo) -> SubotaiResult<()> {
       
-      let store_result = if payload.entries_and_expirations.iter().all(|&(ref entry, ref expiration)| {
-         self.storage.store(&payload.key, &entry, &time::Tm::from(expiration.clone())) == storage::StoreResult::Success
-      }) { storage::StoreResult::Success } else { storage::StoreResult::MassStoreFailed };
+      let all_stores_succeeded = payload.entries_and_expirations.iter().all(|&(ref entry, ref expiration)| {
+         self.storage.store(&payload.key, entry, &time::Tm::from(expiration.clone())) == storage::StoreResult::Success
+      });
+
+      let store_result = if all_stores_succeeded { 
+         storage::StoreResult::Success 
+      } else { 
+         storage::StoreResult::MassStoreFailed 
+      };
 
       let rpc = Rpc::store_response(self.local_info(), payload.key.clone(), store_result);
       let packet = rpc.serialize();

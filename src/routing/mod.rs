@@ -91,7 +91,7 @@ impl Table {
          result = UpdateResult::UpdatedNode;
       }
 
-      bucket.entries.retain(|ref stored_info| info.id != stored_info.id);
+      bucket.entries.retain(|stored_info| info.id != stored_info.id);
       if bucket.entries.len() == self.configuration.k_factor {
          let conflict = EvictionConflict { 
             evicted      : bucket.entries.pop_front().unwrap(),
@@ -108,9 +108,9 @@ impl Table {
 
    /// Removes a node from the routing table, if present.
    pub fn remove_node(&self, id: &hash::SubotaiHash) {
-      let index = self.bucket_for_node(&id);
+      let index = self.bucket_for_node(id);
       let mut bucket = self.buckets[index].write().unwrap();
-      bucket.entries.retain(|ref stored_info| id != &stored_info.id);
+      bucket.entries.retain(|stored_info| id != &stored_info.id);
    }
 
    /// Performs a node lookup on the routing table. The lookup result may
@@ -140,7 +140,7 @@ impl Table {
          Some(info) => LookupResult::Found(info),
          None =>  {
             let closest: Vec<NodeInfo> = self.closest_nodes_to(id)
-               .filter(|ref info| Self::is_allowed(&info.id, blacklist))
+               .filter(|info| Self::is_allowed(&info.id, blacklist))
                .take(n)
                .collect();
 
@@ -205,7 +205,7 @@ impl Table {
    pub fn specific_node(&self, id: &SubotaiHash) -> Option<NodeInfo> {
       let index = self.bucket_for_node(id);
       let entries = &self.buckets[index].read().unwrap().entries;
-      entries.iter().find(|ref info| *id == info.id).cloned()
+      entries.iter().find(|info| *id == info.id).cloned()
    }
 
    /// Returns the appropriate position for a node, by computing
@@ -219,7 +219,7 @@ impl Table {
       let bucket = &self.buckets[index];
       let entries = &mut bucket.write().unwrap().entries;
 
-      if let Some(ref mut evictor) = entries.iter_mut().find(|ref info| conflict.evictor.id == info.id) {
+      if let Some(ref mut evictor) = entries.iter_mut().find(|info| conflict.evictor.id == info.id) {
          mem::replace::<NodeInfo>(evictor, conflict.evicted);
       }
    }
@@ -238,7 +238,7 @@ impl Table {
          .map(|bucket| bucket.read().unwrap().last_probe)
          .collect();
 
-      if let Some(index) = times.iter().position(|ref option| option.is_none()) {
+      if let Some(index) = times.iter().position(|option| option.is_none()) {
          return (index, None);
       }
 
@@ -294,6 +294,7 @@ impl PartialEq for NodeInfo {
    }
 }
 
+#[allow(while_let_on_iterator)]
 impl<'a, 'b> Iterator for ClosestNodesTo<'a, 'b> {
    type Item = NodeInfo;
 
@@ -311,7 +312,7 @@ impl<'a, 'b> Iterator for ClosestNodesTo<'a, 'b> {
             bucket.entries.clone()
          }.into_iter().collect::<Vec<NodeInfo>>();
 
-         new_bucket.sort_by(|ref info_a, ref info_b| (&info_b.id ^ self.reference).cmp(&(&info_a.id ^ self.reference)));
+         new_bucket.sort_by(|info_a, info_b| (&info_b.id ^ self.reference).cmp(&(&info_a.id ^ self.reference)));
          self.current_bucket.append(&mut new_bucket);
          return self.current_bucket.pop();
       }
@@ -328,7 +329,7 @@ impl<'a> Iterator for AllNodes<'a> {
             self.table.buckets[self.bucket_index].read().unwrap().entries.clone()
          }.into_iter().collect::<Vec<NodeInfo>>();
 
-         new_bucket.sort_by_key(|ref info| &info.id ^ &self.table.parent_id);
+         new_bucket.sort_by_key(|info| &info.id ^ &self.table.parent_id);
          self.current_bucket.append(&mut new_bucket);
          self.bucket_index += 1;
       }

@@ -92,7 +92,7 @@ impl Storage {
             }
             let new_entry = ExtendedEntry {
                entry           : entry.clone(),
-               expiration      : expiration.clone(),
+               expiration      : expiration,
                republish_ready : false,
             };
             key_group.push(new_entry);
@@ -104,7 +104,7 @@ impl Storage {
          let mut key_group = KeyGroup::new();
          let new_entry = ExtendedEntry {
                entry           : entry.clone(),
-               expiration      : expiration.clone(),
+               expiration      : expiration,
                republish_ready : false,
          };
          key_group.push(new_entry);
@@ -114,8 +114,8 @@ impl Storage {
    }
 
    fn is_big_blob(&self, entry: &StorageEntry) -> bool {
-      match entry {
-         &StorageEntry::Blob(ref vec) => vec.len() > self.configuration.max_storage_blob_size,
+      match *entry {
+         StorageEntry::Blob(ref vec) => vec.len() > self.configuration.max_storage_blob_size,
          _ => false,
       }
    }
@@ -169,7 +169,7 @@ impl Storage {
       for (key, group) in key_groups.iter() {
          let ready_entries_in_group: Vec<(StorageEntry, time::Tm)> = group
          .iter()
-         .filter_map(|ext| if ext.republish_ready { Some((ext.entry.clone(), ext.expiration.clone())) } else { None } )
+         .filter_map(|ext| if ext.republish_ready { Some((ext.entry.clone(), ext.expiration)) } else { None } )
          .collect();
 
          if !ready_entries_in_group.is_empty() {

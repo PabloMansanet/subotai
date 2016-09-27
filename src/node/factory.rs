@@ -13,6 +13,12 @@ pub struct Factory {
    outbound_port : u16,
 }
 
+impl Default for Factory {
+   fn default() -> Factory {
+      Factory::new()
+   }
+}
+
 impl Factory {
    pub fn new() -> Self {
       Factory {
