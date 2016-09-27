@@ -1,6 +1,6 @@
 [package]
 name = "subotai"
-version = "1.0.3-pre"
+version = "1.0.3"
 authors = ["PabloMansanet <pablomansanet@gmail.com>"]
 description = "Kademlia based DHT"
 repository = "https://github.com/PabloMansanet/subotai"
