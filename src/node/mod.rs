@@ -133,8 +133,8 @@ pub struct Configuration {
 impl Default for Configuration {
    fn default() -> Configuration {
       Configuration {
-         alpha                         : 3,
-         impatience                    : 1,
+         alpha                         : 5,
+         impatience                    : 2,
          k_factor                      : 20,
          max_conflicts                 : 60,
          max_storage                   : 10000,
