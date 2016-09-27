@@ -14,24 +14,31 @@ use std::str::FromStr;
 /// The node layer above is in charge of parallelizing those operations 
 /// by spawning threads when adequate.
 pub struct Resources {
-   pub id            : SubotaiHash,
-   pub table         : routing::Table,
-   pub storage       : storage::Storage,
-   pub outbound      : net::UdpSocket,
-   pub inbound       : net::UdpSocket,
-   pub state         : sync::RwLock<node::State>,
-   pub updates       : sync::Mutex<bus::Bus<Update>>,
-   pub conflicts     : sync::Mutex<Vec<routing::EvictionConflict>>,
-   pub configuration : node::Configuration,
+   pub id                : SubotaiHash,
+   pub table             : routing::Table,
+   pub storage           : storage::Storage,
+   pub outbound          : net::UdpSocket,
+   pub inbound           : net::UdpSocket,
+   pub state             : sync::RwLock<node::State>,
+   pub reception_updates : sync::Mutex<bus::Bus<ReceptionUpdate>>,
+   pub network_updates   : sync::Mutex<bus::Bus<NetworkUpdate>>,
+   pub conflicts         : sync::Mutex<Vec<routing::EvictionConflict>>,
+   pub configuration     : node::Configuration,
 }
 
-#[derive(Clone)]
-pub enum Update {
-   RpcReceived(Rpc),
+#[derive(Clone, Debug)]
+pub enum ReceptionUpdate {
    Tick,
+   RpcReceived(Rpc),
    StateChange(node::State),
-   AddedNode(routing::NodeInfo),
 }
+
+#[derive(Clone, Debug)]
+pub enum NetworkUpdate {
+   AddedNode(routing::NodeInfo),
+   ShuttingDown,
+}
+
 
 impl Resources {
    pub fn local_info(&self) -> routing::NodeInfo {
@@ -67,7 +74,7 @@ impl Resources {
       Ok(())
    }
 
-   /// Updates the table with a new node, and starts the conflict resolution mechanism
+   /// ReceptionUpdates the table with a new node, and starts the conflict resolution mechanism
    /// if necessary.
    pub fn update_table(&self, info: routing::NodeInfo) {
       let defensive = { // Lock scope
@@ -84,11 +91,11 @@ impl Resources {
             conflicts.push(conflict);
             if conflicts.len() == self.configuration.max_conflicts {
                *self.state.write().unwrap() = node::State::Defensive;
-               self.updates.lock().unwrap().broadcast(Update::StateChange(node::State::Defensive));
+               self.reception_updates.lock().unwrap().broadcast(ReceptionUpdate::StateChange(node::State::Defensive));
             }
          }
       } else if let routing::UpdateResult::AddedNode = update_result {
-         self.updates.lock().unwrap().broadcast(Update::AddedNode(info));
+         self.network_updates.lock().unwrap().broadcast(NetworkUpdate::AddedNode(info));
       }
 
       let off_grid = { // Lock scope
@@ -98,7 +105,7 @@ impl Resources {
       // We go on grid as soon as the network is big enough.
       if off_grid && self.table.len() > self.configuration.k_factor {
          *self.state.write().unwrap() = node::State::OnGrid;
-         self.updates.lock().unwrap().broadcast(Update::StateChange(node::State::OnGrid));
+         self.reception_updates.lock().unwrap().broadcast(ReceptionUpdate::StateChange(node::State::OnGrid));
       }
    }
 
@@ -460,7 +467,7 @@ impl Resources {
          _ => Ok(()),
       };
       self.update_table(rpc.sender.clone());
-      self.updates.lock().unwrap().broadcast(Update::RpcReceived(rpc));
+      self.reception_updates.lock().unwrap().broadcast(ReceptionUpdate::RpcReceived(rpc));
       result
    }
 

@@ -11,7 +11,7 @@ use hash::SubotaiHash;
 /// It is also possible to filter the iterator so it only applies to particular
 /// senders or RPC kinds without resorting to iterator adapters.
 pub struct Receptions {
-   iter          : bus::BusIntoIter<resources::Update>,
+   iter          : bus::BusIntoIter<resources::ReceptionUpdate>,
    timeout       : Option<time::SteadyTime>,
    kind_filter   : Option<KindFilter>,
    sender_filter : Option<Vec<SubotaiHash>>,
@@ -43,7 +43,7 @@ impl resources::Resources {
 impl Receptions {
    fn new(resources: &resources::Resources) -> Receptions {
       Receptions {
-         iter          : resources.updates.lock().unwrap().add_rx().into_iter(),
+         iter          : resources.reception_updates.lock().unwrap().add_rx().into_iter(),
          timeout       : None,
          kind_filter   : None,
          sender_filter : None,
@@ -91,7 +91,7 @@ impl Iterator for Receptions {
          }
 
          match self.iter.next() {
-            Some(resources::Update::RpcReceived(rpc)) => {
+            Some(resources::ReceptionUpdate::RpcReceived(rpc)) => {
                if let Some(ref kind_filter) = self.kind_filter {
                   match rpc.kind {
                      rpc::Kind::Ping                 => if *kind_filter != KindFilter::Ping { continue; },
@@ -116,7 +116,7 @@ impl Iterator for Receptions {
 
                return Some(rpc);
             },
-            Some(resources::Update::StateChange(node::State::ShuttingDown)) => self.shutdown = true,
+            Some(resources::ReceptionUpdate::StateChange(node::State::ShuttingDown)) => self.shutdown = true,
             _ => (),
          }
       }

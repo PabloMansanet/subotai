@@ -34,16 +34,13 @@ pub const SOCKET_BUFFER_SIZE_BYTES : usize = 65536;
 const SOCKET_TIMEOUT_MS     : u64   = 200;
 const UPDATE_BUS_SIZE_BYTES : usize = 50;
 
+/// Maintenance thread sleep period.
+const MAINTENANCE_SLEEP_S : u64 = 5;
+
 /// Attempts to probe self during the bootstrap process.
 const BOOTSTRAP_TRIES : u32 = 3;
 
 /// Subotai node. 
-///
-/// On construction, it launches three asynchronous threads.
-///
-/// * For RPC reception.
-/// * For conflict resolution.
-/// * For general maintenance.
 pub struct Node {
    resources: sync::Arc<resources::Resources>,
 }
@@ -210,14 +207,14 @@ impl Node {
    /// Returns if the node is already in the specified state, otherwise blocks indefinitely until
    /// that state is reached.
    pub fn wait_for_state(&self, state: State) {
-      let updates = self.resources.updates.lock().unwrap().add_rx().into_iter();
+      let reception_updates = self.resources.reception_updates.lock().unwrap().add_rx().into_iter();
       if *self.resources.state.read().unwrap() == state {
          return;
       }
 
-      for update in updates {
+      for update in reception_updates {
          match update {
-            resources::Update::StateChange(new_state) if new_state == state => return,
+            resources::ReceptionUpdate::StateChange(new_state) if new_state == state => return,
             _ => (),
          }
       }
@@ -232,15 +229,16 @@ impl Node {
       let id = SubotaiHash::random();
       
       let resources = sync::Arc::new(resources::Resources {
-         id            : id.clone(),
-         table         : routing::Table::new(id.clone(), configuration.clone()),
-         storage       : storage::Storage::new(id, configuration.clone()),
-         inbound       : try!(net::UdpSocket::bind(("0.0.0.0", inbound_port))),
-         outbound      : try!(net::UdpSocket::bind(("0.0.0.0", outbound_port))),
-         state         : sync::RwLock::new(State::OffGrid),
-         updates       : sync::Mutex::new(bus::Bus::new(UPDATE_BUS_SIZE_BYTES)),
-         conflicts     : sync::Mutex::new(Vec::with_capacity(configuration.max_conflicts)),
-         configuration : configuration,
+         id                : id.clone(),
+         table             : routing::Table::new(id.clone(), configuration.clone()),
+         storage           : storage::Storage::new(id, configuration.clone()),
+         inbound           : try!(net::UdpSocket::bind(("0.0.0.0", inbound_port))),
+         outbound          : try!(net::UdpSocket::bind(("0.0.0.0", outbound_port))),
+         state             : sync::RwLock::new(State::OffGrid),
+         reception_updates : sync::Mutex::new(bus::Bus::new(UPDATE_BUS_SIZE_BYTES)),
+         network_updates   : sync::Mutex::new(bus::Bus::new(UPDATE_BUS_SIZE_BYTES)),
+         conflicts         : sync::Mutex::new(Vec::with_capacity(configuration.max_conflicts)),
+         configuration     : configuration,
       });
 
       resources.table.update_node(resources.local_info());
@@ -255,6 +253,9 @@ impl Node {
 
       let maintenance_resources = resources.clone();
       thread::spawn(move || { Node::maintenance_loop(maintenance_resources) });
+
+      let republish_resources = resources.clone();
+      thread::spawn(move || { Node::republish_loop(republish_resources) });
 
       Ok( Node{ resources: resources } )
    }
@@ -276,52 +277,54 @@ impl Node {
             }
          }
 
-         resources.updates.lock().unwrap().broadcast(resources::Update::Tick);
+         resources.reception_updates.lock().unwrap().broadcast(resources::ReceptionUpdate::Tick);
       }
    }
 
-   /// Refreshes the oldest bucket every ten seconds, unless they are all younger than 1 hour,
-   /// in which case it goes back to sleep.
+   /// Wakes up when a new node is introduced to the network, and sends mass store RPCs
+   /// with those entries which are closer to it than they are to this node.
+   #[allow(unused_must_use)]
+   fn republish_loop(resources: sync::Arc<resources::Resources>) {
+      let updates = {
+         resources.network_updates.lock().unwrap().add_rx().into_iter()
+      };
+
+      for update in updates {
+         match update {
+            resources::NetworkUpdate::ShuttingDown => { break; },
+            resources::NetworkUpdate::AddedNode(info) => {
+               let keygroups = resources.storage.get_entries_closer_to(&info.id);
+               for keygroup in keygroups {
+                  resources.mass_store(keygroup.0, keygroup.1);
+               }
+            },
+         }
+      }
+   }
+
+   /// Wakes up every `MAINTENANCE_SLEEP_S` seconds and refreshes the oldest bucket,
+   /// unless they are all younger than 1 hour, in which case it goes back to sleep.
    ///
    /// This loop also republishes all entries each hour, provided we haven't received
    /// a `store` rpc for said entry in the past hour.
-   ///
-   /// Finally, on becoming aware of new nodes, the maintenance loop immediately sends mass
-   /// store RPCs for the new node with the necessary entries.
    #[allow(unused_must_use)]
    fn maintenance_loop(resources: sync::Arc<resources::Resources>) {
       let hour = time::Duration::hours(1);
       let mut last_republish = time::SteadyTime::now();
-      let mut last_bucket_refresh = time::SteadyTime::now();
-      let updates = { // Lock scope
-         resources.updates.lock().unwrap().add_rx().into_iter()
-      };
 
-      for update in updates {
+      loop {
+         thread::sleep(StdDuration::new(MAINTENANCE_SLEEP_S,0));
          if let State::ShuttingDown = *resources.state.read().unwrap() {
             break;
          }
 
-         // If the update that woke the thread up is a new node, republish all keys
-         // which are closer to it than they are to us.
-         //if let resources::Update::AddedNode(info) = update {
-         //   let keygroups = resources.storage.get_entries_closer_to(&info.id);
-         //   for keygroup in keygroups {
-         //      resources.mass_store(keygroup.0, keygroup.1);
-         //   }
-         //}
-
          let now = time::SteadyTime::now();
          // If the oldest bucket was refreshed more than a hour ago,
          // or it was never refreshed, prune and refresh it.
-
-         if now - last_bucket_refresh > time::Duration::seconds(10) {
-            match resources.table.oldest_bucket() {
-               (i, None) => {resources.refresh_bucket(i);},
-               (i, Some(time)) if (now - time) > hour => {resources.refresh_bucket(i);},
-               _ => (),
-            }
-            last_bucket_refresh = time::SteadyTime::now();
+         match resources.table.oldest_bucket() {
+            (i, None) => {resources.refresh_bucket(i);},
+            (i, Some(time)) if (now - time) > hour => {resources.refresh_bucket(i);},
+            _ => (),
          }
         
          // Republish all entries that haven't entered storage in the last hour.
@@ -370,7 +373,7 @@ impl Node {
                      State::OffGrid
                   };
                   
-               resources.updates.lock().unwrap().broadcast(resources::Update::StateChange(*state));
+               resources.reception_updates.lock().unwrap().broadcast(resources::ReceptionUpdate::StateChange(*state));
             },
             _ => (),
          }
@@ -381,6 +384,7 @@ impl Node {
 impl Drop for Node {
    fn drop(&mut self) {
       *self.resources.state.write().unwrap() = State::ShuttingDown;
-      self.resources.updates.lock().unwrap().broadcast(resources::Update::StateChange(State::ShuttingDown));
+      self.resources.reception_updates.lock().unwrap().broadcast(resources::ReceptionUpdate::StateChange(State::ShuttingDown));
+      self.resources.network_updates.lock().unwrap().broadcast(resources::NetworkUpdate::ShuttingDown);
    }
 }
