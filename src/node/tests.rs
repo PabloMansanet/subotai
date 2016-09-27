@@ -163,7 +163,7 @@ fn generating_too_many_conflicts_causes_the_node_to_enter_defensive_state()
       node.resources.update_table(info);
    }
 
-   let state = *node.resources.state.read().unwrap();
+   let state = node.state();
    match state {
       node::State::Defensive => (),
       _ => panic!(),

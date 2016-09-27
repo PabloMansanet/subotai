@@ -208,7 +208,7 @@ impl Node {
    /// that state is reached.
    pub fn wait_for_state(&self, state: State) {
       let updates = self.resources.state_updates.lock().unwrap().add_rx().into_iter();
-      if *self.resources.state.read().unwrap() == state {
+      if self.state() == state {
          return;
       }
 
@@ -267,7 +267,7 @@ impl Node {
 
       loop {
          let message = resources.inbound.recv_from(&mut buffer);
-         if let State::ShuttingDown = *resources.state.read().unwrap() {
+         if let State::ShuttingDown = resources.state() {
             break;
          }
 
@@ -316,7 +316,7 @@ impl Node {
 
       loop {
          thread::sleep(StdDuration::new(MAINTENANCE_SLEEP_S,0));
-         if let State::ShuttingDown = *resources.state.read().unwrap() {
+         if let State::ShuttingDown = resources.state() {
             break;
          }
 
@@ -364,18 +364,15 @@ impl Node {
          // We wait for responses from these nodes.
          thread::sleep(StdDuration::new(1,0));
          
-         let mut state = resources.state.write().unwrap();
-         match *state {
+         match resources.state() {
             State::ShuttingDown => break,
             // If all conflicts are resolved, we leave defensive mode.
             State::Defensive if conflicts_empty => { 
-               *state = if resources.table.len() > resources.configuration.k_factor { 
-                     State::OnGrid 
+               if resources.table.len() > resources.configuration.k_factor { 
+                     resources.set_state(State::OnGrid);
                   } else {
-                     State::OffGrid
+                     resources.set_state(State::OffGrid);
                   };
-                  
-               resources.reception_updates.lock().unwrap().broadcast(resources::ReceptionUpdate::StateChange(*state));
             },
             _ => (),
          }

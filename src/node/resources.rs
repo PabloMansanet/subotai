@@ -19,12 +19,12 @@ pub struct Resources {
    pub storage           : storage::Storage,
    pub outbound          : net::UdpSocket,
    pub inbound           : net::UdpSocket,
-   pub state             : sync::RwLock<node::State>,
    pub reception_updates : sync::Mutex<bus::Bus<ReceptionUpdate>>,
    pub network_updates   : sync::Mutex<bus::Bus<NetworkUpdate>>,
    pub state_updates     : sync::Mutex<bus::Bus<StateUpdate>>,
    pub conflicts         : sync::Mutex<Vec<routing::EvictionConflict>>,
    pub configuration     : node::Configuration,
+   pub state             : sync::RwLock<node::State>,
 }
 
 /// Updates for the reception iterators. Mainly involves RPC received updates,
