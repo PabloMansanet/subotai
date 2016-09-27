@@ -72,8 +72,6 @@ impl Storage {
          return StoreResult::BlobTooBig;
       }
 
-      self.clear_expired_entries();
-
       // Expiration time is clamped to a reasonable value.
       let expiration = cmp::min(*expiration, time::now() + time::Duration::hours(self.configuration.base_expiration_time_hrs));
       let initial_length = self.len();

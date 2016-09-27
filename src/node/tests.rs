@@ -2,6 +2,8 @@ use {node, routing, time, hash, storage};
 use std::collections::VecDeque;
 use std::str::FromStr;
 use std::net;
+use std::thread;
+use std::time::Duration as StdDuration;
 use node::receptions;
 
 pub const POLL_FREQUENCY_MS: u64 = 50;
@@ -12,7 +14,7 @@ fn node_ping() {
    let alpha = node::Node::new().unwrap();
    let beta  = node::Node::new().unwrap();
    let beta_seed = beta.resources.local_info().address;
-   let span = time::Duration::seconds(1);
+   let span = time::Duration::seconds(2);
 
    // Bootstrapping alpha:
    assert!(alpha.bootstrap(&beta_seed).is_ok());
@@ -280,6 +282,9 @@ fn store_retrieve_in_simulated_network()
       .map(|_| (storage::StorageEntry::Value(hash::SubotaiHash::random()), arbitrary_expiration)).collect();
    let collection_key = hash::SubotaiHash::random();
    head.resources.mass_store(collection_key.clone(), collection.clone()).unwrap();
+
+   // Sleep because we might catch nodes mid-store otherwise.
+   thread::sleep(StdDuration::new(20,0));
    let retrieved_collection = tail.retrieve(&collection_key).unwrap();
    let collection_entries: Vec<_> = collection.into_iter().map(|(entry, _)| entry).collect();
    assert_eq!(collection_entries.len(), retrieved_collection.len());

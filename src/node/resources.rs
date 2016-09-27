@@ -22,10 +22,14 @@ pub struct Resources {
    pub state             : sync::RwLock<node::State>,
    pub reception_updates : sync::Mutex<bus::Bus<ReceptionUpdate>>,
    pub network_updates   : sync::Mutex<bus::Bus<NetworkUpdate>>,
+   pub state_updates     : sync::Mutex<bus::Bus<StateUpdate>>,
    pub conflicts         : sync::Mutex<Vec<routing::EvictionConflict>>,
    pub configuration     : node::Configuration,
 }
 
+/// Updates for the reception iterators. Mainly involves RPC received updates,
+/// but keeps a constant tick to allow for timeouts and notifies of state changes
+/// to fully abort the reception iterators if necessary.
 #[derive(Clone, Debug)]
 pub enum ReceptionUpdate {
    Tick,
@@ -33,12 +37,18 @@ pub enum ReceptionUpdate {
    StateChange(node::State),
 }
 
+/// Notifies of new nodes entering the network and changes of state.
 #[derive(Clone, Debug)]
 pub enum NetworkUpdate {
    AddedNode(routing::NodeInfo),
-   ShuttingDown,
+   StateChange(node::State),
 }
 
+/// Just notifies about state changes.
+#[derive(Clone, Debug)]
+pub enum StateUpdate {
+   StateChange(node::State),
+}
 
 impl Resources {
    pub fn local_info(&self) -> routing::NodeInfo {
@@ -46,6 +56,21 @@ impl Resources {
          id      : self.id.clone(),
          address : self.inbound.local_addr().unwrap(),
       }
+   }
+
+   /// Current state of the node
+   pub fn state(&self)-> node::State {
+      *self.state.read().unwrap()
+   }
+
+   /// Changes node state and broadcasts the change
+   pub fn set_state(&self, state: node::State) {
+      { // Lock scope
+         *self.state.write().unwrap() = state;
+      }
+      self.reception_updates.lock().unwrap().broadcast(ReceptionUpdate::StateChange(state));
+      self.network_updates.lock().unwrap().broadcast(NetworkUpdate::StateChange(state));
+      self.state_updates.lock().unwrap().broadcast(StateUpdate::StateChange(state));
    }
 
    /// Pings a node via its IP address, blocking until ping response.
@@ -90,8 +115,7 @@ impl Resources {
             let mut conflicts = self.conflicts.lock().unwrap();
             conflicts.push(conflict);
             if conflicts.len() == self.configuration.max_conflicts {
-               *self.state.write().unwrap() = node::State::Defensive;
-               self.reception_updates.lock().unwrap().broadcast(ReceptionUpdate::StateChange(node::State::Defensive));
+               self.set_state(node::State::Defensive);
             }
          }
       } else if let routing::UpdateResult::AddedNode = update_result {
@@ -104,8 +128,7 @@ impl Resources {
 
       // We go on grid as soon as the network is big enough.
       if off_grid && self.table.len() > self.configuration.k_factor {
-         *self.state.write().unwrap() = node::State::OnGrid;
-         self.reception_updates.lock().unwrap().broadcast(ReceptionUpdate::StateChange(node::State::OnGrid));
+         self.set_state(node::State::OnGrid);
       }
    }
 
@@ -493,7 +516,7 @@ impl Resources {
       
       let store_result = if payload.entries_and_expirations.iter().all(|&(ref entry, ref expiration)| {
          self.storage.store(&payload.key, &entry, &time::Tm::from(expiration.clone())) == storage::StoreResult::Success
-      }) {  storage::StoreResult::Success } else { storage::StoreResult::MassStoreFailed };
+      }) { storage::StoreResult::Success } else { storage::StoreResult::MassStoreFailed };
 
       let rpc = Rpc::store_response(self.local_info(), payload.key.clone(), store_result);
       let packet = rpc.serialize();

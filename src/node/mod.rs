@@ -178,7 +178,7 @@ impl Node {
 
    /// Returns the current state of the node.
    pub fn state(&self)-> State {
-      *self.resources.state.read().unwrap()
+      self.resources.state()
    }
 
    /// Produces an iterator over RPCs received by this node. The iterator will block
@@ -207,14 +207,14 @@ impl Node {
    /// Returns if the node is already in the specified state, otherwise blocks indefinitely until
    /// that state is reached.
    pub fn wait_for_state(&self, state: State) {
-      let reception_updates = self.resources.reception_updates.lock().unwrap().add_rx().into_iter();
+      let updates = self.resources.state_updates.lock().unwrap().add_rx().into_iter();
       if *self.resources.state.read().unwrap() == state {
          return;
       }
 
-      for update in reception_updates {
+      for update in updates  {
          match update {
-            resources::ReceptionUpdate::StateChange(new_state) if new_state == state => return,
+            resources::StateUpdate::StateChange(new_state) if new_state == state => return,
             _ => (),
          }
       }
@@ -237,6 +237,7 @@ impl Node {
          state             : sync::RwLock::new(State::OffGrid),
          reception_updates : sync::Mutex::new(bus::Bus::new(UPDATE_BUS_SIZE_BYTES)),
          network_updates   : sync::Mutex::new(bus::Bus::new(UPDATE_BUS_SIZE_BYTES)),
+         state_updates     : sync::Mutex::new(bus::Bus::new(UPDATE_BUS_SIZE_BYTES)),
          conflicts         : sync::Mutex::new(Vec::with_capacity(configuration.max_conflicts)),
          configuration     : configuration,
       });
@@ -291,13 +292,14 @@ impl Node {
 
       for update in updates {
          match update {
-            resources::NetworkUpdate::ShuttingDown => { break; },
+            resources::NetworkUpdate::StateChange(State::ShuttingDown) => { break; },
             resources::NetworkUpdate::AddedNode(info) => {
                let keygroups = resources.storage.get_entries_closer_to(&info.id);
                for keygroup in keygroups {
                   resources.mass_store(keygroup.0, keygroup.1);
                }
             },
+            _ => (),
          }
       }
    }
@@ -383,8 +385,6 @@ impl Node {
 
 impl Drop for Node {
    fn drop(&mut self) {
-      *self.resources.state.write().unwrap() = State::ShuttingDown;
-      self.resources.reception_updates.lock().unwrap().broadcast(resources::ReceptionUpdate::StateChange(State::ShuttingDown));
-      self.resources.network_updates.lock().unwrap().broadcast(resources::NetworkUpdate::ShuttingDown);
+      self.resources.set_state(State::ShuttingDown);
    }
 }
