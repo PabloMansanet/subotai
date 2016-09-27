@@ -80,3 +80,10 @@ built on top of it.
 Even though every feature is unit tested, the network hasn't yet been tested in real world 
 conditions. I'd really appreciate any experiments! Just make sure not to use it for anything critical
 just yet :).
+
+# Note on Testing
+
+Subotai's unit test suite is somewhat fiddly, since the library uses timeouts pervasively in order to make
+decisions. This means that, unless you're running a very powerful machine, you should run `cargo test` with
+`RUST_TEST_THREADS=1`. Otherwise, an excessive number of tests in parallel may create timeouts all over the
+place, causing the network to mistake nodes as dead.
