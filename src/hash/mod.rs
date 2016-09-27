@@ -16,7 +16,8 @@ use sha1;
 pub const HASH_SIZE : usize = 160;
 pub const HASH_SIZE_BYTES : usize = HASH_SIZE / 8;
 
-/// Light wrapper over a little endian `HASH_SIZE` bit hash.
+/// Subotai hash, a light wrapper over a little endian `HASH_SIZE` bit hash.
+/// It can be generated randomly or via sha-1 of a given string.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct SubotaiHash {
    pub raw : [u8; HASH_SIZE_BYTES],
@@ -43,6 +44,25 @@ impl SubotaiHash {
       SubotaiHash {
          raw: m.digest().bytes(),
       }
+   }
+
+   /// Creates a random hash at a given XOR distance from another (height of their XOR value).
+   pub fn random_at_distance(reference: &SubotaiHash, distance: usize) -> SubotaiHash {
+      let mut random_hash = SubotaiHash::random();
+      let distance_ones = (&random_hash ^ reference).into_ones();
+      for index in distance_ones.rev() {
+         random_hash.flip_bit(index);
+         if let Some(height) = (&random_hash ^ reference).height() {
+            if height == distance {
+               return random_hash;
+            } else if height < distance {
+               random_hash.flip_bit(distance);
+               return random_hash;
+            }
+         }
+      }
+       
+      random_hash
    }
 
    /// Provides an iterator through the indices
@@ -103,26 +123,6 @@ impl SubotaiHash {
       if position >= HASH_SIZE { return; }
       let byte = &mut self.raw[position / 8];
       *byte ^= 1 << (position % 8);
-   }
-
-   /// Creates a random hash at a given XOR distance from another (height of their XOR value).
-   pub fn random_at_distance(reference: &SubotaiHash, distance: usize) -> SubotaiHash {
-      let mut random_hash = SubotaiHash::random();
-      let distance_ones = (&random_hash ^ reference).into_ones();
-      for index in distance_ones.rev() {
-         random_hash.flip_bit(index);
-         if let Some(height) = (&random_hash ^ reference).height() {
-            if height == distance {
-               return random_hash;
-            } else if height < distance {
-               random_hash.flip_bit(distance);
-               return random_hash;
-            }
-         }
-      }
-       
-
-      random_hash
    }
 }
 
