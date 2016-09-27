@@ -584,7 +584,7 @@ impl Resources {
       if let rpc::RetrieveResult::Found(ref entries) = payload.result {
          // Retrieved keys are cached locally for a limited time, to guarantee succesive retrieves don't flood the network.
          for entry in entries {
-            self.storage.store(&payload.key_to_find, entry, &(time::now() + time::Duration::minutes(5)));
+            self.storage.store(&payload.key_to_find, entry, &(time::now() + time::Duration::minutes(1)));
          }
       }
       Ok(())
