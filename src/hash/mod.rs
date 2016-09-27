@@ -6,7 +6,7 @@
 //! useful method is `sha1`, which allows you to create a sha-1 hash from some data,
 //! which can then be used as a key for a storage entry.
 use rand::{thread_rng, Rng};
-use itertools::Zip;
+use itertools;
 use std::ops::BitXor;
 use std::fmt;
 use std::fmt::Write;
@@ -312,7 +312,7 @@ impl<'a, 'b> BitXor<&'b SubotaiHash> for &'a SubotaiHash {
 
    fn bitxor (self, rhs: &'b SubotaiHash) -> SubotaiHash {
       let mut result = SubotaiHash::blank();
-      for (d, a, b) in Zip::new((&mut result.raw, &self.raw, &rhs.raw)) {
+      for (d, a, b) in itertools::multizip((&mut result.raw, &self.raw, &rhs.raw)) {
          *d = a^b;
       }
       result

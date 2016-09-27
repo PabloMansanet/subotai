@@ -30,6 +30,7 @@ pub enum Update {
    RpcReceived(Rpc),
    Tick,
    StateChange(node::State),
+   AddedNode(routing::NodeInfo),
 }
 
 impl Resources {
@@ -73,7 +74,9 @@ impl Resources {
          *self.state.read().unwrap() == node::State::Defensive
       };
 
-      if let routing::UpdateResult::CausedConflict(conflict) = self.table.update_node(info) {
+      let update_result = self.table.update_node(info.clone());
+
+      if let routing::UpdateResult::CausedConflict(conflict) = update_result {
          if defensive {
             self.table.revert_conflict(conflict);
          } else {
@@ -84,6 +87,8 @@ impl Resources {
                self.updates.lock().unwrap().broadcast(Update::StateChange(node::State::Defensive));
             }
          }
+      } else if let routing::UpdateResult::AddedNode = update_result {
+         self.updates.lock().unwrap().broadcast(Update::AddedNode(info));
       }
 
       let off_grid = { // Lock scope
@@ -360,7 +365,6 @@ impl Resources {
       }
 
       for unresponsive_node in nodes {
-         println!("Removing node");
          self.table.remove_node(&unresponsive_node.id);
       }
 

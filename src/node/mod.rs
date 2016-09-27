@@ -34,9 +34,6 @@ pub const SOCKET_BUFFER_SIZE_BYTES : usize = 65536;
 const SOCKET_TIMEOUT_MS     : u64   = 200;
 const UPDATE_BUS_SIZE_BYTES : usize = 50;
 
-/// Maintenance thread sleep period.
-const MAINTENANCE_SLEEP_S : u64 = 5;
-
 /// Attempts to probe self during the bootstrap process.
 const BOOTSTRAP_TRIES : u32 = 3;
 
@@ -283,29 +280,48 @@ impl Node {
       }
    }
 
-   /// Wakes up every `MAINTENANCE_SLEEP_S` seconds and refreshes the oldest bucket,
-   /// unless they are all younger than 1 hour, in which case it goes back to sleep.
+   /// Refreshes the oldest bucket every ten seconds, unless they are all younger than 1 hour,
+   /// in which case it goes back to sleep.
    ///
    /// This loop also republishes all entries each hour, provided we haven't received
    /// a `store` rpc for said entry in the past hour.
+   ///
+   /// Finally, on becoming aware of new nodes, the maintenance loop immediately sends mass
+   /// store RPCs for the new node with the necessary entries.
    #[allow(unused_must_use)]
    fn maintenance_loop(resources: sync::Arc<resources::Resources>) {
       let hour = time::Duration::hours(1);
       let mut last_republish = time::SteadyTime::now();
+      let mut last_bucket_refresh = time::SteadyTime::now();
+      let updates = { // Lock scope
+         resources.updates.lock().unwrap().add_rx().into_iter()
+      };
 
-      loop {
-         thread::sleep(StdDuration::new(MAINTENANCE_SLEEP_S,0));
+      for update in updates {
          if let State::ShuttingDown = *resources.state.read().unwrap() {
             break;
          }
 
+         // If the update that woke the thread up is a new node, republish all keys
+         // which are closer to it than they are to us.
+         //if let resources::Update::AddedNode(info) = update {
+         //   let keygroups = resources.storage.get_entries_closer_to(&info.id);
+         //   for keygroup in keygroups {
+         //      resources.mass_store(keygroup.0, keygroup.1);
+         //   }
+         //}
+
          let now = time::SteadyTime::now();
          // If the oldest bucket was refreshed more than a hour ago,
          // or it was never refreshed, prune and refresh it.
-         match resources.table.oldest_bucket() {
-            (i, None) => {resources.refresh_bucket(i);},
-            (i, Some(time)) if (now - time) > hour => {resources.refresh_bucket(i);},
-            _ => (),
+
+         if now - last_bucket_refresh > time::Duration::seconds(10) {
+            match resources.table.oldest_bucket() {
+               (i, None) => {resources.refresh_bucket(i);},
+               (i, Some(time)) if (now - time) > hour => {resources.refresh_bucket(i);},
+               _ => (),
+            }
+            last_bucket_refresh = time::SteadyTime::now();
          }
         
          // Republish all entries that haven't entered storage in the last hour.

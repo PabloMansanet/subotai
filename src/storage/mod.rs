@@ -150,6 +150,18 @@ impl Storage {
       }
    }
 
+   /// Retrieves all entries stored in this node, that have a shorter distance to a different,
+   /// target node. This is used to republish keys when becoming in contact with a new node.
+   pub fn get_entries_closer_to(&self, target: &SubotaiHash)-> Vec<(SubotaiHash, Vec<(StorageEntry, time::Tm)>)> {
+      self.key_groups
+         .read()
+         .unwrap()
+         .iter()
+         .filter(|&(key, _)| (key ^ target) < (key ^ &self.parent_id))
+         .map(|(key, keygroup)| (key.clone(), keygroup.iter().cloned().map(|ext| (ext.entry, ext.expiration)).collect::<Vec<_>>()))
+         .collect()
+   }
+
    /// Retrieves all keys and associated data ready for republishing
    pub fn get_all_ready_entries(&self) -> Vec<(SubotaiHash, Vec<(StorageEntry, time::Tm)>)>  {
       self.clear_expired_entries();
@@ -215,7 +227,29 @@ mod tests {
       let ready_entries = storage.get_all_ready_entries();
       assert_eq!(ready_entries.len(), 2);
       assert_eq!(storage.len(), 3);
-  }
+   }
+
+   #[test]
+   fn retrieving_all_entries_closest_to_a_given_id() {
+      let storage = default_storage();
+
+      // Key at distance 10 from us.
+      let key = SubotaiHash::random_at_distance(&storage.parent_id, 10);
+      // Key at distance 3 from us.
+      let close_key = SubotaiHash::random_at_distance(&storage.parent_id, 3);
+      // Node that is at a distance 5 of the first key, therefore closer to us.
+      let other_node_id = SubotaiHash::random_at_distance(&key, 5);
+
+      let expiration = time::now() + time::Duration::minutes(30);
+      storage.store(&key, &StorageEntry::Value(SubotaiHash::random()), &expiration);
+      storage.store(&close_key, &StorageEntry::Value(SubotaiHash::random()), &expiration);
+
+      let entries = storage.get_entries_closer_to(&other_node_id);
+
+      assert_eq!(entries.len(), 1);
+      assert_eq!(entries[0].1.len(), 1);
+      assert_eq!(&entries[0].0, &key);
+   }
 
    #[test]
    fn storing_preexisting_entry_updates_to_max_expiration() {
