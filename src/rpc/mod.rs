@@ -3,7 +3,6 @@
 //! Subotai RPCs are the packets sent over TCP between nodes. They
 //! contain information about the sender, as well as an optional payload.
 
-use bincode::serde;
 use {routing, bincode, node, storage, time};
 use std::sync::Arc;
 use hash::SubotaiHash;
@@ -93,12 +92,12 @@ impl Rpc {
 
    /// Serializes an RPC to be send over TCP. 
    pub fn serialize(&self) -> Vec<u8> {
-       serde::serialize(&self, bincode::SizeLimit::Bounded(node::SOCKET_BUFFER_SIZE_BYTES as u64)).unwrap()
+       bincode::serialize(&self, bincode::Bounded(node::SOCKET_BUFFER_SIZE_BYTES as u64)).unwrap()
    }
 
    /// Deserializes into an RPC structure.
-   pub fn deserialize(serialized: &[u8]) -> serde::DeserializeResult<Rpc> {
-       serde::deserialize(serialized)
+   pub fn deserialize(serialized: &[u8]) -> bincode::Result<Rpc> {
+       bincode::deserialize(serialized)
    }
 
    /// Reports whether the RPC is a LocateResponse that found

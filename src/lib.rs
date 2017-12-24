@@ -23,8 +23,9 @@
 //!
 //! Subotai also supports caching to balance intense traffic around a given key.
 #![allow(dead_code, unknown_lints, wrong_self_convention)]
-#![feature(custom_derive, plugin)]
-#![plugin(serde_macros)]
+
+#[macro_use]
+extern crate serde_derive;
 
 extern crate itertools;
 extern crate rand;
