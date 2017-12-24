@@ -13,8 +13,11 @@ license = "MIT"
 itertools = "0.*.*"
 rand = "0.*.*"
 bincode = "0.*.*"
-serde = "0.*.*"
-serde_macros = "0.*.*"
+serde_derive = "1.*.*"
 bus = "1.*.*"
 time = "0.*.*"
 sha1 = "0.*.*"
+
+[dependencies.serde]
+version = "1.*.*"
+features = ["rc"]

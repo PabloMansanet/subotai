@@ -1,7 +1,7 @@
 use std::result;
 use std::io;
 use std::fmt;
-use bincode::serde;
+use bincode;
 use std::error::Error;
 
 /// Subotai error type. It reports the various ways in which a hash table query may fail.
@@ -21,7 +21,7 @@ pub enum SubotaiError {
    /// The network is unresponsive (several RPCs have timed out).
    UnresponsiveNetwork,
    Io(io::Error),
-   Deserialize(serde::DeserializeError),
+   Deserialize(bincode::Error),
 }
 
 /// Custom result type over `SubotaiError`.
@@ -71,8 +71,8 @@ impl From<io::Error> for SubotaiError {
    }
 }
 
-impl From<serde::DeserializeError> for SubotaiError {
-   fn from(err: serde::DeserializeError) -> SubotaiError {
+impl From<bincode::Error> for SubotaiError {
+   fn from(err: bincode::Error) -> SubotaiError {
       SubotaiError::Deserialize(err)
    }
 }
